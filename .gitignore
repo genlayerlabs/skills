@@ -1,0 +1,24 @@
+# Keystore files (sensitive - never commit)
+*-keystore.json
+*.keystore.json
+keystore/
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Claude local settings (user-specific)
+.claude/settings.local.json
+
+# Node modules (if any)
+node_modules/

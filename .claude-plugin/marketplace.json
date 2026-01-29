@@ -1,0 +1,13 @@
+{
+  "name": "genlayerlabs",
+  "owner": {
+    "name": "GenLayer Labs"
+  },
+  "plugins": [
+    {
+      "name": "genlayernode",
+      "source": "./plugins/genlayernode",
+      "description": "Interactive wizard to set up a GenLayer validator node on Linux."
+    }
+  ]
+}

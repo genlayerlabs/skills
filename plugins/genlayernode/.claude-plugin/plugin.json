@@ -1,0 +1,5 @@
+{
+  "name": "genlayernode",
+  "version": "1.0.0",
+  "description": "Interactive wizard to set up a GenLayer validator node on Linux."
+}
