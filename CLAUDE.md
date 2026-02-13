@@ -91,3 +91,15 @@ Skills that handle secrets must follow strict masking requirements:
 | Plugin | Skill | When to Use |
 |--------|-------|-------------|
 | `genlayernode` | `genlayernode` | Interactive wizard to set up a GenLayer validator node on Linux. |
+
+## Development Skills
+
+<!-- SKILLS_TABLE_START -->
+| Skill | When to Use |
+|-------|-------------|
+| `commit` | Execute git commit with conventional commit message analysis, intelligent staging, and message generation. |
+| `create-skill` | Scaffold a new Claude Code skill using the multi-YAML pattern. |
+| `docs-refresh` | Refresh documentation with deterministic generation from source files. |
+| `pr-create` | Creates GitHub pull requests with conventional commit-style titles following project conventions. |
+| `pr-merge` | Merge GitHub pull requests with strict CI validation. Never bypasses failed checks. |
+<!-- SKILLS_TABLE_END -->

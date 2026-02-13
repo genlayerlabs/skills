@@ -1,0 +1,32 @@
+dependencies:
+  - skill: create-skill
+    required: false
+    reason: "After creating a new skill, run docs-refresh to update REFERENCE.md"
+
+composition:
+  - when: "Creating a new skill"
+    sequence:
+      - create-skill
+      - docs-refresh
+
+  - when: "Modifying skill patterns or ownership"
+    sequence:
+      - docs-refresh
+
+triggers:
+  - pattern: "documentation|docs refresh|skill reference|update docs|regenerate docs"
+    suggest: docs-refresh
+  - condition: ".claude/skills/*/skill.yaml modified"
+    action: "Run docs-refresh to update REFERENCE.md"
+
+complements:
+  - skill: create-skill
+    relationship: "After creating a skill, refresh docs to update inventory"
+
+workflow:
+  after_skill_change:
+    description: "Standard workflow after modifying any skill"
+    steps:
+      - "task docs:refresh"
+      - "git add docs/skills/REFERENCE.md"
+      - "git commit"

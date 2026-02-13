@@ -1,0 +1,22 @@
+version: 1
+description: "Validations run by task claude:validate-skill -- --skill docs-refresh"
+
+validations:
+  # Phase 1: Deterministic checks
+  - id: skills-reference-check
+    name: "Skill reference documentation is in sync"
+    type: command
+    command: "task docs:refresh-check"
+    expect: "exit 0"
+    message: "Skill reference is out of sync. Run 'task docs:refresh' to fix."
+
+  - id: skill-yaml-valid
+    name: "All skill YAML files are valid"
+    type: command
+    command: "task claude:validate-skill-yaml"
+    expect: "exit 0"
+    message: "Skill YAML validation failed. Fix skill structure issues."
+
+on_stop:
+  - skills-reference-check
+  - skill-yaml-valid

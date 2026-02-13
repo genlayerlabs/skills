@@ -1,0 +1,215 @@
+name: pr-merge
+kind: workflow
+version: "1.0.0"
+description: "Merge GitHub pull requests with strict CI validation. Never bypasses failed checks."
+severity: high
+tags:
+  - git
+  - github
+  - workflow
+  - pr
+  - merge
+  - ci
+
+purpose: |
+  Merge GitHub pull requests with strict CI validation and merge state checking.
+  Enforces the critical rule: NEVER bypass failed CI checks.
+  Only offers bypass for missing reviews when all CI checks pass.
+
+owns:
+  - "PR merge workflow"
+  - "CI status verification before merge"
+  - "Merge state checking (CLEAN/BEHIND/BLOCKED/DIRTY)"
+  - "Branch update when behind"
+
+inputs_required:
+  - id: pr_number
+    description: "PR number to merge (optional - defaults to PR for current branch)"
+    examples:
+      - "123"
+      - ""
+
+required_outputs:
+  - "PR merged confirmation or blocker explanation"
+
+patterns:
+  - id: never-bypass-failed-checks
+    description: |
+      CRITICAL: Never offer to bypass failed CI checks.
+      Failed checks mean broken code - investigate first.
+      Only offer to bypass when:
+      - All checks pass
+      - Only blocker is missing review (BLOCKED state)
+    example: |
+      # WRONG - never do this
+      if check_failed:
+        ask "Bypass and merge anyway?"  # NO!
+
+      # RIGHT
+      if check_failed:
+        "CI check '<name>' failed. Please investigate before merging."
+
+  - id: get-pr-for-branch
+    description: |
+      Find PR for current branch if no PR number provided.
+      Use gh pr list with --head flag.
+    commands:
+      - "gh pr list --head $(git branch --show-current) --json number,state"
+
+  - id: check-pr-state-first
+    description: |
+      Before checking CI, verify PR is in OPEN state.
+      MERGED = already done, CLOSED = cannot merge.
+    commands:
+      - "gh pr view <number> --json state"
+
+  - id: check-ci-status
+    description: |
+      Check all status checks in statusCheckRollup.
+      Wait for IN_PROGRESS, STOP on FAILURE, continue on SUCCESS.
+    commands:
+      - "gh pr view <number> --json statusCheckRollup"
+
+  - id: wait-for-in-progress
+    description: |
+      If checks are IN_PROGRESS, wait and retry.
+      Max 5 retries with 30s delay between each.
+    example: |
+      for i in {1..5}; do
+        status=$(gh pr view --json statusCheckRollup)
+        if all_complete; then break; fi
+        sleep 30
+      done
+
+  - id: check-merge-state
+    description: |
+      After CI passes, check mergeStateStatus:
+      - CLEAN: safe to merge
+      - BEHIND: update branch first
+      - BLOCKED: check if review required (offer bypass if all checks pass)
+      - DIRTY: conflicts, cannot auto-merge
+    commands:
+      - "gh pr view <number> --json mergeStateStatus,mergeable"
+
+  - id: update-behind-branch
+    description: |
+      When BEHIND, update branch by merging main:
+      1. git fetch origin main
+      2. git merge origin/main --no-edit
+      3. git push
+      4. Re-check CI status
+    commands:
+      - "git fetch origin main"
+      - "git merge origin/main --no-edit"
+      - "git push"
+
+  - id: squash-merge
+    description: |
+      Use squash merge to keep clean history.
+      gh pr merge <number> --squash
+    commands:
+      - "gh pr merge <number> --squash"
+
+  - id: bypass-review-only
+    description: |
+      Only offer bypass when:
+      1. All CI checks pass (SUCCESS)
+      2. mergeStateStatus is BLOCKED
+      3. Block reason is missing review approval
+
+      Ask: "All checks pass but review required. Bypass review and merge?"
+    example: |
+      if all_checks_pass and merge_state == "BLOCKED":
+        ask "All checks pass but review required. Bypass review and merge?"
+        if user_confirms:
+          gh pr merge <number> --squash --admin
+
+anti_patterns:
+  - id: bypass-failed-checks
+    description: "Offering to bypass/merge when CI checks have failed"
+    why_bad: "Merging broken code into main. Failed checks require investigation, not bypass."
+
+  - id: auto-merge-without-checks
+    description: "Merging PR without verifying all CI checks have passed"
+    why_bad: "May merge broken code. Always verify checks before merge."
+
+  - id: ignore-in-progress
+    description: "Merging while checks are still IN_PROGRESS"
+    why_bad: "Checks may fail. Wait for completion before deciding."
+
+  - id: force-merge-conflicts
+    description: "Attempting to merge when DIRTY (conflicts exist)"
+    why_bad: "Cannot auto-merge with conflicts. User must resolve manually."
+
+  - id: skip-behind-update
+    description: "Merging when BEHIND without updating branch first"
+    why_bad: "May miss conflicts or CI failures from main changes."
+
+  - id: offer-bypass-on-failure
+    description: "Asking 'bypass anyway?' when a check has failed"
+    why_bad: |
+      CRITICAL VIOLATION. Failed checks = broken code.
+      Never suggest bypassing failed checks. Only bypass is for missing review.
+
+procedure:
+  - step: "Parse input"
+    detail: |
+      Determine PR number:
+      - If provided, use it directly
+      - Otherwise, find PR for current branch
+
+  - step: "Get PR for current branch (if needed)"
+    detail: |
+      gh pr list --head $(git branch --show-current) --json number,state
+      If no PR found, inform user and exit.
+    commands:
+      - "gh pr list --head $(git branch --show-current) --json number,state"
+
+  - step: "Check PR state"
+    detail: |
+      gh pr view <number> --json state,mergeable,mergeStateStatus,statusCheckRollup
+
+      Check state:
+        - MERGED → "PR already merged" - exit
+        - CLOSED → "PR is closed" - exit
+        - OPEN → Continue
+    commands:
+      - "gh pr view <number> --json state,mergeable,mergeStateStatus,statusCheckRollup"
+
+  - step: "Check CI status"
+    detail: |
+      For each check in statusCheckRollup:
+        - IN_PROGRESS → Wait 30s and re-check (max 5 retries)
+        - FAILURE → STOP. Display: "CI check '<name>' failed. Investigate before merging."
+        - SUCCESS → Continue
+
+      CRITICAL: Never offer to bypass failed checks.
+
+  - step: "Check merge state"
+    detail: |
+      Based on mergeStateStatus:
+        - CLEAN → Proceed to merge
+        - BEHIND → Update branch:
+            git fetch origin main
+            git merge origin/main --no-edit
+            git push
+          Then re-check from "Check CI status" step
+        - BLOCKED → Check if all checks passed:
+            If yes: Ask "All checks pass but review required. Bypass review and merge?"
+            If no: This shouldn't happen (would have stopped at CI check)
+        - DIRTY → "Conflicts detected. Cannot auto-merge. Resolve conflicts first."
+
+  - step: "Execute merge"
+    detail: |
+      If CLEAN or user confirmed bypass:
+        gh pr merge <number> --squash
+
+      On success: "PR #<number> merged successfully"
+      On failure: Display error message
+    commands:
+      - "gh pr merge <number> --squash"
+
+  - step: "Report result"
+    detail: |
+      On success: Display merge confirmation with PR number
+      On failure: Display specific error and next steps

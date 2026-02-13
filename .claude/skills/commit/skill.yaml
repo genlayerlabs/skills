@@ -1,0 +1,220 @@
+name: commit
+kind: action
+version: "1.0.0"
+description: "Execute git commit with conventional commit message analysis, intelligent staging, and message generation."
+severity: medium
+tags:
+  - git
+  - commit
+  - conventional-commits
+  - workflow
+
+purpose: |
+  Create standardized git commits following Conventional Commits specification.
+  Analyze actual diff to determine appropriate type, scope, and message.
+  Enforces project-specific rules: no AI attribution, no ticket references, no emojis.
+
+owns:
+  - "Git commit message generation"
+  - "Conventional commit format enforcement"
+  - "Intelligent staging guidance"
+  - "Project commit rules enforcement"
+
+inputs_required:
+  - id: changes
+    description: "Staged or unstaged changes to commit"
+    examples:
+      - "git diff --staged output"
+      - "git status --porcelain output"
+
+required_outputs:
+  - "Git commit with conventional message"
+
+commit_types:
+  - type: feat
+    purpose: "New feature"
+  - type: fix
+    purpose: "Bug fix"
+  - type: docs
+    purpose: "Documentation only"
+  - type: style
+    purpose: "Formatting/style (no logic)"
+  - type: refactor
+    purpose: "Code refactor (no feature/fix)"
+  - type: perf
+    purpose: "Performance improvement"
+  - type: test
+    purpose: "Add/update tests"
+  - type: build
+    purpose: "Build system/dependencies"
+  - type: ci
+    purpose: "CI/config changes"
+  - type: chore
+    purpose: "Maintenance/misc"
+  - type: revert
+    purpose: "Revert commit"
+
+project_scopes:
+  - plugins
+  - skills
+  - config
+  - infra
+  - docs
+
+patterns:
+  - id: conventional-format
+    description: |
+      Follow conventional commit format:
+      <type>(<scope>): <subject>
+
+      <optional body>
+    example: |
+      feat(plugins): add genlayernode skill
+
+      Adds interactive wizard for GenLayer validator node setup.
+
+  - id: imperative-mood
+    description: "Use present tense, imperative mood for subject"
+    example: |
+      Good: "add feature", "fix bug", "update config"
+      Bad: "added feature", "fixes bug", "updated config"
+
+  - id: specific-subjects
+    description: "Be specific about what changed, avoid vague words"
+    example: |
+      Good: "add parallel worker support"
+      Bad: "improve worker functionality"
+
+  - id: heredoc-multiline
+    description: "Use HEREDOC for multi-line commit messages"
+    example: |
+      git commit -m "$(cat <<'EOF'
+      feat(plugins): add genlayernode skill
+
+      Adds interactive wizard for GenLayer validator node setup.
+      EOF
+      )"
+
+  - id: short-title
+    description: "Keep title under 50 characters"
+    example: |
+      Good (38 chars): "feat(plugins): add genlayernode skill"
+      Bad (62 chars): "feat(plugins): add genlayernode skill with full setup wizard"
+
+  - id: changelog-aware-message
+    description: |
+      Write commit messages with changelog review in mind. The message should
+      make it obvious whether the commit is changelog-worthy based on IMPACT, not type.
+
+      Any type can be changelog-worthy depending on impact:
+      - chore(deps): Security fix → changelog
+      - chore(skills): Tooling → not changelog
+      - docs: User API guide → changelog
+      - docs: Dev setup → not changelog
+
+      Changelog-worthy: Focus on USER/PRODUCT impact
+      Internal: Focus on DEVELOPER/PROCESS impact
+    example: |
+      # Changelog-worthy (various types)
+      feat(plugins): add genlayernode setup wizard
+      fix(skills): correct validation check for missing files
+      docs: add plugin installation guide
+      chore(deps): upgrade axios to fix security vulnerability
+
+      # Internal (various types)
+      chore(skills): add commit validation
+      test(plugins): add integration tests
+      ci: add parallel test execution
+      docs: update development setup instructions
+
+procedure:
+  - step: "Check git status"
+    detail: "Run git status --porcelain to see all changes."
+    commands:
+      - "git status --porcelain"
+
+  - step: "Check staged changes"
+    detail: "If files are staged, show the staged diff."
+    commands:
+      - "git diff --staged"
+
+  - step: "Stage if needed"
+    detail: |
+      If nothing staged, show working tree diff and ask user what to stage.
+      Never stage .env, credentials, or secrets.
+    commands:
+      - "git diff"
+      - "git add <files>"
+
+  - step: "Analyze changes"
+    detail: |
+      Determine type, scope, and subject from the diff:
+      - Type: What kind of change? (feat, fix, docs, etc.)
+      - Scope: What module? (plugins, skills, config, etc.)
+      - Subject: What did it do? (specific, imperative mood)
+
+  - step: "Generate message"
+    detail: |
+      Create commit message following format.
+      Verify all project rules are met:
+      - ≤50 char title
+      - Specific (not vague)
+      - No AI attribution
+      - No ticket refs
+      - No emojis
+
+  - step: "Confirm with user"
+    detail: |
+      ALWAYS confirm before committing:
+      1. Show the generated commit message
+      2. Ask: "Commit with this message? (y/n)"
+      3. If yes: proceed to execute
+      4. If no: ask "Any changes I should make?" and revise
+
+  - step: "Execute commit"
+    detail: "Run git commit with the message using HEREDOC if multi-line."
+    commands:
+      - 'git commit -m "<type>(<scope>): <subject>"'
+
+anti_patterns:
+  - id: vague-subject
+    description: "Using vague words like 'improve', 'enhance', 'update'"
+    why_bad: "Doesn't describe what actually changed. Useless in git log."
+    example: |
+      Bad: "improve API performance"
+      Good: "cache validator list in memory"
+
+  - id: ai-attribution
+    description: "Including Co-Authored-By, 'Generated with', or AI references"
+    why_bad: "Project rule: no AI attribution in commits."
+
+  - id: ticket-references
+    description: "Including 'Fixes #123' or 'Part of NOD-XXX' in commit body"
+    why_bad: "Project rule: ticket references belong in PR, not commits."
+
+  - id: past-tense
+    description: "Using past tense like 'added', 'fixed', 'updated'"
+    why_bad: "Conventional commits use imperative mood (present tense)."
+
+  - id: file-focused
+    description: "Describing file operations instead of work done"
+    why_bad: "Commits should describe what changed, not what files were touched."
+    example: |
+      Bad: "add implementation plan to docs"
+      Good: "document epoch monitoring architecture"
+
+  - id: long-title
+    description: "Title exceeds 50 characters"
+    why_bad: "Git log truncates long titles. Keep it concise."
+
+  - id: staging-secrets
+    description: "Staging .env, credentials, or secret files"
+    why_bad: "Secrets should never be committed to version control."
+
+  - id: amend-after-hook-failure
+    description: "Using --amend after pre-commit hook fails"
+    why_bad: "Would amend the previous commit, not create new one."
+
+handoffs:
+  - skill: pr-create
+    when: "User wants to create a pull request after committing"

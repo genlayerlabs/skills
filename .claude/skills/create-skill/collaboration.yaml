@@ -1,0 +1,16 @@
+# Collaboration: skill dependencies and composition
+#
+# NOTE: composition.sequence lists skill names only.
+# NOTE: Future dependencies (layer-check, etc) will be added when those skills exist.
+
+name: create-skill
+version: "1.0.0"
+
+composition:
+  - when: "Creating a brand new skill"
+    sequence:
+      - create-skill
+
+triggers:
+  - pattern: "create a skill|new skill|add skill|scaffold skill|skill template"
+    suggest: create-skill

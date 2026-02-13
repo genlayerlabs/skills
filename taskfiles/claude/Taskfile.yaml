@@ -1,0 +1,127 @@
+version: "3"
+
+tasks:
+  validate-skill:
+    desc: Run validation commands from a skill's validations.yaml
+    summary: |
+      Validate a skill by running commands defined in its validations.yaml.
+
+      Usage:
+        task claude:validate-skill -- --skill claude-skill-code
+        task claude:validate-skill -- --skill claude-skill-code --mode all
+        task claude:validate-skill -- --skill claude-skill-create-skill --mode on-stop
+
+      Options:
+        --skill SKILL    Skill name (folder name under .claude/skills/) [required]
+        --mode MODE      Which validations to run: "on-stop" (default) or "all"
+        --debug          Enable debug logging
+
+      Exit codes:
+        0 - All validations passed
+        1 - One or more validations failed
+    cmds:
+      - ./taskfiles/claude/scripts/validate-skill.sh {{.CLI_ARGS}}
+    dir: "{{.USER_WORKING_DIR}}"
+
+  audit-skills:
+    desc: Run semantic skill audit (multi-YAML pattern compliance)
+    summary: |
+      Semantic skill auditor that enforces multi-YAML pattern compliance.
+
+      Checks performed:
+        - skill.yaml exists and declares kind
+        - Required files present based on kind
+        - Stop hook discipline (non-helpers)
+        - validations.yaml discipline (v1 command only)
+        - Collaboration reference integrity
+        - Upstream name/description constraints
+        - Best practices (SKILL.md conciseness, procedure sections)
+
+      Usage:
+        task claude:audit-skills
+        task claude:audit-skills -- --strict
+
+      Options:
+        --strict    Fail on warnings (ad-hoc commands, patterns in SKILL.md)
+        --debug     Enable debug logging
+
+      Exit codes:
+        0 - Audit passed
+        1 - Errors found (or warnings in strict mode)
+    cmds:
+      - ./taskfiles/claude/scripts/audit-skills.sh {{.CLI_ARGS}}
+    dir: "{{.USER_WORKING_DIR}}"
+
+  audit-skills-strict:
+    desc: Run semantic skill audit in strict mode
+    summary: |
+      Same as audit-skills but fails on any warnings.
+      Use this in CI to enforce all best practices.
+    cmds:
+      - ./taskfiles/claude/scripts/audit-skills.sh --strict
+    dir: "{{.USER_WORKING_DIR}}"
+
+  validate-skill-yaml:
+    desc: CI check for skill YAML structure and required files
+    summary: |
+      CI check that validates all skill YAML files are well-formed and have
+      required files.
+
+      Enforces:
+        - Stop hook discipline (SKILL.md Stop hook must call task claude:validate-skill)
+        - Naming convention (directory must start with 'claude-skill-')
+        - Collaboration references (all referenced skills must exist)
+        - Validations integrity (on_stop IDs exist, type=command only)
+        - Task target existence
+
+      Usage:
+        task claude:validate-skill-yaml
+
+      Exit codes:
+        0 - All skills valid
+        1 - Errors found
+    cmds:
+      - ./taskfiles/claude/scripts/check-skill-yaml.sh {{.CLI_ARGS}}
+    dir: "{{.USER_WORKING_DIR}}"
+
+  skills-reference:
+    desc: Generate docs/skills/REFERENCE.md from skill.yaml files
+    summary: |
+      Generate a comprehensive reference document from all skill.yaml files.
+
+      Creates:
+        - Overview table of all skills
+        - Detailed sections by skill kind
+        - Patterns and anti-patterns from each skill
+
+      Usage:
+        task claude:skills-reference
+        task claude:skills-reference -- --output /path/to/output.md
+
+      Options:
+        --output FILE   Output file path (default: docs/skills/REFERENCE.md)
+        --debug         Enable debug logging
+    cmds:
+      - ./taskfiles/claude/scripts/generate-skill-reference.sh {{.CLI_ARGS}}
+    dir: "{{.USER_WORKING_DIR}}"
+
+  list-skills:
+    desc: List all available skills
+    summary: |
+      List all skills in .claude/skills/ directory with their kind and description.
+    cmds:
+      - |
+        echo ""
+        echo "Available Skills"
+        echo "================"
+        for dir in .claude/skills/*/; do
+          if [[ -f "${dir}skill.yaml" ]]; then
+            skill=$(basename "$dir")
+            kind=$(grep -E '^kind:' "${dir}skill.yaml" 2>/dev/null | head -1 | sed 's/kind:[[:space:]]*//' | sed 's/"//g' || echo "unknown")
+            desc=$(grep -E '^description:' "${dir}skill.yaml" 2>/dev/null | head -1 | sed 's/description:[[:space:]]*//' | sed 's/"//g' | cut -c1-60 || echo "-")
+            printf "  %-25s [%-10s] %s\n" "$skill" "$kind" "$desc"
+          fi
+        done
+        echo ""
+    dir: "{{.USER_WORKING_DIR}}"
+    silent: true

@@ -1,0 +1,118 @@
+name: docs-refresh
+kind: gate
+version: "1.0.0"
+description: "Refresh documentation with deterministic generation from source files."
+severity: high
+tags:
+  - documentation
+  - automation
+  - skills
+
+purpose: |
+  Keep generated documentation in sync with source files.
+
+  Currently handles:
+  - Skill reference documentation (docs/skills/REFERENCE.md)
+  - Claude instructions file (CLAUDE.md) - skills table section
+  - Generated from .claude/skills/*/skill.yaml
+
+owns:
+  - "docs/skills/REFERENCE.md generation"
+  - "CLAUDE.md skills table maintenance"
+  - "Deterministic documentation generation workflow"
+
+permissions:
+  - "You MUST run docs:refresh before committing skill changes"
+  - "You MUST update CLAUDE.md skills table when adding/removing skills"
+  - "You MUST NOT manually edit docs/skills/REFERENCE.md"
+
+inputs_required:
+  - id: mode
+    description: "Refresh mode"
+    options:
+      - value: quick
+        description: "Regenerate skill reference only"
+      - value: full
+        description: "Regenerate all documentation"
+    default: quick
+
+documentation_sources:
+  skill_reference:
+    description: "Auto-generated skill inventory"
+    sources:
+      - path: ".claude/skills/*/skill.yaml"
+        extracts: "Skill name, kind, description, patterns, ownership"
+    output:
+      file: "docs/skills/REFERENCE.md"
+      generator: "task claude:skills-reference"
+
+  claude_instructions:
+    description: "Project-level Claude instructions with skills table"
+    sources:
+      - path: ".claude/skills/*/skill.yaml"
+        extracts: "Skill name, description (for skills table)"
+    output:
+      file: "CLAUDE.md"
+      generator: "Manual update (skills table section)"
+    update_trigger: "When skills are added or removed"
+
+artifacts:
+  - path: "docs/skills/REFERENCE.md"
+    purpose: "Generated skill reference documentation"
+    generated_by: "task claude:skills-reference"
+
+  - path: "CLAUDE.md"
+    purpose: "Project instructions for Claude with skills table"
+    generated_by: "Manual (skills table must be kept in sync)"
+
+patterns:
+  - id: refresh-before-commit
+    description: "Always run docs:refresh before committing skill changes"
+    commands:
+      - "task docs:refresh"
+      - "git add docs/skills/REFERENCE.md"
+
+  - id: check-in-ci
+    description: "CI should verify docs are in sync"
+    commands:
+      - "task docs:refresh-check"
+
+  - id: never-edit-generated
+    description: "Generated docs should never be manually edited"
+    example: |
+      BAD: vim docs/skills/REFERENCE.md
+      GOOD: vim .claude/skills/code/skill.yaml && task docs:refresh
+
+anti_patterns:
+  - id: skip-refresh
+    description: "Modifying skills without regenerating REFERENCE.md"
+    why_bad: "Skill documentation becomes stale and misleading"
+
+  - id: edit-generated-doc
+    description: "Manually editing docs/skills/REFERENCE.md"
+    why_bad: "Changes will be overwritten on next refresh"
+
+  - id: commit-without-check
+    description: "Committing skill changes without running docs:refresh-check"
+    why_bad: "CI will fail; docs are out of sync"
+
+procedure:
+  - step: "Regenerate documentation"
+    detail: "Generate all deterministic documentation from source files"
+    commands:
+      - "task docs:refresh"
+
+  - step: "Verify"
+    detail: "Check that generated docs match source"
+    commands:
+      - "task docs:refresh-check"
+
+  - step: "Commit"
+    detail: "Include generated docs in commit"
+    commands:
+      - "git add docs/skills/REFERENCE.md"
+
+entry_points:
+  task_targets:
+    - "docs:refresh"
+    - "docs:refresh-check"

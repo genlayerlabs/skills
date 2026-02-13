@@ -1,0 +1,62 @@
+# Collaboration: skill dependencies and composition
+
+collaborates_with:
+  - skill: pr-create
+    relationship: "downstream"
+    handoff: |
+      After committing changes:
+      1. commit creates the commit(s)
+      2. User pushes to remote
+      3. pr-create creates the pull request
+
+boundaries:
+  this_skill_handles:
+    - "Git commit message generation"
+    - "Conventional commit format"
+    - "Intelligent staging guidance"
+    - "Project commit rules enforcement"
+    - "Commit safety checks"
+
+  this_skill_does_not_handle:
+    - "Pull request creation (use pr-create)"
+    - "Pushing to remote (manual git push)"
+
+triggers:
+  - pattern: "commit|/commit"
+    suggest: commit
+
+  - pattern: "git commit|stage changes|create commit"
+    suggest: commit
+
+  - pattern: "commit message|conventional commit"
+    suggest: commit
+
+composition:
+  - when: "User wants to create a PR after committing"
+    sequence:
+      - commit
+      - "git push (manual)"
+      - pr-create
+
+common_questions:
+  - question: "Should I stage all files with git add -A?"
+    answer: |
+      No. Use git add <specific-files> to avoid accidentally staging secrets
+      or unrelated files. Review git status first.
+
+  - question: "What if pre-commit hooks fail?"
+    answer: |
+      Fix the issue (usually lint or test failure).
+      Re-stage files if needed.
+      Create a NEW commit - never use --amend after hook failure.
+
+  - question: "Can I include ticket references in the commit?"
+    answer: |
+      No. Project rule: ticket references belong in PR description,
+      not in commit messages. Keep commits focused on the change itself.
+
+  - question: "Should I use past or present tense?"
+    answer: |
+      Present tense, imperative mood.
+      Good: "add feature", "fix bug", "update config"
+      Bad: "added feature", "fixed bug", "updated config"

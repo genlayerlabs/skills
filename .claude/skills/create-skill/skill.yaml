@@ -1,0 +1,233 @@
+name: create-skill
+kind: meta
+version: "1.0.0"
+description: "Scaffold a new Claude Code skill using the multi-YAML pattern."
+severity: high
+tags:
+  - skills
+  - automation
+  - repo-hygiene
+  - tooling
+
+purpose: |
+  Create a new skill directory under .claude/skills/{folder-name}/ with:
+  - a thin SKILL.md that Claude reads
+  - canonical YAML files used by automation (pattern docs, gotchas, validations, collaboration)
+  Enforces folder-name-based naming and validate-skill-based Stop hooks.
+
+owns:
+  - "Skill scaffolding under .claude/skills/*/"
+  - "Multi-YAML canonical file layout for skills"
+  - "Stop hook discipline: Stop hook must call task claude:validate-skill -- --skill {folder-name}"
+
+inputs_required:
+  - id: folder_name
+    description: "Skill folder basename (directory name). Must start with 'claude-skill-' and equal SKILL.md frontmatter name."
+    examples:
+      - claude-skill-layer-check
+      - claude-skill-add-new-pass
+      - claude-skill-pre-push
+  - id: title
+    description: "Human title for H1 header in SKILL.md."
+    examples:
+      - "Layer Check"
+      - "Add New Pass"
+  - id: description
+    description: "One-line description for trigger matching (frontmatter description)."
+  - id: purpose
+    description: "2-3 sentences describing what the skill accomplishes (SKILL.md purpose section)."
+  - id: creates_summary
+    description: "Pointer-level summary of files or artifacts this skill creates."
+  - id: requires_summary
+    description: "Pointer-level summary of inputs required to run the skill."
+  - id: on_stop_tasks
+    description: |
+      Minimal set of existing Task targets to run on Stop (fast, strict, command-based).
+      Must reference targets discovered in capability scan. Prefer existing targets.
+    examples:
+      - ["task common:test"]
+      - ["task common:test-cov"]
+      - ["task claude:validate-skill-yaml"]
+
+required_outputs:
+  - ".claude/skills/{folder-name}/SKILL.md"
+  - ".claude/skills/{folder-name}/skill.yaml"
+  - ".claude/skills/{folder-name}/sharp-edges.yaml"
+  - ".claude/skills/{folder-name}/validations.yaml"
+  - ".claude/skills/{folder-name}/collaboration.yaml"
+
+patterns:
+  - id: prefix-required
+    description: |
+      All skill folder names must start with 'claude-skill-'.
+      SKILL.md frontmatter name: must exactly match the folder basename.
+    example: |
+      Folder: .claude/skills/claude-skill-layer-check/
+      SKILL.md:
+        name: claude-skill-layer-check
+
+  - id: capability-discovery-before-writing-validations
+    description: |
+      Before generating a new skill's validations.yaml, inventory repo operations
+      (Task targets + scripts) and verify the selected on_stop commands exist.
+      This prevents validations from referencing non-existent operations.
+    commands:
+      - "task --list"
+      - "task --list | grep claude"
+      - "task --list | grep common"
+
+  - id: thin-skillmd-pointers-only
+    description: |
+      SKILL.md is a thin wrapper that:
+      - defines frontmatter (name/description/tools/hooks)
+      - states purpose + quick reference at pointer-level only
+      - points to YAML files for canonical rules
+    example: |
+      SKILL.md includes:
+      - Purpose (2-3 sentences)
+      - Quick reference (creates/requires/stop hook)
+      - Automation section pointing to skill.yaml / sharp-edges.yaml / validations.yaml / collaboration.yaml
+
+  - id: stop-hook-calls-validate-skill
+    description: |
+      Stop hook MUST call:
+        task claude:validate-skill -- --skill {folder-name}
+      This guarantees Stop runs exactly what validations.yaml:on_stop lists.
+    example: |
+      hooks:
+        Stop:
+          - type: command
+            command: "task claude:validate-skill -- --skill claude-skill-layer-check"
+
+  - id: command-only-validations-v1
+    description: |
+      v1 validations runner supports command validations only.
+      validations.yaml MUST use type: command and prefer existing Task targets.
+    example: |
+      validations:
+        - id: test
+          type: command
+          command: "task common:test"
+      on_stop: [test]
+
+  - id: prefer-task-targets
+    description: |
+      Prefer Task targets over ad-hoc grep/regex checks.
+      If a rule matters, create or reuse a Task target, then reference it from validations.yaml.
+    example: |
+      Good:  command: "task common:test"
+      Avoid: command: "grep -R \"some/path\" domains | wc -l | test ..."
+
+  - id: mode-aware-validations
+    description: |
+      validations.yaml should define:
+      - validations: (id -> command)
+      - on_stop: minimal subset (fast checks only)
+      The runner supports --mode on-stop and --mode all.
+
+  - id: document-in-claudemd
+    description: |
+      Every new skill MUST be documented in CLAUDE.md under "### Skill kinds".
+      Add a line: `- \`{folder-name}\` - {short description}`
+      This is enforced by task claude:audit-skills.
+    example: |
+      **Helper skills** - Provide guidance or templates.
+      - `my-new-skill` - Short description of what it does
+
+anti_patterns:
+  - id: non-prefix
+    description: "Skill folder name does not start with 'claude-skill-'"
+    why_bad: "Breaks naming convention. All skills use claude-skill- prefix."
+
+  - id: name-mismatch
+    description: "SKILL.md frontmatter name differs from folder basename"
+    why_bad: "Breaks lookup conventions and validate-skill --skill {folder-name} discipline."
+
+  - id: guessed-operations
+    description: "Writing validations.yaml that references Task targets or scripts that do not exist"
+    why_bad: "Creates dead checks and breaks stop-hook discipline."
+
+  - id: restating-canonical-rules-in-skillmd
+    description: "Copying patterns/anti-patterns from skill.yaml into SKILL.md"
+    why_bad: "Violates canonical placement. SKILL.md should remain thin and stable."
+
+  - id: heavy-stop-hook
+    description: "Stop hook runs heavyweight commands directly (full test suite) instead of validate-skill"
+    why_bad: "Stop hook must not exceed what validations.yaml claims; validate-skill is the contract boundary."
+
+  - id: validations-on-stop-ids-missing
+    description: "validations.yaml:on_stop references IDs not present in validations"
+    why_bad: "Stop validation becomes a no-op or silently skips checks."
+
+  - id: undocumented-skill
+    description: "Creating skill files but forgetting to add to CLAUDE.md"
+    why_bad: "Skills become invisible. task claude:audit-skills will fail."
+
+handoffs:
+  - skill: "layer-check"
+    when: "If the new skill changes code organization or touches layer boundaries."
+  - skill: "tdd-core-first"
+    when: "If the new skill governs core/feature TDD gating behavior."
+  - skill: "pre-push"
+    when: "If you need a heavier validation sequence than Stop should run."
+
+procedure:
+  - step: "Discover available operations"
+    detail: |
+      Run capability scan to list Task targets and confirm likely on_stop candidates exist.
+      Use this to select valid on_stop checks for the new skill.
+    commands:
+      - "task --list"
+      - "task --list | grep claude"
+      - "task --list | grep common"
+
+  - step: "Gather inputs"
+    detail: |
+      Collect from user:
+      - folder_name (must start with claude-skill-)
+      - title
+      - description
+      - purpose
+      - on_stop_tasks (must exist per capability scan)
+
+  - step: "Create folder"
+    detail: "mkdir -p .claude/skills/{folder-name}/"
+
+  - step: "Write SKILL.md (thin wrapper)"
+    detail: |
+      Use folder-name in frontmatter name and in Stop hook task claude:validate-skill -- --skill {folder-name}.
+      Keep content pointer-level only.
+
+  - step: "Write skill.yaml"
+    detail: "Put canonical patterns/anti-patterns and ownership here."
+
+  - step: "Write sharp-edges.yaml"
+    detail: "Put common gotchas + detection/fixes here."
+
+  - step: "Write validations.yaml"
+    detail: |
+      v1 = command-only. Use only Task targets confirmed in capability scan.
+      Put minimal checks in on_stop; heavier checks belong in pre-push.
+
+  - step: "Write collaboration.yaml"
+    detail: "Define dependencies/composition/triggers to suggest skill usage."
+
+  - step: "Document in CLAUDE.md"
+    detail: |
+      Add the skill to CLAUDE.md under "### Skill kinds" in the appropriate category.
+      Format: `- \`{folder-name}\` - {short description}`
+      This is REQUIRED - task claude:audit-skills will fail if the skill is not documented.
+
+  - step: "Validate"
+    detail: |
+      - task claude:validate-skill-yaml
+      - task claude:validate-skill -- --skill {folder-name}
+      - task claude:audit-skills (verifies CLAUDE.md documentation)
+
+default_on_stop_mapping:
+  - area: "tests"
+    target: "task common:test"
+  - area: "test coverage"
+    target: "task common:test-cov"
+  - area: "skill system itself"
+    target: "task claude:validate-skill-yaml"

@@ -1,0 +1,24 @@
+# Collaboration: skill dependencies and composition
+
+name: pr-create
+version: "1.0.0"
+
+dependencies:
+  - skill: workflow
+    reason: "PR creation is typically the final step of a workflow"
+
+composition:
+  - when: "Creating a pull request"
+    sequence:
+      - pr-create
+
+  - when: "Finishing workflow with PR"
+    sequence:
+      - workflow
+      - pr-create
+
+triggers:
+  - pattern: "create pr|make pr|open pr|submit pr|/pr|/pr-create"
+    suggest: pr-create
+  - pattern: "push and pr|push pr|create pull request"
+    suggest: pr-create
