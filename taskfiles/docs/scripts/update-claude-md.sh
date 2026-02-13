@@ -133,6 +133,7 @@ update_claude_md() {
     temp_file=$(mktemp)
     local table_file
     table_file=$(mktemp)
+    trap 'rm -f "$temp_file" "$table_file"' RETURN
 
     # Check if markers exist
     if ! grep -q "$START_MARKER" "$CLAUDE_MD"; then
@@ -167,7 +168,6 @@ update_claude_md() {
     done < "$CLAUDE_MD" > "$temp_file"
 
     mv "$temp_file" "$CLAUDE_MD"
-    rm -f "$table_file"
     log_info "Updated CLAUDE.md skills table"
 }
 
