@@ -13,14 +13,13 @@ flowchart TD
     end
 
     subgraph Configuration
-        C --> D[Step 1: Configure .env<br/>Set credentials + NODE_ID]
-        D --> E[Step 2: Test Credentials<br/>curl → HTTP 400/204]
-        E --> F[Step 3: Create Symlink<br/>alloy-config.river]
+        C --> D[Step 2: Configure .env<br/>Set credentials + NODE_ID]
+        D --> E[Step 3: Test Credentials<br/>curl → HTTP 400/204]
     end
 
     subgraph Deployment
-        F --> G[Step 4: Start Alloy<br/>docker compose --profile monitoring up -d]
-        G --> H[Step 5: Verify<br/>Check logs + Alloy UI]
+        E --> F[Step 4: Start Alloy<br/>docker compose --profile monitoring up -d]
+        F --> G[Step 5: Verify<br/>Check logs + Alloy UI]
     end
 ```
 
@@ -51,10 +50,10 @@ The node tarball (v0.4.4+) **already includes** everything needed for monitoring
 - **`docker-compose.yaml`** — Includes the Alloy service under the `monitoring` profile
 - **`.env.example`** — Includes all monitoring environment variable placeholders
 
-**You do NOT need to create these files manually.** You only need to:
+**You do NOT need to create these files manually.** The `alloy-config.river` symlink is created
+automatically during installation/upgrade as part of the standard symlink setup (see `common-procedures.md` -> "Setup Symlinks"). You only need to:
 1. Set credentials in `.env`
-2. Create the symlink for `alloy-config.river`
-3. Start the monitoring profile
+2. Start the monitoring profile
 
 ## Step 1: Request Credentials
 
@@ -74,7 +73,7 @@ The node tarball (v0.4.4+) **already includes** everything needed for monitoring
 Edit `.env` on the server to set the monitoring variables:
 
 ```bash
-nano /opt/genlayer-node/v0.4.4/.env
+nano /opt/genlayer-node/.env
 ```
 
 **Set these values:**
@@ -119,7 +118,7 @@ ALLOY_SELF_MONITORING_INTERVAL=60s
 
 ```bash
 # Load env vars
-set -a && source /opt/genlayer-node/v0.4.4/.env && set +a
+set -a && source /opt/genlayer-node/.env && set +a
 
 # Test Prometheus (metrics) — expect HTTP 400 (auth OK, empty body rejected)
 echo "=== Prometheus ==="
@@ -150,20 +149,13 @@ echo ""
 
 **Do NOT proceed until both return non-401 codes.**
 
-## Step 4: Create Alloy Config Symlink
+## Step 4: Start Alloy
 
-The `alloy-config.river` ships inside the version directory. Create a symlink so docker-compose can find it:
-
-```bash
-ln -sfn /opt/genlayer-node/v0.4.4/alloy-config.river /opt/genlayer-node/alloy-config.river
-
-# Verify
-ls -la /opt/genlayer-node/alloy-config.river
-```
-
-**Note:** The docker-compose.yaml mounts `./alloy-config.river` from the working directory (`/opt/genlayer-node/`), so the symlink must be at the root level, not inside the version directory.
-
-## Step 5: Start Alloy
+> **Note:** The `alloy-config.river` symlink is created automatically during installation/upgrade
+> as part of the standard symlink setup (see `common-procedures.md` -> "Setup Symlinks").
+> The file ships with every node tarball — you do NOT need to create or copy it manually.
+> The docker-compose.yaml mounts `./alloy-config.river` from the working directory (`/opt/genlayer-node/`),
+> which resolves through the symlink to the current version's config.
 
 ```bash
 cd /opt/genlayer-node
@@ -182,9 +174,9 @@ Expected:
 genlayer-node-alloy  grafana/alloy:v1.12.0  ... Up ... 0.0.0.0:12345->12345/tcp
 ```
 
-## Step 6: Verification
+## Step 5: Verification
 
-### 6.1 Check Alloy Logs (Most Important)
+### 5.1 Check Alloy Logs (Most Important)
 
 ```bash
 # Check for any errors (should be empty)
@@ -209,7 +201,7 @@ error="server returned HTTP status 401 Unauthorized"
 ```
 If you see 401 errors, stop Alloy, fix credentials, test with curl, then restart.
 
-### 6.2 Check Alloy UI
+### 5.2 Check Alloy UI
 
 Via SSH tunnel:
 ```bash
@@ -222,13 +214,13 @@ ssh -L 12345:localhost:12345 user@your-server
 
 Then open `http://localhost:12345` in your browser. The targets page should show `genlayer_node` target as **UP**.
 
-### 6.3 Verify Local Metrics
+### 5.3 Verify Local Metrics
 
 ```bash
 curl -s http://localhost:9153/metrics | grep genlayer_node | head -10
 ```
 
-### 6.4 Check Foundation Dashboard
+### 5.4 Check Foundation Dashboard
 
 Once metrics are flowing, your validator should appear on the GenLayer Foundation dashboard:
 
@@ -263,9 +255,9 @@ docker logs genlayer-node-alloy 2>&1 | grep -c "401"
 docker logs genlayer-node-alloy 2>&1 | head -10
 ```
 
-**Fix:** Create the symlink:
+**Fix:** The `alloy-config.river` symlink should already exist from the install/upgrade symlink setup (see `common-procedures.md` -> "Setup Symlinks"). If missing, recreate it:
 ```bash
-ln -sfn /opt/genlayer-node/v0.4.4/alloy-config.river /opt/genlayer-node/alloy-config.river
+ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river
 ```
 
 ### No Data Being Pushed (No Errors Either)
@@ -329,3 +321,40 @@ docker logs -f genlayer-node-alloy
 # WARNING: 'docker compose down' without --profile stops ALL containers including WebDriver
 # Always use --profile monitoring to only affect Alloy
 ```
+
+## Important: Alloy Must Restart When Node Restarts
+
+**CRITICAL**: When the genlayer-node service restarts (during upgrades or otherwise), Alloy's
+bind mount to the log directory becomes stale. The container continues reading from the old
+log path, and **no new logs are sent to Grafana**.
+
+**Symptoms of stale bind mount:**
+- Node is running and healthy (`curl localhost:9153/health` returns OK)
+- But Grafana shows no logs/metrics for this validator
+- Validator appears offline in monitoring dashboards
+- May lead to heartbeat failures and validator banning
+
+**Solution:** The systemd service should include `ExecStartPost` to auto-restart Alloy:
+```ini
+ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+```
+
+If your existing systemd service doesn't have this line, add it:
+```bash
+# Edit the service file
+sudo nano /etc/systemd/system/genlayer-node.service
+
+# Add after ExecStart line:
+# ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+
+# Reload and restart
+sudo systemctl daemon-reload
+sudo systemctl restart genlayer-node
+```
+
+**Manual fix (if Alloy is already stale):**
+```bash
+docker restart genlayer-node-alloy
+```
+
+See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for detailed explanation.

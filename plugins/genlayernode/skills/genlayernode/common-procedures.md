@@ -83,7 +83,12 @@ ln -sfn ${VERSION}/data data
 ln -sfn ${VERSION}/configs configs
 ln -sfn ${VERSION}/docker-compose.yaml docker-compose.yaml
 ln -sfn ${VERSION}/.env .env
+ln -sfn ${VERSION}/alloy-config.river alloy-config.river
 ```
+
+> **Note:** `alloy-config.river` ships with the node tarball. It must be symlinked like all other
+> version-specific files so docker-compose can find it at the root level. After switching symlinks
+> during an upgrade, restart Alloy to pick up the new config: `docker restart genlayer-node-alloy`
 
 **After symlinks, you can use:**
 - `/opt/genlayer-node/bin/genlayernode` instead of `/opt/genlayer-node/v0.4.4/bin/genlayernode`
@@ -189,12 +194,18 @@ User=root
 WorkingDirectory=/opt/genlayer-node
 EnvironmentFile=/opt/genlayer-node/.env
 ExecStart=/opt/genlayer-node/bin/genlayernode run --password ${NODE_PASSWORD}
+ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
 Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+> **Note:** The `ExecStartPost` line automatically restarts the Alloy telemetry container
+> whenever the node starts. This is required because Alloy's bind mount to the log directory
+> becomes stale when symlinks change during upgrades. The `-` prefix means systemd will
+> ignore failures (e.g., if Alloy isn't installed). See `sharp-edges.yaml` -> `alloy-stale-bind-mount`.
 
 **Commands:**
 ```bash
@@ -212,6 +223,33 @@ sudo systemctl restart genlayer-node
 # Check status
 sudo systemctl status genlayer-node
 ```
+
+## Alloy Telemetry Management
+
+Alloy is the telemetry agent that sends logs and metrics to Grafana Cloud.
+
+**Restart Alloy (required after node restarts):**
+```bash
+docker restart genlayer-node-alloy
+```
+
+**Check Alloy status:**
+```bash
+docker ps | grep alloy
+docker logs genlayer-node-alloy 2>&1 | tail -10
+```
+
+**Verify bind mount is fresh (not stale):**
+```bash
+# Compare timestamps - they should match
+echo "Host:" && ls -la /opt/genlayer-node/data/node/logs/node.log | awk '{print $6,$7,$8}'
+echo "Container:" && docker exec genlayer-node-alloy ls -la /var/log/genlayer/node.log | awk '{print $6,$7,$8}'
+```
+
+> **IMPORTANT:** Alloy's bind mount becomes stale when the node restarts and symlinks change.
+> This is why the systemd service includes `ExecStartPost` to auto-restart Alloy.
+> If timestamps don't match, logs are NOT being sent to Grafana.
+> See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for details.
 
 ## Common Issues
 
@@ -241,3 +279,12 @@ docker compose up -d
 rm /opt/genlayer-node/${VERSION}/data/node/genlayer.db
 ```
 Fresh installs don't have a shared database to link to.
+
+### Alloy Not Sending Logs After Upgrade
+**Symptom:** Node is running and healthy, but Grafana shows no logs/metrics. Validator appears offline in monitoring.
+**Cause:** Alloy's bind mount to the log directory became stale when symlinks changed during upgrade.
+**Fix:**
+```bash
+docker restart genlayer-node-alloy
+```
+**Prevention:** The systemd service should include `ExecStartPost` to auto-restart Alloy. See the Systemd Service section above.

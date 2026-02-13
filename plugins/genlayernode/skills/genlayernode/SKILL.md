@@ -283,7 +283,7 @@ Guide validators through complete GenLayer node installation including:
 ├── configs -> v0.4.4/configs
 ├── docker-compose.yaml -> v0.4.4/docker-compose.yaml
 ├── .env -> v0.4.4/.env
-└── alloy-config.river              # Telemetry config (if monitoring enabled)
+└── alloy-config.river -> v0.4.4/alloy-config.river  # Symlink (ships with tarball)
 ```
 
 ### Requires

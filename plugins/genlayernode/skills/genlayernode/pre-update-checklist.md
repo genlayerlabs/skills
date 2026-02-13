@@ -62,7 +62,26 @@ sudo systemctl status genlayer-node --no-pager
 
 ## Phase 2: Pre-Download Preparation
 
-### 2.1 Check Disk Space
+### 2.1 Check Systemd Service Has Alloy Restart
+**Purpose:** Ensure systemd will auto-restart Alloy after node starts (edge: alloy-stale-bind-mount)
+
+```bash
+grep 'genlayer-node-alloy' /etc/systemd/system/genlayer-node.service
+# Should show ExecStartPost line containing genlayer-node-alloy
+```
+
+**Action if missing:** Add ExecStartPost to the service file:
+```bash
+sudo nano /etc/systemd/system/genlayer-node.service
+# Add after ExecStart line:
+# ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+
+sudo systemctl daemon-reload
+```
+
+This prevents the Alloy bind mount from becoming stale after the upgrade.
+
+### 2.2 Check Disk Space
 **Purpose:** Ensure enough space for new version (edge: not explicitly documented but critical)
 
 ```bash
@@ -72,7 +91,7 @@ df -h /opt/genlayer-node
 
 **Action if low:** Clean up old versions or warn user.
 
-### 2.2 Verify Prerequisites Still Met
+### 2.3 Verify Prerequisites Still Met
 **Purpose:** Ensure system hasn't degraded since initial install
 
 ```bash
@@ -172,6 +191,36 @@ curl -s http://localhost:9153/metrics | grep 'genlayer_node_synced_block'
 sudo journalctl -u genlayer-node --since '2 minutes ago' --no-pager | grep -i 'llm\|genvm is ready'
 # Should see "genvm is ready"
 ```
+
+### 5.4 Verify Alloy Telemetry (CRITICAL)
+**Purpose:** Ensure Alloy's bind mount was refreshed and logs are flowing to Grafana (edge: alloy-stale-bind-mount)
+
+```bash
+# Check Alloy container is running
+docker ps | grep alloy
+# Should show genlayer-node-alloy as running
+
+# Compare log file timestamps (host vs container view)
+echo "Host log timestamp:"
+ls -la /opt/genlayer-node/data/node/logs/node.log 2>/dev/null | awk '{print $6, $7, $8}'
+
+echo "Container log timestamp:"
+docker exec genlayer-node-alloy ls -la /var/log/genlayer/node.log 2>/dev/null | awk '{print $6, $7, $8}'
+
+# CRITICAL: Both timestamps MUST match!
+# If they differ, Alloy has a stale bind mount and is NOT sending current logs.
+
+# Check Alloy is actively processing
+docker logs genlayer-node-alloy 2>&1 | tail -5
+# Should show recent activity, not old timestamps
+```
+
+**Action if timestamps differ:** The Alloy bind mount is stale. Run:
+```bash
+docker restart genlayer-node-alloy
+```
+
+Then re-verify the timestamps match.
 
 ## Automation Recommendation
 
