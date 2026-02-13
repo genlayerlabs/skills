@@ -59,11 +59,11 @@ readonly SUCCESS=0
 readonly ERR_GENERAL=1
 readonly ERR_INVALID_ARGS=2
 
-# Skill prefix (change this to adapt to different projects)
-readonly SKILL_PREFIX="claude-skill-"
+# Skill prefix (change this to adapt to different projects; empty = no prefix required)
+readonly SKILL_PREFIX=""
 
 # Valid skill kinds
-readonly VALID_KINDS="gate scaffolder helper frontend meta"
+readonly VALID_KINDS="gate scaffolder helper frontend meta action"
 
 # Upstream Skills Guide Constraints
 readonly NAME_MAX_LENGTH=64
@@ -421,7 +421,7 @@ parse_collaboration_yaml() {
 get_required_files() {
     local kind="$1"
     case "$kind" in
-        gate|scaffolder|meta|frontend)
+        gate|scaffolder|meta|frontend|action)
             echo "SKILL.md skill.yaml validations.yaml collaboration.yaml sharp-edges.yaml"
             ;;
         helper)
@@ -569,6 +569,9 @@ check_validations_discipline() {
     done
 
     # Check on_stop IDs exist
+    if [[ ${#ON_STOP_IDS[@]} -eq 0 ]]; then
+        return 0
+    fi
     for oid in "${ON_STOP_IDS[@]}"; do
         local found=false
         for vid in "${VALIDATIONS_IDS[@]}"; do
@@ -832,8 +835,8 @@ main() {
         local skill
         skill=$(basename "$skill_dir")
 
-        # Check prefix requirement
-        if [[ "$skill" != ${SKILL_PREFIX}* ]]; then
+        # Check prefix requirement (skip if empty - no prefix required)
+        if [[ -n "$SKILL_PREFIX" ]] && [[ "$skill" != ${SKILL_PREFIX}* ]]; then
             non_prefix_dirs+=("$skill")
             continue
         fi

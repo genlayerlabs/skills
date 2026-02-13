@@ -7,9 +7,9 @@ tasks:
       Validate a skill by running commands defined in its validations.yaml.
 
       Usage:
-        task claude:validate-skill -- --skill claude-skill-code
-        task claude:validate-skill -- --skill claude-skill-code --mode all
-        task claude:validate-skill -- --skill claude-skill-create-skill --mode on-stop
+        task claude:validate-skill -- --skill commit
+        task claude:validate-skill -- --skill commit --mode all
+        task claude:validate-skill -- --skill create-skill --mode on-stop
 
       Options:
         --skill SKILL    Skill name (folder name under .claude/skills/) [required]
@@ -21,7 +21,7 @@ tasks:
         1 - One or more validations failed
     cmds:
       - ./taskfiles/claude/scripts/validate-skill.sh {{.CLI_ARGS}}
-    dir: "{{.USER_WORKING_DIR}}"
+    dir: "{{.ROOT_DIR}}"
 
   audit-skills:
     desc: Run semantic skill audit (multi-YAML pattern compliance)
@@ -50,7 +50,7 @@ tasks:
         1 - Errors found (or warnings in strict mode)
     cmds:
       - ./taskfiles/claude/scripts/audit-skills.sh {{.CLI_ARGS}}
-    dir: "{{.USER_WORKING_DIR}}"
+    dir: "{{.ROOT_DIR}}"
 
   audit-skills-strict:
     desc: Run semantic skill audit in strict mode
@@ -59,7 +59,7 @@ tasks:
       Use this in CI to enforce all best practices.
     cmds:
       - ./taskfiles/claude/scripts/audit-skills.sh --strict
-    dir: "{{.USER_WORKING_DIR}}"
+    dir: "{{.ROOT_DIR}}"
 
   validate-skill-yaml:
     desc: CI check for skill YAML structure and required files
@@ -69,7 +69,7 @@ tasks:
 
       Enforces:
         - Stop hook discipline (SKILL.md Stop hook must call task claude:validate-skill)
-        - Naming convention (directory must start with 'claude-skill-')
+        - Naming convention (frontmatter name must match directory name)
         - Collaboration references (all referenced skills must exist)
         - Validations integrity (on_stop IDs exist, type=command only)
         - Task target existence
@@ -82,7 +82,7 @@ tasks:
         1 - Errors found
     cmds:
       - ./taskfiles/claude/scripts/check-skill-yaml.sh {{.CLI_ARGS}}
-    dir: "{{.USER_WORKING_DIR}}"
+    dir: "{{.ROOT_DIR}}"
 
   skills-reference:
     desc: Generate docs/skills/REFERENCE.md from skill.yaml files
@@ -103,7 +103,7 @@ tasks:
         --debug         Enable debug logging
     cmds:
       - ./taskfiles/claude/scripts/generate-skill-reference.sh {{.CLI_ARGS}}
-    dir: "{{.USER_WORKING_DIR}}"
+    dir: "{{.ROOT_DIR}}"
 
   list-skills:
     desc: List all available skills
@@ -123,5 +123,5 @@ tasks:
           fi
         done
         echo ""
-    dir: "{{.USER_WORKING_DIR}}"
+    dir: "{{.ROOT_DIR}}"
     silent: true

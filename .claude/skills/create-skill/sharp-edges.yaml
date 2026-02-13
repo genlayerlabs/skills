@@ -5,11 +5,11 @@
 # validation runner. Automated enforcement happens via validations.yaml.
 
 edges:
-  - id: non-prefix
-    description: "Skill folder name does not start with 'claude-skill-'"
-    detect: "Check folder name starts with claude-skill-"
-    impact: "Breaks naming convention. All skills must use claude-skill- prefix."
-    fix: "Rename folder to claude-skill-{name} and update SKILL.md frontmatter name: to match."
+  - id: name-frontmatter-mismatch
+    description: "SKILL.md frontmatter name does not match the folder basename"
+    detect: "Compare SKILL.md frontmatter name: with directory name"
+    impact: "Breaks lookup conventions and validate-skill --skill {folder-name} discipline."
+    fix: "Ensure SKILL.md frontmatter name: exactly matches the folder basename."
     severity: critical
 
   - id: stop-hook-skill-arg-mismatch

@@ -8,7 +8,7 @@ set -euo pipefail
 #
 # Enforces:
 # - Stop hook discipline: SKILL.md Stop hook must call `task claude:validate-skill -- --skill <folder-name>`
-# - Naming convention: directory must start with 'claude-skill-', frontmatter name must match
+# - Naming convention: frontmatter name must match directory name
 # - Collaboration references: all referenced skills must exist
 # - Validations integrity: on_stop IDs exist, type=command only (v1), required fields present
 # - Task target existence: commands starting with `task <target>` must reference valid targets
@@ -52,9 +52,8 @@ VALIDATIONS_TYPES=()
 VALIDATIONS_COMMANDS=()
 ON_STOP_IDS=()
 
-# Make target cache (simple list-based cache for bash 3 compatibility)
+# Make target cache (newline-delimited for bash 3 compatibility)
 MAKE_TARGET_CACHE_KEYS=""
-MAKE_TARGET_CACHE_VALS=""
 
 # ============================================================================
 # SOURCE SHARED FUNCTIONS
@@ -95,16 +94,19 @@ has_yq() {
 }
 
 # Check if a Make target exists (with caching)
-# Uses simple string-based cache for bash 3 compatibility
+# Uses newline-delimited cache for bash 3 compatibility (avoids substring collisions)
 make_target_exists() {
     local target="$1"
+    local cache_entry
 
-    # Check cache (search in keys string)
-    if [[ "$MAKE_TARGET_CACHE_KEYS" == *"|$target|"* ]]; then
-        # Found in cache, check if it exists
-        [[ "$MAKE_TARGET_CACHE_VALS" == *"|$target:true|"* ]]
-        return $?
-    fi
+    # Check cache (exact line match)
+    while IFS= read -r cache_entry; do
+        if [[ "$cache_entry" == "$target=true" ]]; then
+            return 0
+        elif [[ "$cache_entry" == "$target=false" ]]; then
+            return 1
+        fi
+    done <<< "$MAKE_TARGET_CACHE_KEYS"
 
     # Run make -n with timeout
     local exists=false
@@ -112,9 +114,9 @@ make_target_exists() {
         exists=true
     fi
 
-    # Cache result
-    MAKE_TARGET_CACHE_KEYS="${MAKE_TARGET_CACHE_KEYS}|$target|"
-    MAKE_TARGET_CACHE_VALS="${MAKE_TARGET_CACHE_VALS}|$target:$exists|"
+    # Cache result (newline-delimited)
+    MAKE_TARGET_CACHE_KEYS="${MAKE_TARGET_CACHE_KEYS}
+${target}=${exists}"
 
     [[ "$exists" == "true" ]]
 }
@@ -386,8 +388,8 @@ check_naming_convention() {
     local skill
     skill=$(basename "$skill_dir")
 
-    # Check prefix
-    if [[ "$skill" != ${SKILL_PREFIX}* ]]; then
+    # Check prefix (skip if empty - no prefix required)
+    if [[ -n "$SKILL_PREFIX" ]] && [[ "$skill" != ${SKILL_PREFIX}* ]]; then
         ERRORS+=("$skill: Directory name must start with '$SKILL_PREFIX'")
     fi
 

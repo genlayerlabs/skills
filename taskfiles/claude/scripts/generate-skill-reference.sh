@@ -41,7 +41,7 @@ readonly ERR_GENERAL=1
 readonly ERR_INVALID_ARGS=2
 
 # Skill prefix (change this to adapt to different projects)
-readonly SKILL_PREFIX="claude-skill-"
+readonly SKILL_PREFIX=""
 
 # Default output file
 DEFAULT_OUTPUT_FILE="docs/skills/REFERENCE.md"
@@ -281,8 +281,8 @@ generate_reference() {
         local folder
         folder=$(basename "$skill_dir")
 
-        # Only include skills with correct prefix
-        if [[ "$folder" != ${SKILL_PREFIX}* ]]; then
+        # Only include skills with correct prefix (skip if empty - no prefix required)
+        if [[ -n "$SKILL_PREFIX" ]] && [[ "$folder" != ${SKILL_PREFIX}* ]]; then
             continue
         fi
 

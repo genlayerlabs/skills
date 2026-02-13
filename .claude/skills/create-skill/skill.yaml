@@ -22,11 +22,11 @@ owns:
 
 inputs_required:
   - id: folder_name
-    description: "Skill folder basename (directory name). Must start with 'claude-skill-' and equal SKILL.md frontmatter name."
+    description: "Skill folder basename (directory name). Must equal SKILL.md frontmatter name."
     examples:
-      - claude-skill-layer-check
-      - claude-skill-add-new-pass
-      - claude-skill-pre-push
+      - my-validator
+      - deploy-check
+      - code-review
   - id: title
     description: "Human title for H1 header in SKILL.md."
     examples:
@@ -57,14 +57,13 @@ required_outputs:
   - ".claude/skills/{folder-name}/collaboration.yaml"
 
 patterns:
-  - id: prefix-required
+  - id: name-matches-folder
     description: |
-      All skill folder names must start with 'claude-skill-'.
-      SKILL.md frontmatter name: must exactly match the folder basename.
+      SKILL.md frontmatter name must exactly match the folder basename.
     example: |
-      Folder: .claude/skills/claude-skill-layer-check/
+      Folder: .claude/skills/my-validator/
       SKILL.md:
-        name: claude-skill-layer-check
+        name: my-validator
 
   - id: capability-discovery-before-writing-validations
     description: |
@@ -97,7 +96,7 @@ patterns:
       hooks:
         Stop:
           - type: command
-            command: "task claude:validate-skill -- --skill claude-skill-layer-check"
+            command: "task claude:validate-skill -- --skill my-validator"
 
   - id: command-only-validations-v1
     description: |
@@ -135,10 +134,6 @@ patterns:
       - `my-new-skill` - Short description of what it does
 
 anti_patterns:
-  - id: non-prefix
-    description: "Skill folder name does not start with 'claude-skill-'"
-    why_bad: "Breaks naming convention. All skills use claude-skill- prefix."
-
   - id: name-mismatch
     description: "SKILL.md frontmatter name differs from folder basename"
     why_bad: "Breaks lookup conventions and validate-skill --skill {folder-name} discipline."
@@ -163,14 +158,6 @@ anti_patterns:
     description: "Creating skill files but forgetting to add to CLAUDE.md"
     why_bad: "Skills become invisible. task claude:audit-skills will fail."
 
-handoffs:
-  - skill: "layer-check"
-    when: "If the new skill changes code organization or touches layer boundaries."
-  - skill: "tdd-core-first"
-    when: "If the new skill governs core/feature TDD gating behavior."
-  - skill: "pre-push"
-    when: "If you need a heavier validation sequence than Stop should run."
-
 procedure:
   - step: "Discover available operations"
     detail: |
@@ -184,7 +171,7 @@ procedure:
   - step: "Gather inputs"
     detail: |
       Collect from user:
-      - folder_name (must start with claude-skill-)
+      - folder_name
       - title
       - description
       - purpose

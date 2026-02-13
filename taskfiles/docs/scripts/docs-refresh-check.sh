@@ -51,7 +51,7 @@ else
     # Fallback logging functions
     log_info() { echo "[INFO] $*"; }
     log_error() { echo "[ERROR] $*" >&2; }
-    log_debug() { [[ "${DEBUG_MODE:-false}" == "true" ]] && echo "[DEBUG] $*"; }
+    log_debug() { if [[ "${DEBUG_MODE:-false}" == "true" ]]; then echo "[DEBUG] $*"; fi; }
 fi
 
 # ============================================================================
@@ -117,7 +117,10 @@ check_skills_reference() {
     mkdir -p "$temp_dir/docs/skills"
 
     if [[ -x "$SKILLS_REFERENCE_GENERATOR" ]]; then
-        "$SKILLS_REFERENCE_GENERATOR" --output "$temp_reference" >/dev/null 2>&1 || true
+        if ! "$SKILLS_REFERENCE_GENERATOR" --output "$temp_reference" >/dev/null 2>&1; then
+            log_error "Skills reference generator failed"
+            return 1
+        fi
     else
         log_debug "Skills reference generator not found or not executable"
         return 0
@@ -153,7 +156,7 @@ main() {
     # Create temp directory for comparison
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
 
     log_debug "Using temp directory: $temp_dir"
 

@@ -44,24 +44,24 @@ GRAY='\033[0;90m'
 NC='\033[0m' # No Color
 
 log_info() {
-    echo -e "$(log_timestamp_prefix)${BLUE}[INFO]${NC} $1" >&2
+    echo -e "$(log_timestamp_prefix)${BLUE}[INFO]${NC} $*" >&2
 }
 
 log_success() {
-    echo -e "$(log_timestamp_prefix)${GREEN}[SUCCESS]${NC} $1" >&2
+    echo -e "$(log_timestamp_prefix)${GREEN}[SUCCESS]${NC} $*" >&2
 }
 
 log_warning() {
-    echo -e "$(log_timestamp_prefix)${YELLOW}[WARNING]${NC} $1" >&2
+    echo -e "$(log_timestamp_prefix)${YELLOW}[WARNING]${NC} $*" >&2
 }
 
 log_error() {
-    echo -e "$(log_timestamp_prefix)${RED}[ERROR]${NC} $1" >&2
+    echo -e "$(log_timestamp_prefix)${RED}[ERROR]${NC} $*" >&2
 }
 
 log_debug() {
     if [[ "${DEBUG_MODE:-false}" == "true" ]]; then
-        echo -e "$(log_timestamp_prefix)${GRAY}[DEBUG]${NC} $1" >&2
+        echo -e "$(log_timestamp_prefix)${GRAY}[DEBUG]${NC} $*" >&2
     fi
 }
 

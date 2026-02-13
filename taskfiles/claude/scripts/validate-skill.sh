@@ -73,13 +73,13 @@ Options:
 
 Examples:
     # Run on-stop validations (default)
-    $SCRIPT_NAME --skill claude-skill-code --mode on-stop
+    $SCRIPT_NAME --skill commit --mode on-stop
 
     # Run all validations
-    $SCRIPT_NAME --skill claude-skill-code --mode all
+    $SCRIPT_NAME --skill commit --mode all
 
     # With debug logging
-    $SCRIPT_NAME --skill claude-skill-code --debug
+    $SCRIPT_NAME --skill commit --debug
 
 EOF
 }
@@ -329,9 +329,9 @@ run_validation() {
     echo "  [$vid] $vname"
     echo "    Running: $vcmd"
 
-    # Run the command
+    # Run the command (use bash -c instead of eval for safety)
     set +e
-    eval "$vcmd"
+    bash -c "$vcmd"
     local result=$?
     set -e
 
@@ -435,7 +435,8 @@ main() {
 
     if [[ ${#failed[@]} -gt 0 ]]; then
         local failed_list
-        failed_list=$(IFS=', '; echo "${failed[*]}")
+        failed_list=$(printf '%s, ' "${failed[@]}")
+        failed_list="${failed_list%, }"
         echo "FAILED: ${#failed[@]} validation(s): $failed_list"
         exit $ERR_GENERAL
     fi

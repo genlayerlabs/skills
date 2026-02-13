@@ -3,18 +3,23 @@
 name: pr-create
 version: "1.0.0"
 
-dependencies:
-  - skill: workflow
-    reason: "PR creation is typically the final step of a workflow"
+collaborates_with:
+  - skill: commit
+    relationship: "upstream"
+    handoff: |
+      After committing changes:
+      1. commit creates the commit(s)
+      2. User pushes to remote
+      3. pr-create creates the pull request
 
 composition:
   - when: "Creating a pull request"
     sequence:
       - pr-create
 
-  - when: "Finishing workflow with PR"
+  - when: "Committing and creating PR"
     sequence:
-      - workflow
+      - commit
       - pr-create
 
 triggers:

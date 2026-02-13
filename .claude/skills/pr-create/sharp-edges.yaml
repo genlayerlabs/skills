@@ -55,12 +55,13 @@ edges:
     severity: critical
 
   - id: title-too-long
-    description: "PR title exceeds 50 characters"
+    description: "PR title exceeds 72 characters"
     detect: "Manual check: count characters in title"
     impact: "Title gets truncated in GitHub UI. Harder to scan."
     fix: |
       Shorten the subject while keeping it specific.
       Move details to the PR body instead.
+      Note: PR titles allow up to 72 chars (vs 50 for commit subjects).
     severity: medium
 
   - id: missing-scope

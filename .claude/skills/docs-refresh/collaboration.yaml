@@ -28,5 +28,5 @@ workflow:
     description: "Standard workflow after modifying any skill"
     steps:
       - "task docs:refresh"
-      - "git add docs/skills/REFERENCE.md"
+      - "git add docs/skills/REFERENCE.md CLAUDE.md"
       - "git commit"

@@ -45,7 +45,7 @@ if [[ -f "$SCRIPT_SHARED_DIR/logger.sh" ]]; then
 else
     log_info() { echo "[INFO] $*"; }
     log_error() { echo "[ERROR] $*" >&2; }
-    log_debug() { [[ "${DEBUG_MODE:-false}" == "true" ]] && echo "[DEBUG] $*"; }
+    log_debug() { if [[ "${DEBUG_MODE:-false}" == "true" ]]; then echo "[DEBUG] $*"; fi; }
 fi
 
 # ============================================================================
@@ -175,8 +175,6 @@ update_claude_md() {
 # Check if CLAUDE.md is in sync
 check_claude_md() {
     local new_table="$1"
-    local temp_file
-    temp_file=$(mktemp)
 
     # Check if markers exist
     if ! grep -q "$START_MARKER" "$CLAUDE_MD"; then
@@ -196,11 +194,9 @@ check_claude_md() {
     if [[ "$current_table" != "$new_table" ]]; then
         log_error "CLAUDE.md skills table is out of sync"
         echo "Run 'task docs:refresh' to update"
-        rm -f "$temp_file"
         return 1
     fi
 
-    rm -f "$temp_file"
     log_info "CLAUDE.md skills table is in sync"
     return 0
 }

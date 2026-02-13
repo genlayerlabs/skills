@@ -22,12 +22,12 @@ This skill produces the canonical file set and wires the Stop hook to `task clau
 
 ## Quick Reference
 - Creates: SKILL.md, skill.yaml, collaboration.yaml (+ validations.yaml, sharp-edges.yaml for non-helpers)
-- Requires: folder name (must start with `claude-skill-`), kind, description
+- Requires: folder name, kind, description
 - Stop hook: `task claude:validate-skill -- --skill create-skill`
 
 ## Post-Creation Verification
 
-The Stop hook runs two checks to ensure every created skill is valid:
+The Stop hook runs three checks to ensure every created skill is valid:
 
 1. **Structural**: `task claude:validate-skill-yaml` - YAML parses, required files exist
 2. **Semantic**: `task claude:audit-skills-strict` - Multi-YAML pattern compliance
