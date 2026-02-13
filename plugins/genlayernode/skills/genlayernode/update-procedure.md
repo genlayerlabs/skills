@@ -113,12 +113,25 @@ ln -sfn /opt/genlayer-node/${VERSION}/data data
 ln -sfn /opt/genlayer-node/${VERSION}/configs configs
 ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml docker-compose.yaml
 ln -sfn /opt/genlayer-node/${VERSION}/.env .env
+ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river alloy-config.river
 
 # 3. Start new version immediately
 sudo systemctl start genlayer-node
 
-# Total downtime: 10-15 seconds
+# 4. Refresh Alloy telemetry bind mount (CRITICAL for monitoring)
+# See: sharp-edges.yaml -> "alloy-stale-bind-mount"
+# The Alloy container's bind mount becomes stale when symlinks change.
+# Without this restart, Alloy stops sending logs to Grafana.
+sleep 5  # Wait for node to initialize
+docker restart genlayer-node-alloy 2>/dev/null || true
+
+# Total downtime: 10-15 seconds (Alloy restart is async)
 ```
+
+> **IMPORTANT**: The Alloy restart is critical! Without it, the telemetry container
+> continues reading from the old log path (stale bind mount) and your validator
+> will appear offline to monitoring systems, potentially leading to penalties.
+> See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for details.
 
 ### Phase 3: Verification
 
@@ -133,7 +146,23 @@ curl -s http://localhost:9153/health | jq '.checks.validating'
 
 # Monitor logs
 sudo journalctl -u genlayer-node -f --no-hostname
+
+# Verify Alloy telemetry is working (CRITICAL)
+# Check that Alloy sees the current log file (timestamp should be recent)
+echo "=== Alloy bind mount check ==="
+echo "Host log file:"
+ls -la /opt/genlayer-node/data/node/logs/node.log 2>/dev/null | awk '{print $6, $7, $8, $9}'
+echo "Alloy container view:"
+docker exec genlayer-node-alloy ls -la /var/log/genlayer/node.log 2>/dev/null | awk '{print $6, $7, $8, $9}'
+# Both timestamps should match! If they differ, Alloy has a stale bind mount.
+
+# Check Alloy is actively tailing logs
+docker logs genlayer-node-alloy 2>&1 | tail -3
 ```
+
+> **WARNING**: If the host and container timestamps don't match, run:
+> `docker restart genlayer-node-alloy`
+> See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for details.
 
 ## For Major Version Updates (e.g., v0.4.x -> v0.5.x)
 
@@ -175,9 +204,14 @@ ln -sfn /opt/genlayer-node/v0.4.3/data data
 ln -sfn /opt/genlayer-node/v0.4.3/configs configs
 ln -sfn /opt/genlayer-node/v0.4.3/docker-compose.yaml docker-compose.yaml
 ln -sfn /opt/genlayer-node/v0.4.3/.env .env
+ln -sfn /opt/genlayer-node/v0.4.3/alloy-config.river alloy-config.river
 
 # 3. Start old version
 sudo systemctl start genlayer-node
+
+# 4. Refresh Alloy telemetry (same reason as upgrade)
+sleep 5
+docker restart genlayer-node-alloy 2>/dev/null || true
 
 # Total rollback time: 10-15 seconds
 ```

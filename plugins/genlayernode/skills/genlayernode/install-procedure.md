@@ -273,6 +273,7 @@ User=root
 WorkingDirectory=/opt/genlayer-node
 EnvironmentFile=/opt/genlayer-node/.env
 ExecStart=/opt/genlayer-node/bin/genlayernode run --password ${NODE_PASSWORD}
+ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
 Restart=always
 RestartSec=10
 
@@ -280,6 +281,10 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 ```
+
+> **Note:** The `ExecStartPost` automatically restarts the Alloy telemetry container when the
+> node starts. This prevents stale bind mount issues where Alloy stops sending logs after
+> upgrades. The `-` prefix means failures are ignored (e.g., if monitoring isn't enabled).
 
 **Enable and start:**
 ```bash
@@ -333,7 +338,8 @@ curl -s http://localhost:9153/health | jq .
 ├── bin -> v0.4.4/bin                # Symlinks
 ├── data -> v0.4.4/data
 ├── configs -> v0.4.4/configs
-└── .env -> v0.4.4/.env
+├── .env -> v0.4.4/.env
+└── alloy-config.river -> v0.4.4/alloy-config.river  # Ships with tarball
 ```
 
 ## Common Issues

@@ -205,6 +205,48 @@ validations:
     expect: "exit 0"
     message: "Cannot reach RPC endpoint. Check network connectivity."
 
+  # ============================================================================
+  # ALLOY TELEMETRY CHECKS
+  # ============================================================================
+
+  - id: alloy-container-running
+    type: command
+    command: "docker ps | grep -q genlayer-node-alloy"
+    expect: "exit 0"
+    message: "Alloy telemetry container not running. Start with: docker compose --profile monitoring up -d"
+
+  - id: alloy-bind-mount-fresh
+    type: command
+    command: |
+      # Compare host and container log timestamps
+      # If they differ by more than 5 minutes, bind mount is stale
+      HOST_TIME=$(stat -c %Y /opt/genlayer-node/data/node/logs/node.log 2>/dev/null || echo 0)
+      CONTAINER_TIME=$(docker exec genlayer-node-alloy stat -c %Y /var/log/genlayer/node.log 2>/dev/null || echo 0)
+      DIFF=$((HOST_TIME - CONTAINER_TIME))
+      [ ${DIFF#-} -lt 300 ]  # Difference less than 5 minutes
+    expect: "exit 0"
+    message: |
+      Alloy bind mount is stale - container sees old log files.
+      This means telemetry is NOT being sent to Grafana.
+      Fix: docker restart genlayer-node-alloy
+      See sharp-edges.yaml -> alloy-stale-bind-mount
+
+  - id: alloy-logs-no-errors
+    type: command
+    command: "! docker logs genlayer-node-alloy 2>&1 | tail -50 | grep -q '401\\|403\\|error'"
+    expect: "exit 0"
+    message: "Alloy has authentication or other errors. Check: docker logs genlayer-node-alloy"
+
+  - id: systemd-has-alloy-restart
+    type: command
+    command: "grep -q 'genlayer-node-alloy' /etc/systemd/system/genlayer-node.service 2>/dev/null"
+    expect: "exit 0"
+    message: |
+      Systemd service missing ExecStartPost for Alloy restart.
+      Add this line after ExecStart in /etc/systemd/system/genlayer-node.service:
+      ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+      Then run: sudo systemctl daemon-reload
+
 # Validations that must pass before installation
 on_stop:
   - architecture-amd64
@@ -221,3 +263,11 @@ on_warn:
   - docker-no-sudo
   - python3-pip-installed
   - python3-venv-installed
+  - systemd-has-alloy-restart
+
+# Post-update validations (run after upgrade)
+post_update:
+  - node-health-ok
+  - alloy-container-running
+  - alloy-bind-mount-fresh
+  - alloy-logs-no-errors

@@ -604,6 +604,116 @@ edges:
   # UPDATE PROCEDURE
   # ============================================================================
 
+  - id: alloy-stale-bind-mount
+    description: "Alloy telemetry container stops sending logs after node restart due to stale bind mount"
+    detect: |
+      # Check if Alloy is running but seeing old logs
+      # 1. Get the last log timestamp Alloy is seeing
+      docker exec genlayer-node-alloy ls -la /var/log/genlayer/node.log 2>/dev/null | awk '{print $6, $7, $8}'
+
+      # 2. Compare with actual log file on host
+      ls -la /opt/genlayer-node/data/node/logs/node.log 2>/dev/null | awk '{print $6, $7, $8}'
+
+      # If timestamps differ significantly, bind mount is stale
+
+      # 3. Check Grafana Loki for recent logs from this node
+      # If no logs in last 5 minutes but node is running, Alloy likely has stale mount
+    impact: |
+      CRITICAL TELEMETRY FAILURE - NODE APPEARS OFFLINE TO MONITORING
+
+      When the genlayer-node service restarts (during upgrade or otherwise), the bind
+      mount inside the Alloy container becomes frozen/stale:
+
+      - Host path: /opt/genlayer-node/data/node/logs/node.log → Current logs
+      - Container view: /var/log/genlayer/node.log → Frozen at restart time
+
+      The Alloy container was started with a bind mount that resolved through symlinks.
+      When those symlinks change (pointing to new version), Docker doesn't refresh the
+      mount. Alloy continues reading the old, stale file.
+
+      CONSEQUENCES:
+      - No telemetry sent to Grafana Loki after node restart
+      - Node appears offline/dead to monitoring systems
+      - Heartbeat service marks validator as IDLE
+      - After 3 strikes: validator gets BANNED until next epoch
+      - Validator loses rewards and may face penalties
+      - Node is actually running and validating correctly (silent failure)
+
+      TIMELINE EXAMPLE:
+      - Jan 29 10:25: Node restarted for upgrade
+      - Jan 29 10:25: Alloy's bind mount becomes stale (frozen at this timestamp)
+      - Jan 29 - Feb 3: No logs sent to Grafana (5 days!)
+      - Feb 3: Validator banned for appearing offline
+      - Feb 3: Issue discovered, Alloy restarted, logs flow again
+
+      ROOT CAUSE:
+      Docker bind mounts are established at container start time and resolve symlinks
+      to their target inodes. When symlinks change (e.g., /opt/genlayer-node/data
+      switches from v0.4.3/data to v0.4.4/data), the container still sees the old
+      directory's inode.
+    fix: |
+      IMMEDIATE FIX (after node restart):
+      =====================================
+      Restart the Alloy container to refresh the bind mount:
+
+        docker restart genlayer-node-alloy
+
+      Verify logs are flowing:
+        docker logs genlayer-node-alloy 2>&1 | tail -5
+        # Should show recent log processing activity
+
+      PREVENTIVE FIX (systemd integration):
+      =====================================
+      The genlayer-node systemd service should include ExecStartPost to automatically
+      restart Alloy whenever the node restarts:
+
+        [Service]
+        ...
+        ExecStartPost=-/bin/sh -c 'sleep 2 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+
+      This ensures Alloy's bind mount is refreshed on every node restart.
+
+      DURING UPGRADES:
+      ================
+      Always restart Alloy after starting the new node version:
+
+        # Phase 2: Quick Switch
+        sudo systemctl stop genlayer-node
+        # ... update symlinks ...
+        sudo systemctl start genlayer-node
+
+        # NEW: Refresh Alloy telemetry
+        sleep 5  # Wait for node to initialize
+        docker restart genlayer-node-alloy
+
+      VERIFICATION:
+      =============
+      After restarting Alloy, verify telemetry is flowing:
+
+        # Check Alloy sees current logs
+        docker exec genlayer-node-alloy ls -la /var/log/genlayer/
+        # Timestamp should be recent (within minutes)
+
+        # Check Alloy is processing logs
+        docker logs genlayer-node-alloy 2>&1 | grep "tail routine"
+        # Should show active tailing
+
+        # Check Grafana for recent logs (if available)
+        # Dashboard: https://genlayerfoundation.grafana.net/...
+    severity: critical
+    when_to_check: |
+      MANDATORY CHECKS:
+      1. After ANY node restart (upgrade, manual restart, crash recovery)
+      2. If validator appears offline in monitoring but node is actually running
+      3. If no logs appearing in Grafana Loki for this validator
+      4. During post-upgrade verification phase
+
+      SYMPTOMS OF THIS ISSUE:
+      - Node health endpoint returns OK (curl localhost:9153/health)
+      - Node is syncing and validating (check journalctl logs)
+      - But Grafana shows no data / validator appears offline
+      - Alloy container is running but log timestamps are old
+
   - id: high-downtime-update
     description: "Stopping old node before preparing new version causes 3-4 minute downtime"
     detect: |
