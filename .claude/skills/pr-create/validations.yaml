@@ -1,0 +1,20 @@
+validations:
+  - id: skills-yaml-valid
+    name: "Skill YAML files parse and required SKILL.md exists"
+    type: command
+    command: "task claude:validate-skill-yaml"
+    expect: "exit 0"
+    message: "Skill YAML validation failed (missing SKILL.md or invalid YAML)."
+
+  - id: no-ai-attribution
+    name: "PR title and body contain no AI attribution"
+    type: command
+    command: |
+      gh pr view --json title,body -q '.title + " " + .body' 2>/dev/null | \
+      grep -qiE 'co-authored-by\s*:.*(claude|gpt|copilot|anthropic)|🤖|generated (by|with) (claude|gpt|ai|copilot)|created with (claude|gpt|ai|copilot)' && exit 1 || exit 0
+    expect: "exit 0"
+    message: "AI attribution detected in PR. Remove all references to Claude, GPT, 🤖, Co-Authored-By AI, etc."
+
+on_stop:
+  - skills-yaml-valid
+  - no-ai-attribution

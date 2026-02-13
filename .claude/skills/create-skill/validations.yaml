@@ -1,0 +1,18 @@
+validations:
+  - id: skills-yaml-valid
+    name: "Skill YAML files parse and required SKILL.md exists"
+    type: command
+    command: "task claude:validate-skill-yaml"
+    expect: "exit 0"
+    message: "Skill YAML validation failed (missing SKILL.md or invalid YAML)."
+
+  - id: skills-audit-strict
+    name: "All skills pass semantic audit"
+    type: command
+    command: "task claude:audit-skills-strict"
+    expect: "exit 0"
+    message: "Skill audit failed. Check multi-YAML pattern compliance."
+
+on_stop:
+  - skills-yaml-valid
+  - skills-audit-strict

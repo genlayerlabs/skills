@@ -1,0 +1,103 @@
+# Sharp edges for pr-merge
+#
+# NOTE: The `detect` field is informational only - it shows how to manually
+# check for the edge case. These are NOT automatically enforced by the
+# validation runner. Automated enforcement happens via validations.yaml.
+
+edges:
+  - id: bypass-failed-check-offered
+    description: "Offering to bypass merge when a CI check has failed"
+    detect: "User asked 'merge anyway' after seeing FAILURE status"
+    impact: "Broken code merged to main, CI becomes meaningless"
+    fix: |
+      NEVER offer bypass on failed checks.
+      Only response to FAILURE is:
+      "CI check '<name>' failed. Please investigate before merging."
+      Do not ask if user wants to bypass. Do not suggest --admin flag.
+    severity: critical
+
+  - id: merge-while-checks-running
+    description: "Attempting merge while statusCheckRollup shows IN_PROGRESS"
+    detect: "Any check has status IN_PROGRESS"
+    impact: "May merge code that will fail checks"
+    fix: |
+      Wait for all checks to complete.
+      Retry up to 5 times with 30s delay.
+      Only proceed when all checks are SUCCESS or FAILURE.
+    severity: high
+
+  - id: merge-with-conflicts
+    description: "Attempting to merge when mergeStateStatus is DIRTY"
+    detect: "mergeStateStatus == DIRTY"
+    impact: "Merge will fail, or worse, may cause data loss"
+    fix: |
+      Inform user: "Conflicts detected. Cannot auto-merge."
+      User must resolve conflicts manually:
+      1. git fetch origin main
+      2. git merge origin/main
+      3. Resolve conflicts
+      4. git push
+      5. Re-run /pr-merge
+    severity: high
+
+  - id: stale-branch-merge
+    description: "Merging when branch is BEHIND main without updating"
+    detect: "mergeStateStatus == BEHIND"
+    impact: "May miss CI failures or conflicts from new main commits"
+    fix: |
+      Always update branch before merging:
+      git fetch origin main
+      git merge origin/main --no-edit
+      git push
+      Then re-check CI status.
+    severity: medium
+
+  - id: no-pr-for-branch
+    description: "Running /pr-merge on branch with no PR"
+    detect: "gh pr list --head <branch> returns empty"
+    impact: "Confusing error, user may think merge failed"
+    fix: |
+      Check for PR existence first.
+      If no PR: "No PR found for branch '<branch>'. Create one with /pr first."
+    severity: low
+
+  - id: pr-already-merged
+    description: "Running /pr-merge on already merged PR"
+    detect: "PR state is MERGED"
+    impact: "Confusing, user may think action failed"
+    fix: |
+      Check PR state first.
+      If MERGED: "PR #<number> is already merged."
+    severity: low
+
+  - id: pr-closed
+    description: "Running /pr-merge on closed (not merged) PR"
+    detect: "PR state is CLOSED"
+    impact: "Cannot merge closed PR"
+    fix: |
+      Check PR state first.
+      If CLOSED: "PR #<number> is closed. Reopen it first if you want to merge."
+    severity: low
+
+  - id: bypass-review-with-failed-checks
+    description: "Offering --admin bypass when checks failed (not just review missing)"
+    detect: "BLOCKED state but checks also failed"
+    impact: "Same as bypass-failed-check-offered - broken code merged"
+    fix: |
+      Only offer bypass when:
+      1. ALL checks are SUCCESS
+      2. mergeStateStatus is BLOCKED
+      3. Block reason is review requirement
+
+      If any check failed, do not offer bypass.
+    severity: critical
+
+  - id: gh-cli-not-authenticated
+    description: "gh CLI not authenticated when trying to merge"
+    detect: "gh auth status returns error"
+    impact: "Merge command fails with auth error"
+    fix: |
+      Before merge operations, verify gh auth:
+      gh auth status
+      If not authenticated: "Please run 'gh auth login' first."
+    severity: medium

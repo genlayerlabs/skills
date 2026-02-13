@@ -1,0 +1,63 @@
+edges:
+  - id: reference-out-of-sync
+    description: "REFERENCE.md doesn't match current skill.yaml files"
+    detect: "task docs:refresh-check"
+    impact: "Skill documentation is stale and misleading"
+    fix: "Run 'task docs:refresh' to regenerate"
+    severity: high
+
+  - id: edited-generated-doc
+    description: "Manual edits to docs/skills/REFERENCE.md"
+    detect: "git diff docs/skills/REFERENCE.md after task docs:refresh"
+    impact: "Manual changes will be lost on next refresh"
+    fix: "Never edit REFERENCE.md directly. Update skill.yaml instead."
+    severity: high
+
+  - id: skill-yaml-invalid
+    description: "skill.yaml has syntax errors or missing required fields"
+    detect: "task claude:validate-skill-yaml"
+    impact: "Reference generation will fail or produce incomplete output"
+    fix: "Fix YAML syntax and ensure required fields are present"
+    severity: high
+
+  - id: forgot-refresh-after-skill-change
+    description: "Modified skill.yaml but didn't regenerate REFERENCE.md"
+    detect: "task docs:refresh-check fails in CI"
+    impact: "PR fails CI; skill docs are stale"
+    fix: |
+      After modifying any .claude/skills/*/skill.yaml:
+      1. Run task docs:refresh
+      2. Commit the updated REFERENCE.md
+    severity: high
+
+  - id: docs-directory-missing
+    description: "docs/skills/ directory doesn't exist"
+    detect: "test ! -d docs/skills"
+    impact: "Reference generation will fail"
+    fix: "mkdir -p docs/skills (task docs:refresh does this automatically)"
+    severity: low
+
+  - id: forgot-to-commit-reference
+    description: "Ran docs:refresh but didn't commit REFERENCE.md"
+    detect: "git status shows unstaged docs/skills/REFERENCE.md"
+    impact: "CI will fail because docs are out of sync"
+    fix: "git add docs/skills/REFERENCE.md && git commit"
+    severity: medium
+
+  - id: claude-md-skills-table-stale
+    description: "Added/removed skill but didn't update CLAUDE.md skills table"
+    detect: "Compare skill count in .claude/skills/ vs CLAUDE.md table rows"
+    impact: "Claude won't know about new skills or will reference deleted ones"
+    fix: |
+      Update the skills table in CLAUDE.md:
+      1. Add row for new skill: | `skill-name` | When to use description |
+      2. Remove row for deleted skill
+      3. Commit CLAUDE.md with skill changes
+    severity: high
+
+  - id: claude-md-missing
+    description: "CLAUDE.md file doesn't exist"
+    detect: "test ! -f CLAUDE.md"
+    impact: "Claude has no project-level instructions or skill awareness"
+    fix: "Create CLAUDE.md with skills table (see docs-refresh skill)"
+    severity: critical

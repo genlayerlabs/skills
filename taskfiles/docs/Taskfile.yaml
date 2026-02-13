@@ -1,0 +1,31 @@
+version: "3"
+
+tasks:
+  refresh:
+    desc: Refresh all generated documentation
+    summary: |
+      Regenerate all deterministic documentation from source files.
+
+      Currently generates:
+        - docs/skills/REFERENCE.md from skill.yaml files
+        - CLAUDE.md skills table (auto-updated between markers)
+
+      Usage:
+        task docs:refresh
+    cmds:
+      - mkdir -p docs/skills
+      - task claude:skills-reference
+      - ./taskfiles/docs/scripts/update-claude-md.sh
+    dir: "{{.USER_WORKING_DIR}}"
+
+  refresh-check:
+    desc: Check if generated documentation is in sync (CI mode)
+    summary: |
+      Verify all generated documentation matches source files.
+      Exits non-zero if any docs are out of sync.
+
+      Usage:
+        task docs:refresh-check
+    cmds:
+      - ./taskfiles/docs/scripts/docs-refresh-check.sh {{.CLI_ARGS}}
+    dir: "{{.USER_WORKING_DIR}}"

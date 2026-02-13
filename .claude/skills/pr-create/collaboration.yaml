@@ -1,0 +1,29 @@
+# Collaboration: skill dependencies and composition
+
+name: pr-create
+version: "1.0.0"
+
+collaborates_with:
+  - skill: commit
+    relationship: "upstream"
+    handoff: |
+      After committing changes:
+      1. commit creates the commit(s)
+      2. User pushes to remote
+      3. pr-create creates the pull request
+
+composition:
+  - when: "Creating a pull request"
+    sequence:
+      - pr-create
+
+  - when: "Committing and creating PR"
+    sequence:
+      - commit
+      - pr-create
+
+triggers:
+  - pattern: "create pr|make pr|open pr|submit pr|/pr|/pr-create"
+    suggest: pr-create
+  - pattern: "push and pr|push pr|create pull request"
+    suggest: pr-create

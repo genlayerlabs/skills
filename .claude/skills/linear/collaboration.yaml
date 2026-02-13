@@ -1,0 +1,29 @@
+# Collaboration: skill dependencies and composition
+#
+# Defines how this skill works with other skills.
+
+name: linear
+version: "1.0.0"
+
+dependencies: []
+
+composition:
+  - when: "Direct issue creation"
+    sequence:
+      - linear
+
+triggers:
+  - pattern: "create.*linear.*issue|create.*ticket|new.*issue.*linear"
+    suggest: linear
+
+  - pattern: "add.*to.*backlog|create.*backlog.*item"
+    suggest: linear
+
+  - pattern: "log.*issue|file.*bug|report.*bug"
+    suggest: linear
+
+  - pattern: "convert.*plan.*to.*issue|plan.*to.*linear"
+    suggest: linear
+
+  - pattern: "/linear"
+    suggest: linear

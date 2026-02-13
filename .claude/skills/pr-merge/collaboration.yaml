@@ -1,0 +1,27 @@
+# Collaboration: skill dependencies and composition
+
+name: pr-merge
+version: "1.0.0"
+
+dependencies:
+  - skill: pr-create
+    reason: "PR must exist before it can be merged"
+    optional: false
+
+composition:
+  - when: "Merging a pull request"
+    sequence:
+      - pr-merge  # Check CI, merge state, execute merge
+
+  - when: "Full PR workflow"
+    sequence:
+      - pr-create  # Create the PR
+      - pr-merge   # Merge when ready
+
+triggers:
+  - pattern: "merge pr|merge pull request|pr merge|/pr-merge|/merge-pr"
+    suggest: pr-merge
+  - pattern: "is pr ready|can we merge|check pr status"
+    suggest: pr-merge
+  - pattern: "merge this|merge it|let's merge"
+    suggest: pr-merge

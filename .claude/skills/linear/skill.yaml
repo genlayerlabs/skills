@@ -1,0 +1,933 @@
+name: linear
+kind: integration
+version: "1.0.0"
+description: "Create and manage Linear issues using templates for the GenLayer Heartbeat project."
+severity: medium
+tags:
+  - linear
+  - issues
+  - project-management
+  - templates
+
+purpose: |
+  Manage Linear issues for the GenLayer Node team (which also manages Heartbeat):
+  - Create issues using the standard template format
+  - Convert plans/reports into properly formatted Linear issues
+  - Support creating issues in backlog or specific cycles
+  - Work with the developer skill as orchestrator
+
+owns:
+  - "Linear issue creation for Node team"
+  - "Issue template formatting"
+  - "Issue metadata management (labels, projects, cycles)"
+
+constants:
+  team_name: "Node"
+  team_key: "NOD"
+  team_id: "a1ac0b90-27bb-40f7-8920-cff6a26126b9"
+
+template:
+  name: "GenLayer Node Issue Template"
+  sections:
+    - id: problem_statement
+      title: "Problem Statement"
+      placeholder: "[What problem are we solving and why?]"
+      required: true
+
+    - id: proposed_solution
+      title: "Proposed Solution"
+      placeholder: "[High-level approach]"
+      required: false
+
+    - id: acceptance_criteria
+      title: "Acceptance Criteria"
+      placeholder: |
+        1. Given X, when Y, then Z (behavior specifications)
+        2. [Performance: <100ms response (if applicable)]
+        3. [Testing requirements (if applicable)]
+        4. [AI-generated code reviewed by human requirements (if applicable)]
+        5. [Edge cases considered beyond AI suggestions (if applicable)]
+      required: false
+
+    - id: ai_execution_plan
+      title: "Specific AI-Execution Plan"
+      placeholder: |
+        ```
+        [What parts will be solved by the AIs above]
+        ```
+      required: false
+      note: "Use triple-backtick code block for placeholder text"
+
+    - id: human_contribution
+      title: "Human Contribution Focus"
+      placeholder: "[What parts will require human creativity/decision-making?]"
+      required: false
+
+    - id: technical_notes
+      title: "Technical Notes"
+      placeholder: "[Implementation details, gotchas, AI limitations encountered]"
+      required: false
+
+    - id: lessons_learned
+      title: "Lessons Learned"
+      placeholder: "[What was learned while planning the ticket?]"
+      required: false
+      note: "Optional at creation. Captures insights discovered while planning. Omit section if empty."
+
+  format: |
+    ## Problem Statement
+
+    {problem_statement}
+
+    ## Proposed Solution
+
+    {proposed_solution}
+
+    ## Acceptance Criteria
+
+    {acceptance_criteria}
+
+    ## Specific AI-Execution Plan
+
+    {ai_execution_plan}
+
+    ## Human Contribution Focus
+
+    {human_contribution}
+
+    ## Technical Notes
+
+    {technical_notes}
+
+    ## Lessons Learned
+
+    {lessons_learned}
+
+inputs_required:
+  - id: title
+    description: "Issue title - concise summary of the task"
+    required: true
+    examples:
+      - "Add skill for Claude Code to create Linear issues"
+      - "Fix memory leak in heartbeat service"
+      - "Implement validator monitoring alerts"
+
+  - id: problem_statement
+    description: "What problem are we solving and why?"
+    required: true
+    examples:
+      - "Users frequently encounter configuration issues that are difficult to diagnose."
+      - "The heartbeat service sends alerts without validator identity, making it hard to identify owners."
+
+  - id: proposed_solution
+    description: "High-level approach to solve the problem"
+    required: false
+    examples:
+      - "Add a Claude skill that creates Linear issues with proper templates."
+      - "Add Identity data such as moniker to identify validator owners."
+
+  - id: acceptance_criteria
+    description: "Behavior specifications in Given/When/Then format"
+    required: false
+
+  - id: ai_execution_plan
+    description: "What parts will be solved by AI"
+    required: false
+
+  - id: human_contribution
+    description: "What parts require human creativity/decision-making"
+    required: false
+
+  - id: technical_notes
+    description: "Implementation details, gotchas, AI limitations"
+    required: false
+
+  - id: lessons_learned
+    description: "Optional learnings discovered while planning the ticket"
+    required: false
+    note: "If provided, included in ticket. Omit section if empty."
+
+  - id: assignee
+    description: "User to assign the issue to (name, email, or 'me')"
+    required: false
+    examples:
+      - "me"
+      - "darien"
+      - "Darien Hernandez"
+
+  - id: labels
+    description: "Labels to apply to the issue"
+    required: false
+    examples:
+      - "Bug"
+      - "Improvement"
+      - "Productivity"
+
+  - id: project
+    description: "Project to add the issue to"
+    required: false
+    examples:
+      - "Staking Node"
+      - "Tech Debt"
+      - "Monitoring and Metrics"
+
+  - id: cycle
+    description: "Cycle to add the issue to (name, number, or 'current')"
+    required: false
+    examples:
+      - "current"
+      - "25"
+
+  - id: priority
+    description: "Issue priority (0=None, 1=Urgent, 2=High, 3=Normal, 4=Low)"
+    required: false
+
+  - id: estimate
+    description: "Story point estimate"
+    required: false
+    examples:
+      - 1
+      - 2
+      - 3
+      - 5
+
+  - id: state
+    description: "Initial issue state (auto-set to 'Todo' when cycle is specified)"
+    required: false
+    default_logic: "If cycle is specified -> 'Todo', otherwise -> 'Backlog'"
+    examples:
+      - "Backlog"
+      - "Todo"
+      - "In Progress"
+
+  - id: parent_id
+    description: "Parent issue ID to create this as a sub-issue"
+    required: false
+    examples:
+      - "NOD-123"
+
+  - id: due_date
+    description: "Due date in ISO format"
+    required: false
+    examples:
+      - "2026-02-15"
+
+  - id: links
+    description: "URLs to attach (PRs, docs, Slack threads, etc.)"
+    required: false
+    examples:
+      - url: "https://github.com/genlayerlabs/genlayer-heartbeat/pull/123"
+        title: "Related PR"
+      - url: "https://genlayer.slack.com/archives/..."
+        title: "Discussion thread"
+
+  - id: blocks
+    description: "Issue IDs that this ticket blocks"
+    required: false
+    examples:
+      - "NOD-456"
+      - "NOD-789"
+
+  - id: blocked_by
+    description: "Issue IDs that block this ticket"
+    required: false
+    examples:
+      - "NOD-100"
+
+  - id: related_to
+    description: "Related issue IDs"
+    required: false
+    examples:
+      - "NOD-310"
+
+required_outputs:
+  - "Linear issue created with proper template formatting"
+  - "Issue URL returned to caller"
+
+patterns:
+  - id: template-formatting
+    description: |
+      Always format issue descriptions using the template structure.
+      Include section headers even if content is placeholder text.
+    example: |
+      ## Problem Statement
+
+      Users need a way to easily create Linear issues without memorizing commands.
+
+      ## Proposed Solution
+
+      Add a Claude skill that guides users through the issue creation process.
+
+      ## Acceptance Criteria
+
+      1. Given a user requests an issue, when they invoke /linear, then the skill guides them through the process
+      2. [Testing requirements: Unit tests for skill parsing]
+
+      ## Specific AI-Execution Plan
+
+      [To be filled during implementation]
+
+      ## Human Contribution Focus
+
+      [To be filled during implementation]
+
+      ## Technical Notes
+
+      [To be filled during implementation]
+
+      ## Lessons Learned
+
+      [To be filled during review]
+
+  - id: request-missing-info
+    description: |
+      When called without required information, request it from the caller.
+      Minimum required: title and problem_statement.
+      If called by developer skill, request the plan.
+    example: |
+      If no plan provided:
+      "I need a plan to create the Linear issue. Please provide the plan or ask the developer skill to provide it."
+
+  - id: cycle-handling
+    description: |
+      Handle cycle specification:
+      - "current" -> fetch current cycle ID
+      - number -> use cycle number
+      - omitted -> create in backlog (no cycle)
+    example: |
+      # Get current cycle
+      list_cycles(teamId="...", type="current")
+
+      # Create in current cycle
+      create_issue(..., cycle="current-cycle-id")
+
+      # Create in backlog (no cycle param)
+      create_issue(...) # omit cycle parameter
+
+  - id: developer-skill-integration
+    description: |
+      When called by the developer skill:
+      1. Expect plan data to be provided
+      2. Parse plan into template sections
+      3. Ask for clarification if plan is incomplete
+      4. Return issue URL to developer skill
+
+anti_patterns:
+  - id: missing-problem-statement
+    description: "Creating issues without a clear problem statement"
+    why_bad: "Issues without context are hard to understand and prioritize."
+
+  - id: empty-template-sections
+    description: "Leaving all optional sections with placeholder text"
+    why_bad: "Provides no value. Better to omit sections than use placeholders."
+
+  - id: wrong-team
+    description: "Creating issues in wrong team"
+    why_bad: "Issues won't be visible to the right people."
+
+  - id: duplicate-issues
+    description: "Creating duplicate issues without checking existing ones"
+    why_bad: "Causes confusion and duplicated work."
+
+content_extraction:
+  description: |
+    When given a plan, analysis, or report document, extract content for each
+    template section using these rules. The goal is to transform technical
+    documents into well-structured Linear issues.
+
+  sections:
+    - id: title
+      extract_from:
+        - "Document title (# heading)"
+        - "Executive Summary - first sentence describing the goal"
+        - "Purpose or objective statement"
+      transform: |
+        Create a concise action-oriented title (5-10 words).
+        Format: "[Verb] [what] for [purpose]"
+        Examples:
+          - "Inject txID into context for automatic log propagation"
+          - "Add retry logic for network timeouts"
+          - "Refactor consensus module for better testability"
+
+    - id: problem_statement
+      extract_from:
+        - "## Executive Summary"
+        - "## Problem"
+        - "## Issue"
+        - "## Background"
+        - "## Current Pattern"
+        - "Opening paragraphs explaining the motivation"
+      transform: |
+        Summarize the pain point in 2-4 sentences:
+        1. What is the current situation?
+        2. Why is it a problem?
+        3. What is the impact?
+
+    - id: proposed_solution
+      extract_from:
+        - "## Proposed Solution"
+        - "## Proposed Pattern"
+        - "## Approach"
+        - "## Strategy"
+        - "## Design"
+        - "Key Insight callouts"
+      transform: |
+        Describe the high-level approach in 2-4 sentences.
+        Focus on WHAT will be done, not HOW (that goes in AI-Execution Plan).
+
+    - id: acceptance_criteria
+      extract_from:
+        - "## Benefits"
+        - "## Expected Outcomes"
+        - "## Success Criteria"
+        - "## Requirements"
+        - Numbered lists of goals/outcomes
+      transform: |
+        Convert to Given/When/Then format where possible:
+        1. Given [precondition], when [action], then [expected result]
+        2. Include performance criteria if mentioned
+        3. Include testing requirements if applicable
+        4. Add "AI-generated code reviewed by human" if significant code changes
+
+    - id: ai_execution_plan
+      extract_from:
+        - "## Implementation Steps"
+        - "## Step 1, Step 2, ..."
+        - "## Summary: Injection Points"
+        - "## Locations to REMOVE/ADD/CHANGE"
+        - "Numbered implementation instructions"
+        - "File/line number references"
+      transform: |
+        Create actionable steps that another Claude agent can execute.
+        Format as a todo-list style plan with specific, verifiable actions.
+        MUST be wrapped in triple-backtick code block.
+
+        Each step should include:
+        - ACTION: What to do (Add, Remove, Update, Create, etc.)
+        - WHERE: Specific file path or pattern
+        - WHAT: Exact change (function name, line pattern, code snippet)
+        - VERIFICATION: How to confirm it's done
+
+        Format:
+        ```
+        ## AI Execution Steps
+
+        ### Step 1: [Action] [What] in [Where]
+        - File: path/to/file.ts
+        - Action: [Add/Remove/Update]
+        - Pattern: [what to look for]
+        - Change: [what to do]
+        - Verify: [how to confirm]
+
+        ### Step 2: ...
+        ```
+
+    - id: human_contribution
+      extract_from:
+        - "## Risks and Mitigations"
+        - "## Decisions Needed"
+        - "## Open Questions"
+        - "## Trade-offs"
+        - "Anything marked as requires review or needs decision"
+      transform: |
+        List items requiring human judgment:
+        - Architecture decisions
+        - Trade-off evaluations
+        - Edge case handling
+        - Final testing and validation
+        - Code review focus areas
+
+    - id: technical_notes
+      extract_from:
+        - "## Risks and Mitigations"
+        - "## Gotchas"
+        - "## Edge Cases"
+        - "## Related Files"
+        - "## Dependencies"
+        - "## Caveats"
+        - Warning callouts
+      transform: |
+        Include:
+        - Known risks with mitigations
+        - Files/modules affected
+        - Dependencies or prerequisites
+        - Potential gotchas during implementation
+
+  extraction_priority: |
+    When content could fit multiple sections, use this priority:
+    1. problem_statement: WHY we're doing this (motivation, pain)
+    2. proposed_solution: WHAT we'll do (high-level approach)
+    3. ai_execution_plan: HOW AI will do it (specific steps, files, code)
+    4. acceptance_criteria: HOW we'll know it's done (verification)
+    5. human_contribution: WHAT humans must decide/review
+    6. technical_notes: WHAT could go wrong (risks, gotchas)
+
+  empty_section_handling: |
+    If a section cannot be extracted from the document:
+    - Required sections (problem_statement): Ask user for clarification
+    - Optional sections: Omit entirely from the ticket
+    - NEVER use placeholder text like "[To be filled]"
+
+metadata_inference:
+  description: |
+    When creating a ticket from a plan, infer metadata options using these rules.
+    Some fields are inferred, some require user input, some have defaults.
+
+  fields:
+    - id: labels
+      inference: "auto"
+      available_labels:
+        - name: "Bug"
+          use_when: "Fixing broken behavior, errors, crashes"
+        - name: "Feature"
+          use_when: "New functionality that didn't exist before"
+        - name: "Improvement"
+          use_when: "Enhancing existing functionality, code quality, refactoring"
+        - name: "Optimization"
+          use_when: "Performance improvements, code cleanup, efficiency"
+        - name: "Productivity"
+          use_when: "Developer tooling, automation, skills, CI/CD"
+        - name: "Documentation"
+          use_when: "Docs updates, README, API docs"
+        - name: "Test"
+          use_when: "Adding or improving tests"
+        - name: "Performance"
+          use_when: "Speed/memory optimizations, benchmarks"
+        - name: "Critical Path"
+          use_when: "Blocking other work, urgent priority"
+        - name: "Spike"
+          use_when: "Research, exploration, proof of concept"
+        - name: "Release"
+          use_when: "Release process tickets, version releases, changelog generation"
+        - name: "Needs Definition"
+          use_when: "Scope unclear, needs refinement"
+        - name: "Needs UX"
+          use_when: "Requires UX/design input"
+      rules: |
+        Infer from the nature of the work described in the plan:
+        - "Bug" -> fixing broken behavior, errors, crashes
+        - "Feature" -> new functionality that didn't exist
+        - "Improvement" -> enhancing existing functionality, refactoring, code quality
+        - "Optimization" -> performance, cleanup, efficiency gains
+        - "Productivity" -> developer tooling, automation, skills
+        - "Documentation" -> docs updates
+        - "Test" -> adding/improving tests
+        - "Performance" -> speed/memory optimizations
+        Multiple labels can apply. If unclear, include in proposal for discussion.
+      examples:
+        - plan_signal: "Remove 50+ repetitive logger.With() calls"
+          inferred: ["Improvement"]
+        - plan_signal: "Fix memory leak in consensus module"
+          inferred: ["Bug"]
+        - plan_signal: "Add Claude skill for releases"
+          inferred: ["Productivity"]
+        - plan_signal: "Speed up contract execution by 2x"
+          inferred: ["Performance", "Optimization"]
+
+    - id: project
+      inference: "auto"
+      rules: |
+        Infer from the affected area/module described in the plan:
+        - "Tech Debt" -> refactoring, cleanup, code quality improvements
+        - "Staking Node" -> validator functionality, consensus, staking
+        - "Monitoring and Metrics" -> telemetry, logging, observability
+        If plan doesn't clearly fit a project, ask user or omit.
+      examples:
+        - plan_signal: "Inject txID into context for logging"
+          inferred: "Tech Debt"
+        - plan_signal: "Add Prometheus metrics for consensus"
+          inferred: "Monitoring and Metrics"
+
+    - id: estimate
+      inference: "auto"
+      rules: |
+        Estimate story points based on TOTAL EFFORT including:
+        - AI execution time (high demand, may need multiple sessions)
+        - Human code review time (based on files changed and lines of code)
+        - Iteration cycles (AI generates, human reviews, adjustments needed)
+
+        Scale (time includes AI + human + iterations):
+        - 1 point -> ~4 hours total
+        - 2 points -> ~8 hours (1 workday)
+        - 3 points -> ~2 workdays
+        - 5 points -> ~2-4 workdays
+        - 8 points -> ~5 workdays (1 workweek)
+
+        Estimation factors:
+
+        1. AI EXECUTION TIME
+           - Simple changes (1-3 files): 1-2 hours AI time
+           - Moderate changes (5-10 files): 2-4 hours AI time
+           - Large changes (10-20 files): 4-8 hours AI time (may span sessions)
+           - Major refactoring (20+ files): 8+ hours AI time (multiple sessions)
+
+        2. HUMAN REVIEW TIME
+           - Few lines changed: 30 min review
+           - 1-3 files changed: 1-2 hours review
+           - 5-10 files changed: 2-4 hours review
+           - 10-20 files changed: 4-8 hours review (may need multiple passes)
+           - 20+ files changed: 1-2 days review
+
+        3. ITERATION CYCLES (expect at least 1-2 rounds)
+           - Simple fix: 1 iteration
+           - Moderate change: 2 iterations
+           - Complex refactoring: 2-3 iterations
+           - Architectural change: 3+ iterations
+
+        4. COMPLEXITY MULTIPLIERS
+           - Touches consensus/critical path: +1 point
+           - Has risks/edge cases listed: +1 point
+           - Requires testing strategy: +1 point
+           - Cross-module changes: +1 point
+
+        Estimation formula (rough guide):
+        base = files_changed_bucket + complexity_multipliers
+        - 1-3 files, no complexity -> 1pt
+        - 1-3 files, some complexity -> 2pt
+        - 5-10 files, low complexity -> 2pt
+        - 5-10 files, moderate complexity -> 3pt
+        - 10-20 files, any complexity -> 5pt
+        - 20+ files or architectural -> 8pt
+
+      examples:
+        - plan_signal: "13 injection points, 50+ locations to remove, touches consensus"
+          reasoning: "20+ locations = large change (base 5), consensus = critical (+1), risks listed (+1) -> cap at 8"
+          inferred: 8
+        - plan_signal: "Update single handler function"
+          reasoning: "1 file, simple change, 1 iteration"
+          inferred: 1
+        - plan_signal: "Add new metrics collector, 5 files"
+          reasoning: "5 files (base 2), straightforward pattern, 2 iterations"
+          inferred: 2
+        - plan_signal: "Refactor error handling across 10 files"
+          reasoning: "10 files (base 3), moderate complexity, needs testing (+1)"
+          inferred: 5
+
+    - id: priority
+      inference: "ask_unless_obvious"
+      rules: |
+        Usually ask user for priority. Only infer if plan contains:
+        - Urgent language: "critical", "blocking", "production issue" -> 1 (Urgent)
+        - Important: "high priority", "needed for release" -> 2 (High)
+        - Normal: no urgency indicators -> 3 (Normal) or omit
+        - Nice to have: "when time permits", "low priority" -> 4 (Low)
+
+        DEFAULT: Do not set priority unless explicitly requested or obvious.
+
+    - id: cycle
+      inference: "user_provided"
+      rules: |
+        Always use what user specifies:
+        - "current" -> resolve to current cycle ID
+        - "next" -> resolve to next cycle ID
+        - number -> use as cycle number
+        - not specified -> backlog (no cycle)
+
+        NEVER assume a cycle. If user doesn't specify, create in backlog.
+
+    - id: state
+      inference: "auto_from_cycle"
+      rules: |
+        Automatically determined based on cycle:
+        - Cycle specified -> state = "Todo"
+        - No cycle -> state = "Backlog"
+
+        User can override by explicitly specifying state.
+
+    - id: assignee
+      inference: "ask_or_default"
+      rules: |
+        If user doesn't specify:
+        - Check if plan mentions who will work on it
+        - Otherwise ask: "Who should be assigned?" or leave unassigned
+
+        Accept: "me", name, or email.
+
+    - id: related_to
+      inference: "auto_extract"
+      rules: |
+        Scan the plan for issue references:
+        - Pattern: "NOD-\d+" (e.g., NOD-310, NOD-456)
+        - Pattern: "Related to #XXX" or "See issue XXX"
+        - Pattern: "Plan: .claude/plans/nod-XXX-..."
+
+        Extract all found issue IDs as related_to.
+      examples:
+        - plan_signal: "Plan: .claude/plans/nod-310-standardize-txid-logging-key.md"
+          inferred: ["NOD-310"]
+
+    - id: links
+      inference: "auto_extract"
+      rules: |
+        Scan the plan for URLs:
+        - GitHub links -> title: "GitHub Reference"
+        - Slack links -> title: "Discussion Thread"
+        - PR links -> title: "Related PR"
+        - Doc links -> title: "Documentation"
+
+        Extract as [{url, title}] array.
+
+    - id: parent_id
+      inference: "user_provided"
+      rules: |
+        Only set if user explicitly requests creating a sub-issue:
+        - "Create as sub-issue of NOD-123"
+        - "This is part of NOD-456"
+
+        NEVER assume parent. Ask if unclear.
+
+    - id: blocks
+      inference: "user_provided_or_extract"
+      rules: |
+        Set if user specifies or plan mentions:
+        - "This blocks NOD-XXX"
+        - "NOD-XXX depends on this"
+        - "Prerequisite for NOD-XXX"
+
+    - id: blocked_by
+      inference: "user_provided_or_extract"
+      rules: |
+        Set if user specifies or plan mentions:
+        - "Blocked by NOD-XXX"
+        - "Depends on NOD-XXX"
+        - "Requires NOD-XXX first"
+
+    - id: due_date
+      inference: "user_provided"
+      rules: |
+        Only set if user explicitly provides a deadline.
+        NEVER assume a due date.
+
+  inference_summary: |
+    | Field       | Inference Type          | Action                              |
+    |-------------|-------------------------|-------------------------------------|
+    | labels      | auto                    | Infer from work type                |
+    | project     | auto                    | Infer from affected area            |
+    | estimate    | auto                    | Infer from scope (files/locations)  |
+    | priority    | ask_unless_obvious      | Ask user, rarely infer              |
+    | cycle       | user_provided           | Use what user says, default backlog |
+    | state       | auto_from_cycle         | Todo if cycle, else Backlog         |
+    | assignee    | ask_or_default          | Ask or leave unassigned             |
+    | related_to  | auto_extract            | Scan for NOD-XXX patterns           |
+    | links       | auto_extract            | Scan for URLs                       |
+    | parent_id   | user_provided           | Only if explicitly requested        |
+    | blocks      | user_provided_or_extract| User or scan for "blocks" language  |
+    | blocked_by  | user_provided_or_extract| User or scan for "blocked" language |
+    | due_date    | user_provided           | Only if explicitly provided         |
+
+  examples:
+    - document_type: "Strategy/Analysis Document"
+      typical_structure:
+        - "Executive Summary -> problem_statement + proposed_solution"
+        - "Current vs Proposed Pattern -> problem_statement + proposed_solution"
+        - "Flow Analysis -> technical_notes"
+        - "Implementation Steps -> ai_execution_plan"
+        - "Risks and Mitigations -> human_contribution + technical_notes"
+        - "Benefits -> acceptance_criteria"
+
+    - document_type: "Bug Report/Investigation"
+      typical_structure:
+        - "Issue Description -> problem_statement"
+        - "Root Cause -> technical_notes"
+        - "Fix Approach -> proposed_solution + ai_execution_plan"
+        - "Testing Plan -> acceptance_criteria"
+
+    - document_type: "Feature Request"
+      typical_structure:
+        - "User Story/Need -> problem_statement"
+        - "Proposed Feature -> proposed_solution"
+        - "Requirements -> acceptance_criteria"
+        - "Implementation Notes -> ai_execution_plan + technical_notes"
+
+handoffs:
+  - skill: "developer"
+    when: "Developer skill orchestrates and provides plan data for issue creation."
+    receives: "plan, optional lessons_learned discovered while planning the ticket"
+  - skill: "plan"
+    when: "If a plan needs to be created before the issue."
+
+procedure:
+  - step: "Receive request"
+    detail: |
+      When invoked, determine the source:
+      - Direct invocation: User provides issue details directly
+      - From developer skill: Expect plan data to be provided
+
+      If no plan or issue details provided, ask:
+      "Please provide the issue details or plan. I need at minimum:
+      - Title
+      - Problem Statement"
+
+  - step: "Request lessons learned from planning skill"
+    detail: |
+      If plan was provided by another skill (e.g., developer):
+      Ask: "Were there any lessons learned while planning the ticket? (optional)"
+
+      Examples of lessons learned while planning:
+      - "Discovered the existing pattern uses X instead of Y"
+      - "Found that module Z already has similar functionality"
+      - "Realized we need to consider edge case W"
+      - "The codebase already has a utility for this in utils/helpers.ts"
+
+      If provided, include in the Lessons Learned section.
+      If not provided or empty, omit the section from ticket.
+
+  - step: "Extract content from plan"
+    detail: |
+      Use content_extraction rules to map plan sections to template fields.
+      Use metadata_inference rules to determine metadata options.
+
+      For each field, note:
+      - The inferred value
+      - The source/reasoning
+      - Confidence level (certain, likely, uncertain)
+
+  - step: "Show proposal wizard"
+    detail: |
+      BEFORE creating the ticket, show a proposal for discussion.
+
+      Format:
+      ```
+      ## Ticket Proposal
+
+      **Title:** [inferred title]
+
+      ### Metadata
+      | Field | Value | Reasoning |
+      |-------|-------|-----------|
+      | Labels | [value] | [why this label] |
+      | Project | [value] | [why this project] |
+      | Estimate | [value] | [calculation breakdown] |
+      | Cycle | [value] | [user specified or backlog] |
+      | State | [value] | [auto from cycle] |
+      | Related | [value] | [extracted from plan] |
+
+      ### Description Preview
+      [First 3-5 lines of each section]
+
+      ---
+      **Ready to create?** Or adjust any options?
+      ```
+
+      Wait for user confirmation or adjustments before proceeding.
+
+  - step: "Handle user feedback"
+    detail: |
+      CRITICAL: When user requests ANY changes, you MUST:
+      1. Apply the requested changes
+      2. Show the FULL updated proposal again
+      3. Wait for EXPLICIT approval ("yes", "create it", "looks good")
+      4. NEVER create the ticket immediately after changes are requested
+
+      This is mandatory even for simple changes like "assign to X" or "use current cycle".
+      The user needs to see and approve the final version before creation.
+
+      Common adjustments:
+      - "Change estimate to X" -> update estimate, show proposal
+      - "Add label Y" -> add to labels array, show proposal
+      - "Assign to Z" -> set assignee, show proposal
+      - "Use current cycle" -> set cycle, show proposal
+      - "Remove section" -> edit description, show proposal
+
+      After showing updated proposal, always end with:
+      "**Ready to create?** Or adjust any options?"
+
+  - step: "Format description using template"
+    detail: |
+      Build the description using the template format.
+      Only include sections that have content (not just placeholders).
+
+      IMPORTANT: Always omit "Lessons Learned" at creation time.
+      This section is filled when the ticket is completed as part of
+      the definition of done.
+
+      Example:
+      ```
+      ## Problem Statement
+
+      [actual problem statement content]
+
+      ## Proposed Solution
+
+      [actual solution content]
+      ```
+
+      If a section has no content, omit it entirely rather than
+      including placeholder text.
+
+  - step: "Resolve cycle and state"
+    detail: |
+      If cycle is specified:
+      - "current" -> call list_cycles with type="current" to get cycle ID
+      - "next" -> call list_cycles with type="next" to get cycle ID
+      - number -> use as cycle parameter directly
+      - AUTO-SET state to "Todo" (unless user explicitly specified different state)
+
+      If cycle not specified:
+      - Issue goes to backlog (omit cycle param)
+      - State defaults to "Backlog"
+
+  - step: "Create the issue"
+    detail: |
+      Only after user approves the proposal.
+
+      Use mcp__linear-server__create_issue with:
+
+      Required:
+      - team: "Node" (or team_id)
+      - title: issue title
+      - description: formatted template content
+
+      Metadata (if provided):
+      - assignee: user name, email, or "me"
+      - labels: as array ["Bug", "Improvement"]
+      - project: project name
+      - cycle: resolved cycle ID
+      - priority: 1-4 (only if explicitly requested)
+      - estimate: story points
+      - state: initial state name
+      - dueDate: ISO format date
+
+      Relationships (if provided):
+      - parentId: parent issue ID for sub-issues
+      - links: array of {url, title} objects
+      - blocks: array of issue IDs this blocks
+      - blockedBy: array of issue IDs blocking this
+      - relatedTo: array of related issue IDs
+
+  - step: "Return result"
+    detail: |
+      Return the created issue information:
+      - Issue identifier (e.g., NOD-123)
+      - Issue URL
+      - Confirmation message
+
+      Example response:
+      "Created issue NOD-123: [title]
+      URL: https://linear.app/genlayer-labs/issue/NOD-123/..."
+
+troubleshooting:
+  - issue: "Issue creation fails with 'team not found'"
+    diagnosis: |
+      list_teams(query="node")
+    fix: |
+      Verify team name or use team_id directly:
+      team: "a1ac0b90-27bb-40f7-8920-cff6a26126b9"
+
+  - issue: "Cycle not found"
+    diagnosis: |
+      list_cycles(teamId="a1ac0b90-27bb-40f7-8920-cff6a26126b9")
+    fix: |
+      Use "current" to get current cycle, or omit for backlog.
+
+  - issue: "Label not found"
+    diagnosis: |
+      list_issue_labels(team="Node")
+    fix: |
+      Use exact label name from the list.
+
+  - issue: "Project not found"
+    diagnosis: |
+      list_projects(team="Node")
+    fix: |
+      Use exact project name or ID from the list.

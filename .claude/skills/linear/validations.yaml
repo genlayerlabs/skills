@@ -1,0 +1,17 @@
+version: 1
+description: "Validations run by task claude:validate-skill -- --skill linear"
+
+# Linear skill validations:
+# - Skill structure validation (always run)
+# - No heavy runtime validations needed since this is an integration skill
+
+validations:
+  - id: skill-structure
+    name: "Skill YAML structure valid"
+    type: command
+    command: task claude:validate-skill-yaml
+    expect: exit 0
+    message: "Skill YAML structure is invalid."
+
+on_stop:
+  - skill-structure

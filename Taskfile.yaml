@@ -1,0 +1,10 @@
+version: "3"
+
+includes:
+  claude:
+    desc: Tasks for Claude Code skills management
+    taskfile: ./taskfiles/claude/Taskfile.yaml
+
+  docs:
+    desc: Tasks for documentation generation and validation
+    taskfile: ./taskfiles/docs/Taskfile.yaml

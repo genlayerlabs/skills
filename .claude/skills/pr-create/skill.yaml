@@ -1,0 +1,310 @@
+name: pr-create
+kind: action
+version: "1.0.0"
+description: "Creates GitHub pull requests with conventional commit-style titles following project conventions."
+severity: medium
+tags:
+  - git
+  - github
+  - workflow
+  - pr
+
+purpose: |
+  Creates GitHub pull requests using the `gh` CLI with properly formatted titles
+  that follow conventional commits and the project's git workflow conventions.
+  Analyzes changes to determine appropriate type, scope, and summary.
+
+owns:
+  - "PR creation workflow"
+  - "PR title formatting"
+  - "PR body generation"
+
+inputs_required:
+  - id: committed_changes
+    description: "Changes must be committed to a feature branch (not main)"
+  - id: branch_pushed
+    description: "Branch should be pushed or will be pushed during PR creation"
+
+required_outputs:
+  - "GitHub PR URL"
+
+patterns:
+  - id: conventional-commit-title
+    description: |
+      PR titles MUST follow conventional commit format:
+      <type>(<scope>): <subject>
+
+      - type: feat, fix, chore, docs, test, perf, ci
+      - scope: app, plugins, skills, config, infra, docs (optional)
+      - subject: Capitalized, no period, max 50 chars total
+    example: |
+      feat(plugins): Add parallel worker support
+      fix(consensus): Handle timeout during reveal phase
+      chore(skills): Add create-pr skill
+
+  - id: analyze-before-title
+    description: |
+      Before creating PR title, analyze all commits on the branch:
+      - git log origin/main..HEAD --oneline
+      - git diff origin/main..HEAD --stat
+      Determine the primary type and scope from the changes.
+    commands:
+      - "git log origin/main..HEAD --oneline"
+      - "git diff origin/main..HEAD --stat"
+
+  - id: specific-not-vague
+    description: |
+      Avoid vague words: "improve", "enhance", "update", "change"
+      Use specific action verbs: "Add", "Fix", "Remove", "Refactor", "Handle"
+    example: |
+      Bad:  chore(config): Update configuration
+      Good: chore(config): Add Redis connection pooling
+
+  - id: changelog-aware-description
+    description: |
+      Write descriptions with changelog review in mind. The description should
+      make it obvious whether the PR is changelog-worthy based on IMPACT, not type.
+
+      Any type can be changelog-worthy depending on impact:
+      - chore(deps): Security fix → changelog
+      - chore(skills): Tooling → not changelog
+      - docs: User API guide → changelog
+      - docs: Dev setup → not changelog
+
+      Changelog-worthy: Focus on USER/PRODUCT impact
+      Internal: Focus on DEVELOPER/PROCESS impact
+    example: |
+      # Changelog-worthy (various types)
+      feat(consensus): Add validator ban detection
+      → Adds monitoring for validator bans. Reports via Slack.
+
+      docs: Add API authentication guide
+      → Documents how to authenticate with the GenLayer API.
+
+      chore(deps): Upgrade axios to fix security vulnerability
+      → Fixes CVE-2024-XXXX affecting API requests.
+
+      # Internal (various types)
+      chore(skills): Add AI attribution validation
+      → Adds automated validation for PR checks.
+
+      docs: Update development setup instructions
+      → Clarifies Node version for contributors.
+
+  - id: pr-body-structure
+    description: |
+      PR body MUST use the template from .github/PULL_REQUEST_TEMPLATE.md.
+      Fill in the template fields:
+      - Description: 2-3 sentences summarizing the technical change
+      - Release Notes: User-facing summary for the changelog
+      - Types of Changes: Mark [x] for the appropriate type
+      - Checklist: Mark [x] for items that apply
+      - Add Linear ticket link at the bottom if available
+    example: |
+      ## Description
+
+      Add gh CLI prerequisite checks to create-pr skill.
+      Strengthen AI attribution policy to explicitly forbid Co-Authored-By.
+
+      ## Release Notes
+
+      - Added gh CLI prerequisite checks to create-pr skill
+
+      ## Types of Changes
+
+      - [ ] Bug fix (non-breaking change that fixes an issue)
+      - [ ] New feature (non-breaking change that adds functionality)
+      - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+      - [x] Chore (maintenance tasks, refactoring, or non-functional changes)
+
+      ## Checklist
+
+      - [x] My code follows the code style of this project
+      - [x] I have added the necessary documentation (if appropriate)
+      - [ ] I have added tests (if appropriate)
+      - [x] Lint and unit tests pass locally with my changes
+
+      Related: HBT-123
+
+  - id: network-labels
+    description: |
+      Apply network labels to PRs that should auto-deploy on merge.
+      The release workflow reads these labels to determine deploy targets.
+      Valid labels: asimov-phase4, bradbury
+      Labels are optional — omitting means release without deploy.
+    example: |
+      # Single network
+      gh pr create --title "..." --body "..." --label asimov-phase4
+      # Multiple networks
+      gh pr create --title "..." --body "..." --label asimov-phase4 --label bradbury
+      # No deploy (omit --label)
+      gh pr create --title "..." --body "..."
+
+  - id: push-before-pr
+    description: |
+      Ensure branch is pushed before creating PR:
+      git push -u origin HEAD
+    commands:
+      - "git push -u origin HEAD"
+
+anti_patterns:
+  - id: pr-from-main
+    description: "Creating PR while on main branch"
+    why_bad: "PRs should be from feature branches. Main is the target, not source."
+
+  - id: vague-title
+    description: "Using vague words like 'update', 'improve', 'enhance'"
+    why_bad: "Doesn't communicate what actually changed. Be specific."
+
+  - id: ai-attribution
+    description: "Including ANY AI attribution in PR title, body, or commits"
+    why_bad: |
+      STRICTLY FORBIDDEN. This is a complete violation of project conventions.
+      NEVER include:
+      - Co-Authored-By: Claude, GPT, or any AI
+      - 🤖 emoji or AI-related emojis
+      - "Generated by", "Created with", or similar phrases
+      - Any reference to AI tools (Claude, ChatGPT, Copilot, etc.)
+      PRs and commits must appear as human-authored work.
+
+  - id: unpushed-pr
+    description: "Attempting to create PR without pushing branch first"
+    why_bad: "gh pr create requires the branch to exist on remote."
+
+  - id: no-commit-analysis
+    description: "Creating PR title without reviewing commits"
+    why_bad: "Title should reflect all changes, not just the last commit."
+
+procedure:
+  - step: "Verify gh CLI prerequisites"
+    detail: |
+      Before anything else, verify GitHub CLI is available and authenticated:
+      1. Check gh is installed: gh --version
+      2. Check gh is authenticated: gh auth status
+      If gh is not installed, tell user: "Install GitHub CLI: brew install gh"
+      If gh is not authenticated, tell user: "Authenticate with: gh auth login"
+      Do not proceed until both checks pass.
+    commands:
+      - "gh --version"
+      - "gh auth status"
+
+  - step: "Verify not on main"
+    detail: |
+      Check current branch is not main:
+      git branch --show-current
+      If on main, stop and inform user to create a feature branch.
+    commands:
+      - "git branch --show-current"
+
+  - step: "Check repository state"
+    detail: |
+      Verify there are commits to PR and no uncommitted changes:
+      - git status
+      - git log origin/main..HEAD --oneline
+    commands:
+      - "git status"
+      - "git log origin/main..HEAD --oneline"
+
+  - step: "Analyze changes"
+    detail: |
+      Review all commits and changes to determine:
+      - Primary type (feat, fix, chore, etc.)
+      - Affected scope (plugins, skills, etc.)
+      - Summary of what the PR accomplishes
+    commands:
+      - "git log origin/main..HEAD --oneline"
+      - "git diff origin/main..HEAD --stat"
+
+  - step: "Push branch"
+    detail: |
+      Push branch to origin with upstream tracking:
+      git push -u origin HEAD
+    commands:
+      - "git push -u origin HEAD"
+
+  - step: "Ask about deploy networks"
+    detail: |
+      Ask user which network(s) to deploy to on merge.
+      Use AskUserQuestion with options:
+      - asimov-phase4 (main testnet)
+      - bradbury (staging)
+      - Both networks
+      - None (skip deploy)
+      If "None" selected, omit --label flags from PR creation.
+      If network(s) selected, include --label flags in PR creation command.
+    tool: AskUserQuestion
+    tool_params:
+      questions:
+        - question: "Which network(s) should this deploy to on merge?"
+          header: "Deploy"
+          multiSelect: false
+          options:
+            - label: "asimov-phase4 (Recommended)"
+              description: "Main testnet - production environment"
+            - label: "bradbury"
+              description: "Secondary testnet - staging environment"
+            - label: "Both networks"
+              description: "Deploy to asimov-phase4 AND bradbury"
+            - label: "None (skip deploy)"
+              description: "Create release but don't deploy"
+
+  - step: "Present PR for user review"
+    detail: |
+      Before creating the PR, present the title, labels, and body to the user:
+
+      ## PR Preview
+
+      **Title:** <type>(<scope>): <subject>
+      **Labels:** <network labels or "none">
+
+      **Body:**
+      ## Description
+      <description>
+      ...
+
+      ---
+      Any changes I should make?
+
+      Wait for user confirmation:
+      - If user says "no" or confirms → proceed to create PR
+      - If user requests changes → incorporate feedback and show again
+
+  - step: "Create PR"
+    detail: |
+      After user confirms, use gh CLI to create the PR.
+      The body MUST follow .github/PULL_REQUEST_TEMPLATE.md format.
+      Use HEREDOC for body to preserve formatting.
+      Include --label flags for selected network(s), omit if "None" selected.
+    commands:
+      - |
+        # With network label(s):
+        gh pr create --title "<type>(<scope>): <subject>" --label asimov-phase4 --body "$(cat <<'EOF'
+        ## Description
+
+        <2-3 sentences summarizing what changed>
+
+        ## Release Notes
+
+        <user-facing changelog summary>
+
+        ## Types of Changes
+
+        - [ ] Bug fix (non-breaking change that fixes an issue)
+        - [ ] New feature (non-breaking change that adds functionality)
+        - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+        - [ ] Chore (maintenance tasks, refactoring, or non-functional changes)
+
+        ## Checklist
+
+        - [ ] My code follows the code style of this project
+        - [ ] I have added the necessary documentation (if appropriate)
+        - [ ] I have added tests (if appropriate)
+        - [ ] Lint and unit tests pass locally with my changes
+        EOF
+        )"
+      - |
+        # Without network labels (no deploy on merge):
+        gh pr create --title "<type>(<scope>): <subject>" --body "$(cat <<'EOF'
+        ...
+        EOF
+        )"
