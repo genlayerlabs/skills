@@ -1,5 +1,5 @@
 name: genlayernode
-kind: setup
+kind: gate
 version: "1.0.0"
 description: "Interactive wizard to set up a GenLayer validator node on Linux."
 severity: high
@@ -78,8 +78,8 @@ directory_structure:
       description: "Symlink to current version docker-compose"
     - path: ".env -> {VERSION}/.env"
       description: "Symlink to current version .env"
-    - path: "alloy-config.river"
-      description: "Telemetry configuration (if monitoring enabled)"
+    - path: "alloy-config.river -> {VERSION}/alloy-config.river"
+      description: "Symlink to current version telemetry config (ships with tarball)"
 
 inputs_required:
   - id: server_location
@@ -703,6 +703,8 @@ patterns:
   - id: create-systemd-service
     description: |
       Create systemd service for persistent node operation.
+      Includes ExecStartPost to restart Alloy telemetry container, preventing
+      stale bind mount issues after upgrades. See sharp-edges.yaml -> alloy-stale-bind-mount.
     template: |
       [Unit]
       Description=GenLayer Node Service
@@ -716,6 +718,7 @@ patterns:
       WorkingDirectory=/opt/genlayer-node
       EnvironmentFile=/opt/genlayer-node/.env
       ExecStart=/opt/genlayer-node/bin/genlayernode run --password ${NODE_PASSWORD}
+      ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
       Restart=always
       RestartSec=10
       StandardOutput=journal
@@ -730,6 +733,10 @@ patterns:
       - "sudo systemctl daemon-reload"
       - "sudo systemctl enable genlayer-node"
       - "sudo systemctl start genlayer-node"
+    notes:
+      - "ExecStartPost restarts Alloy to refresh its bind mount after symlink changes"
+      - "The '-' prefix means systemd ignores failures (e.g., if Alloy isn't installed)"
+      - "The 5-second sleep ensures the node has started before restarting Alloy"
 
   - id: run-node-docker
     description: |
@@ -761,6 +768,25 @@ patterns:
       - "CENTRAL_LOKI_PASSWORD"
       - "VALIDATOR_NAME"
     command: "cd /opt/genlayer-node && docker compose --profile monitoring up -d"
+    notes:
+      - "After enabling, verify Alloy is sending data to Grafana"
+      - "Alloy must be restarted whenever the node restarts (handled by systemd ExecStartPost)"
+      - "See sharp-edges.yaml -> alloy-stale-bind-mount for bind mount issue details"
+
+  - id: restart-alloy-telemetry
+    description: |
+      Restart Alloy telemetry container to refresh bind mount.
+      Required after node restarts when symlinks change (e.g., during upgrades).
+      The systemd service should handle this automatically via ExecStartPost.
+    command: "docker restart genlayer-node-alloy"
+    when_to_use:
+      - "After node upgrade if systemd service doesn't have ExecStartPost"
+      - "If Grafana shows no data but node is healthy"
+      - "If Alloy container shows old log timestamps"
+    verify: |
+      # Check bind mount is fresh (timestamps should match)
+      echo "Host:" && ls -la /opt/genlayer-node/data/node/logs/node.log | awk '{print $6,$7,$8}'
+      echo "Container:" && docker exec genlayer-node-alloy ls -la /var/log/genlayer/node.log | awk '{print $6,$7,$8}'
 
 anti_patterns:
   - id: skip-prerequisites

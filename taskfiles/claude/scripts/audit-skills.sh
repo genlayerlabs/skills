@@ -63,7 +63,7 @@ readonly ERR_INVALID_ARGS=2
 readonly SKILL_PREFIX=""
 
 # Valid skill kinds
-readonly VALID_KINDS="gate scaffolder helper frontend meta action"
+readonly VALID_KINDS="gate scaffolder helper frontend meta action integration"
 
 # Upstream Skills Guide Constraints
 readonly NAME_MAX_LENGTH=64
@@ -423,6 +423,9 @@ get_required_files() {
     case "$kind" in
         gate|scaffolder|meta|frontend|action)
             echo "SKILL.md skill.yaml validations.yaml collaboration.yaml sharp-edges.yaml"
+            ;;
+        integration)
+            echo "SKILL.md skill.yaml collaboration.yaml sharp-edges.yaml"
             ;;
         helper)
             echo "SKILL.md skill.yaml collaboration.yaml"

@@ -1,5 +1,5 @@
 name: pr-merge
-kind: workflow
+kind: action
 version: "1.0.0"
 description: "Merge GitHub pull requests with strict CI validation. Never bypasses failed checks."
 severity: high

@@ -1,0 +1,113 @@
+# Sharp Edges: common gotchas and pitfalls
+#
+# Each entry describes a problem that can occur, how to detect it,
+# and how to fix it.
+
+name: linear
+version: "1.0.0"
+
+gotchas:
+  - id: template-not-available-via-api
+    summary: "Linear templates cannot be retrieved via API"
+    description: |
+      The Linear MCP server does not support retrieving issue templates.
+      Templates are a web UI feature only. This skill embeds the template
+      content directly in skill.yaml instead.
+    detection: |
+      Attempting to use a template parameter in create_issue will fail.
+    fix: |
+      Use the template format defined in this skill's skill.yaml.
+      Format the description manually using the template sections.
+
+  - id: team-name-vs-id
+    summary: "Team name may not resolve correctly"
+    description: |
+      The Linear API sometimes has issues resolving team names.
+      Using the team ID directly is more reliable.
+    detection: |
+      Error: "team not found" when using team name "Node"
+    fix: |
+      Use the team ID directly:
+      team: "a1ac0b90-27bb-40f7-8920-cff6a26126b9"
+
+  - id: cycle-must-be-resolved
+    summary: "Cycle 'current' must be resolved to actual ID"
+    description: |
+      The create_issue API doesn't understand "current" as a cycle value.
+      You must first call list_cycles to get the actual cycle ID.
+    detection: |
+      Error when passing cycle="current" to create_issue
+    fix: |
+      # First resolve current cycle
+      cycles = list_cycles(teamId="...", type="current")
+      current_cycle_id = cycles[0].id
+
+      # Then use the ID
+      create_issue(..., cycle=current_cycle_id)
+
+  - id: labels-must-be-array
+    summary: "Labels parameter must be an array"
+    description: |
+      The labels parameter expects an array of label names or IDs,
+      not a single string.
+    detection: |
+      Labels not applied or error on issue creation
+    fix: |
+      # Correct
+      labels: ["Bug", "Improvement"]
+
+      # Incorrect
+      labels: "Bug"
+
+  - id: empty-description-sections
+    summary: "Don't include empty template sections"
+    description: |
+      Including template sections with only placeholder text provides
+      no value and clutters the issue description.
+    detection: |
+      Issue description contains "[To be filled]" or similar placeholders
+    fix: |
+      Only include sections that have actual content.
+      Omit sections entirely if no content is provided.
+
+  - id: missing-mcp-connection
+    summary: "Linear MCP server must be connected"
+    description: |
+      The skill requires the Linear MCP server to be configured and
+      connected. Without it, no Linear operations will work.
+    detection: |
+      Error: "mcp__linear-server__* tool not found"
+    fix: |
+      Ensure Linear MCP server is configured in Claude settings.
+      The user may need to run /mcp to connect.
+
+  - id: project-name-exact-match
+    summary: "Project names must match exactly"
+    description: |
+      Project names are case-sensitive and must match exactly.
+    detection: |
+      Error: "project not found" when using slightly different name
+    fix: |
+      # List available projects first
+      list_projects(team="Node")
+
+      # Use exact name from the list
+      project: "Staking Node"  # Not "staking node"
+
+  - id: priority-values
+    summary: "Priority uses specific numeric values"
+    description: |
+      Priority must be a number: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low.
+      Do not set priority unless explicitly requested.
+    detection: |
+      Wrong priority applied or error on invalid value
+    fix: |
+      # Only set if explicitly requested
+      priority: 2  # High
+
+      # Valid values:
+      # 0 = No priority
+      # 1 = Urgent
+      # 2 = High
+      # 3 = Normal
+      # 4 = Low

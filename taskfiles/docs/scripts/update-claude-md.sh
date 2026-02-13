@@ -133,14 +133,15 @@ update_claude_md() {
     temp_file=$(mktemp)
     local table_file
     table_file=$(mktemp)
-    trap 'rm -f "$temp_file" "$table_file"' RETURN
 
     # Check if markers exist
     if ! grep -q "$START_MARKER" "$CLAUDE_MD"; then
+        rm -f "$temp_file" "$table_file"
         die "Missing $START_MARKER in CLAUDE.md. Please add markers around the skills table."
     fi
 
     if ! grep -q "$END_MARKER" "$CLAUDE_MD"; then
+        rm -f "$temp_file" "$table_file"
         die "Missing $END_MARKER in CLAUDE.md. Please add markers around the skills table."
     fi
 
@@ -167,6 +168,7 @@ update_claude_md() {
         fi
     done < "$CLAUDE_MD" > "$temp_file"
 
+    rm -f "$table_file"
     mv "$temp_file" "$CLAUDE_MD"
     log_info "Updated CLAUDE.md skills table"
 }

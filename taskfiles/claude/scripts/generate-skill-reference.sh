@@ -334,7 +334,7 @@ EOF
     echo ""
 
     # Kind order for output
-    local kind_order="gate scaffolder helper discipline meta frontend"
+    local kind_order="gate scaffolder helper discipline meta frontend action integration"
 
     # Get sorted unique kinds
     local sorted_kinds=""
