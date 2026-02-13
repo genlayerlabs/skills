@@ -11,7 +11,7 @@ set -euo pipefail
 # - Naming convention: frontmatter name must match directory name
 # - Collaboration references: all referenced skills must exist
 # - Validations integrity: on_stop IDs exist, type=command only (v1), required fields present
-# - Make target existence: commands starting with `make <target>` must reference valid targets
+# - Task target existence: commands starting with `task <target>` must reference valid targets
 #
 # Usage:
 #     ./check-skill-yaml.sh
@@ -52,8 +52,8 @@ VALIDATIONS_TYPES=()
 VALIDATIONS_COMMANDS=()
 ON_STOP_IDS=()
 
-# Make target cache (newline-delimited for bash 3 compatibility)
-MAKE_TARGET_CACHE_KEYS=""
+# Task target cache (newline-delimited for bash 3 compatibility)
+TASK_TARGET_CACHE_KEYS=""
 
 # ============================================================================
 # SOURCE SHARED FUNCTIONS
@@ -93,9 +93,9 @@ has_yq() {
     command -v yq >/dev/null 2>&1
 }
 
-# Check if a Make target exists (with caching)
+# Check if a Task target exists (with caching)
 # Uses newline-delimited cache for bash 3 compatibility (avoids substring collisions)
-make_target_exists() {
+task_target_exists() {
     local target="$1"
     local cache_entry
 
@@ -106,16 +106,16 @@ make_target_exists() {
         elif [[ "$cache_entry" == "$target=false" ]]; then
             return 1
         fi
-    done <<< "$MAKE_TARGET_CACHE_KEYS"
+    done <<< "$TASK_TARGET_CACHE_KEYS"
 
-    # Run make -n with timeout
+    # Check if task target exists using task --list
     local exists=false
-    if timeout 5s make -n "$target" >/dev/null 2>&1; then
+    if task --list 2>/dev/null | grep -q "\\b${target}\\b"; then
         exists=true
     fi
 
     # Cache result (newline-delimited)
-    MAKE_TARGET_CACHE_KEYS="${MAKE_TARGET_CACHE_KEYS}
+    TASK_TARGET_CACHE_KEYS="${TASK_TARGET_CACHE_KEYS}
 ${target}=${exists}"
 
     [[ "$exists" == "true" ]]
@@ -484,8 +484,8 @@ check_validations_integrity() {
     fi
 }
 
-# Check Make targets exist
-check_make_targets() {
+# Check Task targets exist
+check_task_targets() {
     local skill_dir="$1"
     local skill
     skill=$(basename "$skill_dir")
@@ -500,11 +500,11 @@ check_make_targets() {
         local vid="${VALIDATIONS_IDS[$i]:-unknown}"
         local vcmd="${VALIDATIONS_COMMANDS[$i]}"
 
-        # Extract make target from command
-        if [[ "$vcmd" =~ ^make[[:space:]]+([a-zA-Z0-9_-]+) ]]; then
+        # Extract task target from command
+        if [[ "$vcmd" =~ ^task[[:space:]]+([a-zA-Z0-9_:-]+) ]]; then
             local target="${BASH_REMATCH[1]}"
-            if ! make_target_exists "$target"; then
-                ERRORS+=("$skill: validations.yaml validation '$vid' references non-existent make target '$target'")
+            if ! task_target_exists "$target"; then
+                ERRORS+=("$skill: validations.yaml validation '$vid' references non-existent task target '$target'")
             fi
         fi
     done
@@ -540,8 +540,8 @@ check_skill() {
     # Check validations integrity
     check_validations_integrity "$skill_dir"
 
-    # Check Make targets exist
-    check_make_targets "$skill_dir"
+    # Check Task targets exist
+    check_task_targets "$skill_dir"
 }
 
 # ============================================================================

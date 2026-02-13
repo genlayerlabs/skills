@@ -141,10 +141,10 @@ has_yq() {
     command -v yq >/dev/null 2>&1
 }
 
-# Check if a Make target exists
-make_target_exists() {
+# Check if a Task target exists
+task_target_exists() {
     local target="$1"
-    make -n "$target" >/dev/null 2>&1
+    task --list 2>/dev/null | grep -q "\\b${target}\\b"
 }
 
 # ============================================================================
@@ -554,16 +554,16 @@ check_validations_discipline() {
                     "./infra/"*) suggested="test-infra" ;;
                     "./interfaces/"*) suggested="test-interfaces" ;;
                 esac
-                if [[ -n "$suggested" ]] && make_target_exists "$suggested"; then
-                    WARNINGS+=("$skill: validation '$vid' uses ad-hoc 'go test $test_path', prefer 'make $suggested'")
+                if [[ -n "$suggested" ]] && task_target_exists "$suggested"; then
+                    WARNINGS+=("$skill: validation '$vid' uses ad-hoc 'go test $test_path', prefer 'task $suggested'")
                 fi
             fi
         fi
 
         # Check for ad-hoc go build
         if [[ "$vcmd" == "go build ./..." ]]; then
-            if make_target_exists "build"; then
-                WARNINGS+=("$skill: validation '$vid' uses ad-hoc 'go build ./...', prefer 'make build'")
+            if task_target_exists "build"; then
+                WARNINGS+=("$skill: validation '$vid' uses ad-hoc 'go build ./...', prefer 'task build'")
             fi
         fi
     done
