@@ -68,26 +68,26 @@ log_debug() {
 # Generic log function that accepts level and message
 log() {
     local level="$1"
-    local message="$2"
+    shift
 
     case "$level" in
         "info"|"INFO")
-            log_info "$message"
+            log_info "$@"
             ;;
         "success"|"SUCCESS")
-            log_success "$message"
+            log_success "$@"
             ;;
         "warning"|"WARNING")
-            log_warning "$message"
+            log_warning "$@"
             ;;
         "error"|"ERROR")
-            log_error "$message"
+            log_error "$@"
             ;;
         "debug"|"DEBUG")
-            log_debug "$message"
+            log_debug "$@"
             ;;
         *)
-            echo -e "$(log_timestamp_prefix)[UNKNOWN] $message" >&2
+            echo -e "$(log_timestamp_prefix)[UNKNOWN] $*" >&2
             ;;
     esac
 }

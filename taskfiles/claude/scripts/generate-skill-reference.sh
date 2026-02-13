@@ -352,9 +352,11 @@ EOF
         fi
     done
 
-    # Detailed sections by kind
-    for k in $kind_order unknown; do
-        [[ "$sorted_kinds" != *"|$k|"* ]] && continue
+    # Detailed sections by kind (iterate over all collected kinds, not just hardcoded list)
+    local all_kinds
+    all_kinds=$(echo "$sorted_kinds" | tr '|' '\n' | grep -v '^$' | awk '!seen[$0]++')
+
+    for k in $all_kinds; do
 
         # Title case (bash 4+ compatible, with fallback)
         local kind_title

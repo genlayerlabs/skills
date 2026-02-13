@@ -11,7 +11,7 @@ set -euo pipefail
 # - Naming convention: frontmatter name must match directory name
 # - Collaboration references: all referenced skills must exist
 # - Validations integrity: on_stop IDs exist, type=command only (v1), required fields present
-# - Task target existence: commands starting with `task <target>` must reference valid targets
+# - Make target existence: commands starting with `make <target>` must reference valid targets
 #
 # Usage:
 #     ./check-skill-yaml.sh

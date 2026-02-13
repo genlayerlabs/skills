@@ -32,7 +32,6 @@ readonly END_MARKER="<!-- SKILLS_TABLE_END -->"
 
 # Exit codes
 readonly SUCCESS=0
-readonly ERR_OUT_OF_SYNC=1
 readonly ERR_MISSING_FILE=2
 
 # ============================================================================
