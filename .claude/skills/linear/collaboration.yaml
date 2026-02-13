@@ -1,60 +1,16 @@
 # Collaboration: skill dependencies and composition
 #
-# Defines how this skill works with other skills,
-# particularly the developer skill as orchestrator.
+# Defines how this skill works with other skills.
 
 name: linear
 version: "1.0.0"
 
-dependencies:
-  - skill: developer
-    reason: "May receive plan/context from developer orchestration"
-    optional: true
+dependencies: []
 
 composition:
-  - when: "Creating an issue from a plan"
-    sequence:
-      - developer
-      - linear
-
   - when: "Direct issue creation"
     sequence:
       - linear
-
-  - when: "Developer orchestrates issue creation"
-    sequence:
-      - developer
-      - linear
-
-orchestration:
-  orchestrator: developer
-  description: |
-    The developer skill acts as the orchestrator that connects all skills.
-    When creating Linear issues:
-    1. Developer receives request to create a ticket
-    2. Developer triggers linear skill
-    3. linear requests plan/details if not provided
-    4. linear creates the issue and returns URL
-    5. Developer reports completion to user
-
-  request_format: |
-    When linear needs information from developer:
-    "I need the following to create the Linear issue:
-    - Title: [required]
-    - Problem Statement: [required]
-    - Proposed Solution: [optional]
-    - Acceptance Criteria: [optional]
-    - Assignee: [optional]
-    - Labels: [optional]
-    - Project: [optional]
-    - Cycle: [optional, use 'current' for current cycle]"
-
-  response_format: |
-    When linear completes:
-    "Created issue {identifier}: {title}
-    URL: {url}
-    Status: {status}
-    Assignee: {assignee}"
 
 triggers:
   - pattern: "create.*linear.*issue|create.*ticket|new.*issue.*linear"

@@ -27,7 +27,6 @@ set -euo pipefail
 # ============================================================================
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-readonly SCRIPT_NAME="$(basename "$0")"
 
 # Exit codes
 readonly SUCCESS=0
@@ -66,7 +65,6 @@ esac
 cd "$PROJECT_DIR"
 
 # Run structural validation (YAML parsing + required files)
-# Note: Skills should use claude-skill- prefix
 if ! task claude:validate-skill-yaml >/dev/null 2>&1; then
     echo "Skill structure validation failed" >&2
     echo "" >&2

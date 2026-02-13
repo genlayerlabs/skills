@@ -68,9 +68,4 @@ composition:
   - when: "Setup with monitoring"
     sequence:
       - genlayernode
-      - genlayer-validator-monitor
-
-  - when: "Update existing validator"
-    sequence:
-      - genlayer-validator-update
 
