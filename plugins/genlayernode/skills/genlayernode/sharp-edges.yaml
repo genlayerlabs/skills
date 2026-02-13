@@ -669,7 +669,7 @@ edges:
 
         [Service]
         ...
-        ExecStartPost=-/bin/sh -c 'sleep 2 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+        ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
 
       This ensures Alloy's bind mount is refreshed on every node restart.
 
