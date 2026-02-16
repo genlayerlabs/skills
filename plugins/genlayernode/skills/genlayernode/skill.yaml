@@ -30,9 +30,8 @@ owns:
 defaults:
   network: testnet-asimov
   # NOTE: rpc_url and websocket_url have NO defaults - user must provide
-  consensus_contract_main: "0x67fd4aC71530FB220E0B7F90668BAF977B88fF07"
-  consensus_contract_data: "0xB6E1316E57d47d82FDcEa5002028a554754EF243"
-  consensus_genesis: 4632386
+  consensus_contract_address: "0xe66B434bc83805f380509642429eC8e43AE9874a"
+  consensus_genesis: 17326
   install_path: "/opt/genlayer-node"
   data_dir: "./data/node"
   node_rpc_port: 9151
@@ -80,6 +79,8 @@ directory_structure:
       description: "Symlink to current version .env"
     - path: "alloy-config.river -> {VERSION}/alloy-config.river"
       description: "Symlink to current version telemetry config (ships with tarball)"
+    - path: "genvm-module-web-docker.yaml -> {VERSION}/genvm-module-web-docker.yaml"
+      description: "Symlink to current version GenVM web module docker config"
 
 inputs_required:
   - id: server_location
@@ -207,6 +208,12 @@ inputs_required:
       - label: "Google (Gemini)"
         value: google
         env_var: "GEMINIKEY"
+      - label: "xAI (Grok)"
+        value: xai
+        env_var: "XAIKEY"
+      - label: "Atoma"
+        value: atoma
+        env_var: "ATOMAKEY"
     required: true
 
   - id: llm_api_key
@@ -492,6 +499,8 @@ patterns:
       - "ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs"
       - "ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml"
       - "ln -sfn /opt/genlayer-node/${VERSION}/.env /opt/genlayer-node/.env"
+      - "ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river"
+      - "ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml /opt/genlayer-node/genvm-module-web-docker.yaml"
 
   - id: run-genvm-setup
     description: |
@@ -522,15 +531,16 @@ patterns:
       LIBERTAI_API_KEY=${LIBERTAI_KEY}
       ANTHROPICKEY=${ANTHROPIC_KEY}
       GEMINIKEY=${GEMINI_KEY}
+      XAIKEY=${XAI_KEY}
+      ATOMAKEY=${ATOMA_KEY}
 
       # Rollup configuration
       GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL=${RPC_URL}
       GENLAYERNODE_ROLLUP_GENLAYERCHAINWEBSOCKETURL=${WEBSOCKET_URL}
 
-      # Consensus configuration
-      GENLAYERNODE_CONSENSUS_CONTRACTMAINADDRESS=0x67fd4aC71530FB220E0B7F90668BAF977B88fF07
-      GENLAYERNODE_CONSENSUS_CONTRACTDATAADDRESS=0xB6E1316E57d47d82FDcEa5002028a554754EF243
-      GENLAYERNODE_CONSENSUS_GENESIS=4632386
+      # Consensus configuration (AddressManager)
+      GENLAYERNODE_CONSENSUS_CONSENSUSADDRESS=0xe66B434bc83805f380509642429eC8e43AE9874a
+      GENLAYERNODE_CONSENSUS_GENESIS=17326
 
       # Node configuration
       GENLAYERNODE_NODE_VALIDATORWALLETADDRESS=${VALIDATOR_ADDRESS}
@@ -561,11 +571,10 @@ patterns:
         genlayerchainrpcurl: "${RPC_URL}"
         genlayerchainwebsocketurl: "${WEBSOCKET_URL}"
 
-      # Consensus contracts configuration
+      # Consensus configuration (AddressManager)
       consensus:
-        contractmainaddress: "0x67fd4aC71530FB220E0B7F90668BAF977B88fF07"
-        contractdataaddress: "0xB6E1316E57d47d82FDcEa5002028a554754EF243"
-        genesis: 4632386
+        consensusaddress: "0xe66B434bc83805f380509642429eC8e43AE9874a"
+        genesis: 17326
 
       # Data directory
       datadir: "./data/node"
@@ -1032,8 +1041,9 @@ procedure:
       wget https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}/genlayer-node-linux-amd64-${VERSION}.tar.gz -O /tmp/genlayer-node-${VERSION}.tar.gz
 
       # Create major version directory for shared storage FIRST
-      sudo mkdir -p /opt/genlayer-node/${MAJOR_VERSION}/data/node
-      echo "Created major version directory: /opt/genlayer-node/${MAJOR_VERSION}/data/node"
+      # genlayer.db is a PebbleDB directory, not a file
+      sudo mkdir -p /opt/genlayer-node/${MAJOR_VERSION}/data/node/genlayer.db
+      echo "Created major version directory: /opt/genlayer-node/${MAJOR_VERSION}/data/node/genlayer.db"
 
       # Create patch version directory structure
       sudo mkdir -p /opt/genlayer-node/${VERSION}
@@ -1045,12 +1055,14 @@ procedure:
       sudo mkdir -p /opt/genlayer-node/${VERSION}/configs/node
       echo "Created version-specific directories"
 
-      # Remove any existing genlayer.db file in patch version (we'll symlink it)
-      sudo rm -f /opt/genlayer-node/${VERSION}/data/node/genlayer.db
+      # Remove any existing genlayer.db in patch version (we'll symlink it)
+      # NOTE: For binary (systemd) deploys only. Docker deploys cannot use
+      # symlinks because the target is outside the container's mounted volume.
+      sudo rm -rf /opt/genlayer-node/${VERSION}/data/node/genlayer.db
 
       # Create symlink from patch version to major version shared database
-      sudo ln -sfn ../../${MAJOR_VERSION}/data/node/genlayer.db /opt/genlayer-node/${VERSION}/data/node/genlayer.db
-      echo "Created symlink: /opt/genlayer-node/${VERSION}/data/node/genlayer.db -> ../../${MAJOR_VERSION}/data/node/genlayer.db"
+      sudo ln -sfn ../../../${MAJOR_VERSION}/data/node/genlayer.db /opt/genlayer-node/${VERSION}/data/node/genlayer.db
+      echo "Created symlink: /opt/genlayer-node/${VERSION}/data/node/genlayer.db -> ../../../${MAJOR_VERSION}/data/node/genlayer.db"
 
       # Change ownership
       sudo chown -R $USER:$USER /opt/genlayer-node
@@ -1062,6 +1074,8 @@ procedure:
       ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs
       ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml
       ln -sfn /opt/genlayer-node/${VERSION}/.env /opt/genlayer-node/.env
+      ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river
+      ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml /opt/genlayer-node/genvm-module-web-docker.yaml
 
       # Verify structure
       echo "Directory structure:"

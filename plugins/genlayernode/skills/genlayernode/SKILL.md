@@ -283,7 +283,8 @@ Guide validators through complete GenLayer node installation including:
 ├── configs -> v0.4.4/configs
 ├── docker-compose.yaml -> v0.4.4/docker-compose.yaml
 ├── .env -> v0.4.4/.env
-└── alloy-config.river -> v0.4.4/alloy-config.river  # Symlink (ships with tarball)
+├── alloy-config.river -> v0.4.4/alloy-config.river  # Symlink (ships with tarball)
+└── genvm-module-web-docker.yaml -> v0.4.4/genvm-module-web-docker.yaml
 ```
 
 ### Requires
@@ -298,9 +299,8 @@ Guide validators through complete GenLayer node installation including:
 |---------|---------------|
 | RPC URL | **No default** - user must provide |
 | WebSocket | **No default** - user must provide |
-| Main Contract | `0x67fd4aC71530FB220E0B7F90668BAF977B88fF07` |
-| Data Contract | `0xB6E1316E57d47d82FDcEa5002028a554754EF243` |
-| Genesis Block | `4632386` |
+| Consensus Address | `0xe66B434bc83805f380509642429eC8e43AE9874a` |
+| Genesis Block | `17326` |
 | Install Path | `/opt/genlayer-node` |
 | RPC Port | `9151` |
 | Ops Port | `9153` |
@@ -316,6 +316,8 @@ Guide validators through complete GenLayer node installation including:
 | LibertAI | `LIBERTAI_API_KEY` |
 | Anthropic | `ANTHROPICKEY` |
 | Google | `GEMINIKEY` |
+| xAI (Grok) | `XAIKEY` |
+| Atoma | `ATOMAKEY` |
 
 ## Installation Flow
 
@@ -459,6 +461,8 @@ ln -sfn /opt/genlayer-node/${VERSION}/data /opt/genlayer-node/data
 ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs
 ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml
 ln -sfn /opt/genlayer-node/${VERSION}/.env /opt/genlayer-node/.env
+ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river
+ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml /opt/genlayer-node/genvm-module-web-docker.yaml
 ```
 
 **Run GenVM setup:**
@@ -485,7 +489,7 @@ cp /opt/genlayer-node/${VERSION}/.env.example /opt/genlayer-node/${VERSION}/.env
 1. **Rollup URLs** - Add these lines (not in .env.example by default):
    ```bash
    GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL=<RPC_URL_FROM_USER>
-   GENLAYERNODE_ROLLUP_GENLAYERCHAINWSSURL=<WSS_URL_FROM_USER>
+   GENLAYERNODE_ROLLUP_GENLAYERCHAINWEBSOCKETURL=<WSS_URL_FROM_USER>
    ```
 
 2. **LLM API Key** - Set ONE of these (leave others empty):

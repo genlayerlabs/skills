@@ -174,15 +174,16 @@ edges:
     severity: high
 
   - id: wrong-contract-addresses
-    description: "Using outdated or wrong consensus contract addresses"
+    description: "Using outdated or wrong consensus contract address (AddressManager)"
     detect: |
-      grep contractmainaddress configs/node/config.yaml
+      grep GENLAYERNODE_CONSENSUS_CONSENSUSADDRESS .env
       # Compare with official documentation
     impact: "Node cannot interact with consensus, transactions fail."
     fix: |
-      Use the official contract addresses from docs:
-      contractmainaddress: "0x67fd4aC71530FB220E0B7F90668BAF977B88fF07"
-      contractdataaddress: "0xB6E1316E57d47d82FDcEa5002028a554754EF243"
+      Use the official AddressManager contract address from docs.
+      Set in .env:
+      GENLAYERNODE_CONSENSUS_CONSENSUSADDRESS=0xe66B434bc83805f380509642429eC8e43AE9874a
+      GENLAYERNODE_CONSENSUS_GENESIS=17326
     severity: critical
 
   - id: rpc-url-unreachable
@@ -599,6 +600,29 @@ edges:
       Or move files to correct location:
       sudo mv /opt/genlayer-node/genlayer-node-*/* /opt/genlayer-node/
     severity: medium
+
+  - id: docker-db-symlink
+    description: "Docker deploy fails with PebbleDB error because DB symlink points outside container mount"
+    detect: |
+      # Check if docker node is crash-looping with genlayer.db error
+      docker logs genlayer-node 2>&1 | grep "genlayer.db"
+      # Check if genlayer.db is a symlink (shouldn't be for docker deploys)
+      ls -la /opt/genlayer-node/${VERSION}/data/node/genlayer.db
+    impact: |
+      Docker container cannot follow symlinks that point outside the mounted volume.
+      The node will crash with "mkdir data/node/genlayer.db: file exists" or similar
+      PebbleDB error because the symlink target is not accessible inside the container.
+    fix: |
+      Replace the symlink with a real directory:
+        rm /opt/genlayer-node/${VERSION}/data/node/genlayer.db
+        mkdir -p /opt/genlayer-node/${VERSION}/data/node/genlayer.db
+
+      Then restart the container:
+        docker compose --profile node up -d
+
+      PREVENTION: When deploying as docker, skip the DB symlink creation step.
+      The database should live directly in the version directory for docker deploys.
+    severity: high
 
   # ============================================================================
   # UPDATE PROCEDURE

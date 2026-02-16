@@ -50,6 +50,8 @@ The LLM provider must be enabled in GenVM config. By default, all providers are 
 | `COMPUT3KEY` | comput3 |
 | `IOINTELLIGENCEKEY` | ionet |
 | `LIBERTAI_API_KEY` | libertai |
+| `XAIKEY` | xai |
+| `ATOMAKEY` | atoma |
 
 ```bash
 # Replace <provider> with your provider name from the table above
@@ -84,6 +86,7 @@ ln -sfn ${VERSION}/configs configs
 ln -sfn ${VERSION}/docker-compose.yaml docker-compose.yaml
 ln -sfn ${VERSION}/.env .env
 ln -sfn ${VERSION}/alloy-config.river alloy-config.river
+ln -sfn ${VERSION}/genvm-module-web-docker.yaml genvm-module-web-docker.yaml
 ```
 
 > **Note:** `alloy-config.river` ships with the node tarball. It must be symlinked like all other
