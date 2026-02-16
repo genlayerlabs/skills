@@ -150,7 +150,7 @@ cp /opt/genlayer-node/${VERSION}/.env.example /opt/genlayer-node/${VERSION}/.env
 ```bash
 # Required: RPC URLs (get from GenLayer team or docs)
 GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL=https://your-rpc-url/rpc
-GENLAYERNODE_ROLLUP_GENLAYERCHAINWSSURL=wss://your-rpc-url/ws
+GENLAYERNODE_ROLLUP_GENLAYERCHAINWEBSOCKETURL=wss://your-rpc-url/ws
 
 # Required: LLM API key (set ONE based on your provider)
 # HEURISTKEY=your-api-key-here
@@ -339,7 +339,8 @@ curl -s http://localhost:9153/health | jq .
 ├── data -> v0.4.4/data
 ├── configs -> v0.4.4/configs
 ├── .env -> v0.4.4/.env
-└── alloy-config.river -> v0.4.4/alloy-config.river  # Ships with tarball
+├── alloy-config.river -> v0.4.4/alloy-config.river  # Ships with tarball
+└── genvm-module-web-docker.yaml -> v0.4.4/genvm-module-web-docker.yaml
 ```
 
 ## Common Issues

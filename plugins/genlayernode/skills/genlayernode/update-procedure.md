@@ -114,6 +114,7 @@ ln -sfn /opt/genlayer-node/${VERSION}/configs configs
 ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml docker-compose.yaml
 ln -sfn /opt/genlayer-node/${VERSION}/.env .env
 ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river alloy-config.river
+ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml genvm-module-web-docker.yaml
 
 # 3. Start new version immediately
 sudo systemctl start genlayer-node
@@ -205,6 +206,7 @@ ln -sfn /opt/genlayer-node/v0.4.3/configs configs
 ln -sfn /opt/genlayer-node/v0.4.3/docker-compose.yaml docker-compose.yaml
 ln -sfn /opt/genlayer-node/v0.4.3/.env .env
 ln -sfn /opt/genlayer-node/v0.4.3/alloy-config.river alloy-config.river
+ln -sfn /opt/genlayer-node/v0.4.3/genvm-module-web-docker.yaml genvm-module-web-docker.yaml
 
 # 3. Start old version
 sudo systemctl start genlayer-node
