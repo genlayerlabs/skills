@@ -1,4 +1,4 @@
-# GenLayer Labs Skills
+# GenLayer Skills
 
 A [Claude Code](https://claude.ai/code) plugin marketplace providing operational skills for GenLayer infrastructure.
 
