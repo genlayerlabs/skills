@@ -103,4 +103,5 @@ Skills that handle secrets must follow strict masking requirements:
 | `linear` | Create and manage Linear issues using templates for the GenL |
 | `pr-create` | Creates GitHub pull requests with conventional commit-style  |
 | `pr-merge` | Merge GitHub pull requests with strict CI validation. Never  |
+| `validator-manage` | Manage GenLayer validators across testnets using the genlaye |
 <!-- SKILLS_TABLE_END -->

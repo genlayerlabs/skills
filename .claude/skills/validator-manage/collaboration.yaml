@@ -1,0 +1,26 @@
+dependencies:
+  tools:
+    - name: genlayer
+      type: npm-global
+      install: "npm install -g genlayer"
+      update: "npm update -g genlayer"
+      version_check: "genlayer --version"
+
+  files:
+    - path: "~/.genlayer/keystores/"
+      description: "Account keystore files"
+    - path: "~/.genlayer/genlayer-config.json"
+      description: "CLI configuration (active network, account)"
+    - path: "project memory validators.md"
+      description: "Validator mapping memory file"
+    - path: "~/.claude/nodes.yaml"
+      description: "Node inventory for SSH operations"
+
+compositions:
+  - sequence: "validator-manage → genlayernode"
+    description: "After joining validators on-chain, set up the node software on servers"
+    when: "New validators need their operator nodes configured"
+
+  - sequence: "validator-manage → validator-manage"
+    description: "Repeat across networks (e.g., join on asimov, then join on bradbury)"
+    when: "Setting up validators on multiple testnets"

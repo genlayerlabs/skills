@@ -1,0 +1,44 @@
+validations:
+  prerequisites:
+    - id: cli-installed
+      description: "genlayer CLI is installed"
+      command: "genlayer --version"
+      expected: "version number output"
+      on_stop: true
+
+    - id: accounts-exist
+      description: "At least one owner account exists"
+      command: "genlayer account list"
+      expected: "Account list with at least one entry"
+      on_stop: true
+
+    - id: correct-network
+      description: "Active network matches target"
+      command: "genlayer network list"
+      expected: "Target network has * marker"
+      on_stop: true
+
+  post_join:
+    - id: validators-visible
+      description: "Newly joined validators appear in validator set"
+      command: "genlayer staking validators"
+      expected: "All joined validators listed with correct stake"
+      on_stop: true
+
+    - id: operators-funded
+      description: "Operator accounts have expected balance"
+      command: "genlayer account show --account '<operator-name>'"
+      expected: "Balance matches funded amount"
+      on_warn: true
+
+    - id: identity-set
+      description: "Validator monikers are set on-chain"
+      command: "genlayer staking validator-info <validator-address>"
+      expected: "identity.moniker field is present and correct"
+      on_warn: true
+
+    - id: memory-updated
+      description: "validators.md reflects current state"
+      command: "Read validators.md"
+      expected: "All new validators and operators listed"
+      on_warn: true
