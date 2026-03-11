@@ -1,5 +1,11 @@
 {
   "name": "genlayer-dev",
-  "version": "1.0.0",
-  "description": "Development skills for GenLayer intelligent contracts — linting, direct mode tests, and integration tests."
+  "version": "1.1.0",
+  "description": "Development skills for GenLayer intelligent contracts — linting, direct mode tests, and integration tests.",
+  "mcpServers": {
+    "genlayer-docs": {
+      "type": "sse",
+      "url": "https://docs-mcp.genlayer.com/sse"
+    }
+  }
 }
