@@ -1,0 +1,417 @@
+---
+name: write-contract
+description: Write production-quality GenLayer intelligent contracts. Covers equivalence principle selection, validator patterns, storage rules, LLM resilience, and cross-contract interaction.
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Glob
+---
+
+# Write Intelligent Contract
+
+Guidance for writing GenLayer intelligent contracts that pass consensus, handle errors correctly, and survive production.
+
+Always lint with `genvm-lint check` after writing or modifying a contract.
+
+## Contract Skeleton
+
+```python
+# { "Depends": "py-genlayer:test" }
+
+from genlayer import *
+
+@gl.contract
+class MyContract:
+    # Storage fields — typed, persisted on-chain
+    owner: Address
+    items: TreeMap[str, Item]
+    item_order: DynArray[str]
+
+    def __init__(self, param: str):
+        self.owner = gl.message.sender_account
+
+    @gl.public.view
+    def get_item(self, item_id: str) -> dict:
+        return {"id": item_id, "value": self.items[item_id].value}
+
+    @gl.public.write
+    def set_item(self, item_id: str, value: str) -> None:
+        if gl.message.sender_account != self.owner:
+            raise gl.UserError("Only owner")
+        self.items[item_id] = Item(value=value)
+        self.item_order.append(item_id)
+```
+
+## Equivalence Principle — Which One to Use
+
+This is the most critical decision. Pick wrong and consensus will fail or be trivially exploitable.
+
+### Decision Tree
+
+```
+Is the external call deterministic (same input → same output)?
+├── YES → gl.eq_principle.strict_eq(fn)
+│         Examples: blockchain RPC, stable REST APIs, DNS lookups
+│
+└── NO (LLM, dynamic web content, variable APIs)
+    │
+    Does the output have a clear "decision" field?
+    ├── YES → gl.eq_principle.prompt_comparative(fn, principle="...")
+    │         Examples: oracle resolution, content classification
+    │         principle: "`outcome` must match exactly. Analysis can differ."
+    │
+    └── NO (numeric scores, complex multi-field output)
+        └── gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+              Write custom comparison with tolerances.
+              Examples: tweet scoring, price feeds with drift
+```
+
+### strict_eq — Deterministic calls only
+
+```python
+def fetch_balance(self) -> int:
+    def call_rpc():
+        res = gl.nondet.web.post(rpc_url, body=payload, headers=headers)
+        return json.loads(res.body.decode("utf-8"))["result"]
+    return gl.eq_principle.strict_eq(call_rpc)
+```
+
+Never use for LLM calls or web pages that change between requests.
+
+### prompt_comparative — LLM with clear outcome
+
+```python
+def resolve(self) -> str:
+    def analyze():
+        page = gl.get_webpage(url, mode="text")
+        return gl.exec_prompt(f"Analyze: {page}\nReturn JSON with outcome and reasoning.")
+
+    return gl.eq_principle.prompt_comparative(
+        analyze,
+        principle="`outcome` field must be exactly the same. All other fields must be similar.",
+    )
+```
+
+Good for: oracle resolution, content classification, yes/no decisions backed by reasoning.
+
+### run_nondet_unsafe — Custom validator logic
+
+Use when you need tolerances, gate checks, or complex comparison.
+
+```python
+def score_content(self, content: str) -> dict:
+    # Pre-read storage BEFORE entering nondet block
+    cached_data = gl.storage.copy_to_memory(self.reference_data)
+
+    def leader_fn():
+        analysis = gl.nondet.exec_prompt(prompt, response_format="json")
+        score = _parse_llm_score(analysis)
+        return {"score": score, "analysis": str(analysis.get("analysis", ""))}
+
+    def validator_fn(leaders_res: gl.vm.Result) -> bool:
+        if not isinstance(leaders_res, gl.vm.Return):
+            return _handle_leader_error(leaders_res, leader_fn)
+
+        validator_result = leader_fn()
+        leader_score = leaders_res.calldata["score"]
+        validator_score = validator_result["score"]
+
+        # Gate check: if either is zero (reject), both must agree
+        if (leader_score == 0) != (validator_score == 0):
+            return False
+
+        # Tolerance: within 5x/0.5x bounds (log10 comparison)
+        if leader_score > 0 and validator_score > 0:
+            ratio = leader_score / validator_score
+            if ratio > 5.0 or ratio < 0.2:
+                return False
+
+        return True
+
+    return gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+```
+
+## Error Classification
+
+Classify errors so validators know how to compare them. This is critical for consensus on failure paths.
+
+```python
+ERROR_EXPECTED  = "[EXPECTED]"   # Business logic (deterministic) — exact match required
+ERROR_EXTERNAL  = "[EXTERNAL]"   # External API 4xx (deterministic) — exact match required
+ERROR_TRANSIENT = "[TRANSIENT]"  # Network/5xx (non-deterministic) — agree if both transient
+ERROR_LLM       = "[LLM_ERROR]"  # LLM misbehavior — always disagree, force retry
+```
+
+### Canonical error handler for validators
+
+```python
+def _handle_leader_error(leaders_res, leader_fn) -> bool:
+    leader_msg = leaders_res.message if hasattr(leaders_res, 'message') else ''
+    try:
+        leader_fn()
+        return False  # Leader errored, validator succeeded — disagree
+    except gl.vm.UserError as e:
+        validator_msg = e.message if hasattr(e, 'message') else str(e)
+        # Deterministic errors: must match exactly
+        if validator_msg.startswith(ERROR_EXPECTED) or validator_msg.startswith(ERROR_EXTERNAL):
+            return validator_msg == leader_msg
+        # Transient: agree if both hit transient failure
+        if validator_msg.startswith(ERROR_TRANSIENT) and leader_msg.startswith(ERROR_TRANSIENT):
+            return True
+        # LLM or unknown: disagree — forces consensus retry
+        return False
+    except Exception:
+        return False
+```
+
+### Applying error prefixes
+
+```python
+# Web requests
+if response.status >= 400 and response.status < 500:
+    raise gl.vm.UserError(f"{ERROR_EXTERNAL} API returned {response.status}")
+elif response.status >= 500:
+    raise gl.vm.UserError(f"{ERROR_TRANSIENT} API temporarily unavailable")
+
+# LLM responses
+if not isinstance(analysis, dict):
+    raise gl.vm.UserError(f"{ERROR_LLM} LLM returned non-dict: {type(analysis)}")
+
+# Business logic
+if user_balance < amount:
+    raise gl.vm.UserError(f"{ERROR_EXPECTED} Insufficient balance")
+```
+
+## Storage Rules
+
+### Types — use GenLayer types, not Python builtins
+
+| Python | GenLayer | Notes |
+|--------|----------|-------|
+| `dict` | `TreeMap[K, V]` | O(log n) lookup, persisted |
+| `list` | `DynArray[T]` | Dynamic array, persisted |
+| `int` | `u256` / `i256` | Sized integers for on-chain math |
+| `float` | **avoid** | Use atto-scale integers (value * 10^18) |
+| `enum` | `str` | Store `.value`, not the enum itself |
+
+### Dataclasses for complex state
+
+```python
+@allow_storage
+@dataclass
+class Item:
+    name: str
+    status: str          # Use str, not Enum
+    atto_amount: u256    # Atto-scale (value * 10^18), not float
+    created_at: str      # ISO format string
+    tags: DynArray[str]
+```
+
+### Layout rules
+
+- **Append new fields at END only.** Storage layout is order-sensitive. Reordering or inserting fields breaks deployed contracts.
+- **Default values for new fields** — existing storage reads zero/empty for fields added after deployment.
+- **Initialize DynArray/TreeMap by appending** in `__init__`, not by assignment. `self.items = [x]` does not work.
+- **O(1) stat indexes** — maintain a `TreeMap[str, u256]` counter alongside collections for fast counts.
+
+### Storage in non-deterministic blocks
+
+Storage is **inaccessible** from inside `leader_fn` / `validator_fn`. Pre-read everything you need:
+
+```python
+# BEFORE the nondet block
+cached_store = gl.storage.copy_to_memory(self.data_store)
+cached_config = self.config_value  # Simple values can be read directly
+
+def leader_fn():
+    # Use cached_store and cached_config here
+    similar = list(cached_store.knn(embedding, 10))
+    ...
+```
+
+## LLM Resilience
+
+LLMs return unpredictable formats. Always defensively parse.
+
+```python
+def _parse_llm_score(analysis: dict) -> int:
+    """Extract numeric score from LLM response, handling common variations."""
+    if not isinstance(analysis, dict):
+        raise gl.vm.UserError(f"{ERROR_LLM} Non-dict response: {type(analysis)}")
+
+    # Key aliasing — LLMs use alternate names
+    raw = analysis.get("score")
+    if raw is None:
+        for alt in ("rating", "points", "value", "result"):
+            if alt in analysis:
+                raw = analysis[alt]
+                break
+
+    if raw is None:
+        raise gl.vm.UserError(f"{ERROR_LLM} Missing 'score'. Keys: {list(analysis.keys())}")
+
+    # Coerce aggressively — handles int, float, "3", "3.5", whitespace
+    try:
+        return max(0, int(round(float(str(raw).strip()))))
+    except (ValueError, TypeError):
+        raise gl.vm.UserError(f"{ERROR_LLM} Non-numeric score: {raw}")
+```
+
+### JSON cleanup from LLM output
+
+```python
+def _parse_json(text: str) -> dict:
+    """Clean LLM JSON: strip wrapping text, fix trailing commas."""
+    import re
+    first = text.find("{")
+    last = text.rfind("}")
+    text = text[first:last + 1]
+    text = re.sub(r",(?!\s*?[\{\[\"\'\w])", "", text)  # Remove trailing commas
+    return json.loads(text)
+```
+
+### Always use response_format="json"
+
+```python
+result = gl.nondet.exec_prompt(task, response_format="json")
+```
+
+This tells the LLM to return JSON. Still validate and clean — LLMs don't always comply.
+
+## Cross-Contract Interaction
+
+### Read from another contract (synchronous)
+
+```python
+other = gl.get_contract_at(Address(other_address))
+value = other.view().get_data()
+```
+
+### Write to another contract (asynchronous)
+
+```python
+other = gl.get_contract_at(Address(other_address))
+other.emit(on="accepted").process_data(payload)  # Non-blocking
+```
+
+`emit()` queues the call — it executes after current transaction. Use `on="accepted"` (fast) or `on="finalized"` (safe).
+
+**Warning:** If the current transaction is appealed after `emit()`, the emitted call still happens but the balance may already be decremented.
+
+### Factory pattern — deploy child contracts
+
+```python
+def __init__(self, num_workers: int):
+    with open("/contract/Worker.py", "rt") as f:
+        worker_code = f.read()
+
+    for i in range(num_workers):
+        addr = gl.deploy_contract(
+            code=worker_code.encode("utf-8"),
+            args=[i, gl.message.contract_address],
+            salt_nonce=i + 1,
+            on="accepted",
+        )
+        self.worker_addresses.append(addr)
+```
+
+Workers are immutable after deployment. Code changes require redeploying the factory.
+
+### Cross-chain RPC verification
+
+```python
+def verify_deposit(self, rpc_url: str, contract_addr: str, call_data: bytes) -> bytes:
+    """Verify state on another chain via eth_call."""
+    payload = {
+        "jsonrpc": "2.0", "id": 1,
+        "method": "eth_call",
+        "params": [{"to": contract_addr, "data": "0x" + call_data.hex()}, "latest"],
+    }
+
+    def fetch():
+        res = gl.nondet.web.post(rpc_url, body=json.dumps(payload).encode(),
+                                  headers={"Content-Type": "application/json"})
+        if res.status != 200:
+            raise gl.vm.UserError(f"{ERROR_EXTERNAL} RPC failed: {res.status}")
+        data = json.loads(res.body.decode("utf-8"))
+        if "error" in data:
+            raise gl.vm.UserError(f"{ERROR_EXTERNAL} RPC error: {data['error']}")
+        hex_result = data.get("result", "0x")[2:]
+        return bytes.fromhex(hex_result) if hex_result else b""
+
+    return gl.eq_principle.strict_eq(fetch)
+```
+
+## Web Requests
+
+### Extracting stable fields for consensus
+
+External APIs return variable data (timestamps, counts). Extract only stable fields:
+
+```python
+def leader_fn():
+    res = gl.nondet.web.get(api_url)
+    data = json.loads(res.body.decode("utf-8"))
+    # Only return fields that won't change between leader and validator calls
+    return {"id": data["id"], "login": data["login"], "status": data["status"]}
+    # NOT: follower_count, updated_at, online_status
+```
+
+### Deriving status from variable data
+
+When raw data may differ (e.g., CI check counts change), compare derived summaries:
+
+```python
+def validator_fn(leaders_res: gl.vm.Result) -> bool:
+    validator_checks = leader_fn()
+
+    def derive(checks):
+        if not checks: return "pending"
+        for c in checks:
+            if c.get("conclusion") != "success": return "failing"
+        return "success"
+
+    return derive(leaders_res.calldata) == derive(validator_checks)
+```
+
+## Anti-Patterns
+
+| Don't | Do Instead | Why |
+|-------|-----------|-----|
+| `strict_eq()` for LLM calls | `prompt_comparative()` or `run_nondet_unsafe()` | LLM outputs are non-deterministic — strict_eq always fails consensus |
+| Read storage inside `leader_fn` | `gl.storage.copy_to_memory()` before the nondet block | Storage is inaccessible in non-deterministic context |
+| Store `list` or `dict` | `DynArray[T]` or `TreeMap[K, V]` | Python builtins aren't persistable |
+| Use `float` for money/scores | Atto-scale `u256` (value * 10^18) | Floating point has rounding errors |
+| Insert fields in the middle of a dataclass | Append at END only | Storage layout is positional — insertion shifts all subsequent fields |
+| Store `Enum` directly | Store `enum.value` as `str` | Enum type not supported in storage |
+| Ignore LLM response format | Validate type, sanitize JSON, alias keys | LLMs return unpredictable formats |
+| Let validator agree on LLM errors | Return `False` (disagree) to force retry | Agreeing on broken LLM output locks bad state |
+| Use bare `Exception` in contracts | Use `gl.vm.UserError` with error prefix | Bare exceptions become unrecoverable VMError |
+| Compare variable API fields in validators | Extract stable fields or derive status | Timestamps, counts change between calls |
+| O(n) scans over large collections | Maintain TreeMap indexes for O(1) lookups | Transactions have compute limits |
+
+## Testing Strategy
+
+1. **Lint first**: `genvm-lint check contracts/my_contract.py`
+2. **Direct mode tests**: Fast (30ms), no server. Tests business logic, validation, state transitions. Validator logic NOT exercised.
+3. **Integration tests**: Slow (seconds-minutes), full consensus. Tests validator agreement, real web/LLM calls. Run before deployment.
+
+### DEV MODE for external dependencies
+
+Skip cross-chain verification in tests by checking for zero address:
+
+```python
+def __init__(self, bridge_sender: str):
+    self.bridge_sender = Address(bridge_sender)
+
+def verify_deposit(self, ...):
+    if self.bridge_sender == Address("0x" + "0" * 40):
+        print("DEV MODE: skipping verification")
+        return True
+    # Real verification logic...
+```
+
+Deploy with `bridge_sender="0x0000...0000"` in tests, real address in production.
