@@ -1,0 +1,5 @@
+{
+  "name": "genlayer-dev",
+  "version": "1.0.0",
+  "description": "Development skills for GenLayer intelligent contracts — linting, direct mode tests, and integration tests."
+}

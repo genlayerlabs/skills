@@ -8,6 +8,11 @@
       "name": "genlayernode",
       "source": "./plugins/genlayernode",
       "description": "Interactive wizard to set up a GenLayer validator node on Linux."
+    },
+    {
+      "name": "genlayer-dev",
+      "source": "./plugins/genlayer-dev",
+      "description": "Development skills for GenLayer intelligent contracts — linting, direct mode tests, and integration tests."
     }
   ]
 }
