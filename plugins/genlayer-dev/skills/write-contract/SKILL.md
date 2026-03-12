@@ -58,15 +58,17 @@ Is the external call deterministic (same input → same output)?
 │
 └── NO (LLM, dynamic web content, variable APIs)
     │
-    Does the output have a clear "decision" field?
-    ├── YES → gl.eq_principle.prompt_comparative(fn, principle="...")
-    │         Examples: oracle resolution, content classification
-    │         principle: "`outcome` must match exactly. Analysis can differ."
+    ├── DEFAULT → gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+    │             Write custom comparison logic: tolerances, field extraction,
+    │             derived status, gate checks, etc.
+    │             Examples: scoring, price feeds, content analysis, oracles
     │
-    └── NO (numeric scores, complex multi-field output)
-        └── gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
-              Write custom comparison with tolerances.
-              Examples: tweet scoring, price feeds with drift
+    └── Want a quick natural-language comparison rule?
+        └── gl.eq_principle.prompt_comparative(fn, principle="...")
+              Sends both outputs to an LLM with your principle string.
+              Convenient for prototyping, but narrow — only optimal when
+              comparison is best expressed in English.
+              Examples: simple yes/no decisions, content classification
 ```
 
 ### strict_eq — Deterministic calls only
@@ -81,31 +83,12 @@ def fetch_balance(self) -> int:
 
 Never use for LLM calls or web pages that change between requests.
 
-### prompt_comparative — LLM with clear outcome
+### run_nondet_unsafe — Custom validator logic (most common)
 
-```python
-def resolve(self) -> str:
-    def analyze():
-        page = gl.get_webpage(url, mode="text")
-        return gl.exec_prompt(f"Analyze: {page}\nReturn JSON with outcome and reasoning.")
-
-    return gl.eq_principle.prompt_comparative(
-        analyze,
-        principle="`outcome` field must be exactly the same. All other fields must be similar.",
-    )
-```
-
-Good for: oracle resolution, content classification, yes/no decisions backed by reasoning.
-
-### run_nondet_unsafe — Custom validator logic
-
-Use when you need tolerances, gate checks, or complex comparison.
+The default choice for non-deterministic operations. You write the leader function and a validator function with your own comparison logic.
 
 ```python
 def score_content(self, content: str) -> dict:
-    # Pre-read storage BEFORE entering nondet block
-    cached_data = gl.storage.copy_to_memory(self.reference_data)
-
     def leader_fn():
         analysis = gl.nondet.exec_prompt(prompt, response_format="json")
         score = _parse_llm_score(analysis)
@@ -123,7 +106,7 @@ def score_content(self, content: str) -> dict:
         if (leader_score == 0) != (validator_score == 0):
             return False
 
-        # Tolerance: within 5x/0.5x bounds (log10 comparison)
+        # Tolerance: within 5x/0.5x bounds
         if leader_score > 0 and validator_score > 0:
             ratio = leader_score / validator_score
             if ratio > 5.0 or ratio < 0.2:
@@ -132,6 +115,22 @@ def score_content(self, content: str) -> dict:
         return True
 
     return gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+```
+
+### prompt_comparative — Quick natural-language comparison
+
+Convenient for prototyping or when comparison is best expressed as an English rule. Both leader and validator outputs are sent to an LLM with your principle string. Narrow use case — for most production contracts, prefer `run_nondet_unsafe` with explicit comparison logic.
+
+```python
+def resolve(self) -> str:
+    def analyze():
+        page = gl.get_webpage(url, mode="text")
+        return gl.exec_prompt(f"Analyze: {page}\nReturn JSON with outcome and reasoning.")
+
+    return gl.eq_principle.prompt_comparative(
+        analyze,
+        principle="`outcome` field must be exactly the same. All other fields must be similar.",
+    )
 ```
 
 ## Error Classification
@@ -194,8 +193,14 @@ if user_balance < amount:
 | `dict` | `TreeMap[K, V]` | O(log n) lookup, persisted |
 | `list` | `DynArray[T]` | Dynamic array, persisted |
 | `int` | `u256` / `i256` | Sized integers for on-chain math |
-| `float` | **avoid** | Use atto-scale integers (value * 10^18) |
+| `float` | use with care | See float guidance below |
 | `enum` | `str` | Store `.value`, not the enum itself |
+
+### Floats
+
+- **In nondet blocks**: native floats work, but they're inherently non-deterministic (hardware differences cause rounding variation). Handle this in your validator logic with tolerances or rounding before comparison.
+- **In deterministic blocks**: floats are software-emulated — deterministic but slower.
+- **For cross-chain interop / money**: use `u256` with atto-scale (value × 10^18) — this is standard across all blockchains.
 
 ### Dataclasses for complex state
 
@@ -205,32 +210,17 @@ if user_balance < amount:
 class Item:
     name: str
     status: str          # Use str, not Enum
-    atto_amount: u256    # Atto-scale (value * 10^18), not float
+    atto_amount: u256    # Atto-scale (value * 10^18) for money
     created_at: str      # ISO format string
     tags: DynArray[str]
 ```
 
 ### Layout rules
 
-- **Append new fields at END only.** Storage layout is order-sensitive. Reordering or inserting fields breaks deployed contracts.
+- **Append new fields at END only** if using upgradable contracts. Storage layout is order-sensitive — reordering or inserting fields breaks deployed contracts. See the upgradability docs for details.
 - **Default values for new fields** — existing storage reads zero/empty for fields added after deployment.
 - **Initialize DynArray/TreeMap by appending** in `__init__`, not by assignment. `self.items = [x]` does not work.
 - **O(1) stat indexes** — maintain a `TreeMap[str, u256]` counter alongside collections for fast counts.
-
-### Storage in non-deterministic blocks
-
-Storage is **inaccessible** from inside `leader_fn` / `validator_fn`. Pre-read everything you need:
-
-```python
-# BEFORE the nondet block
-cached_store = gl.storage.copy_to_memory(self.data_store)
-cached_config = self.config_value  # Simple values can be read directly
-
-def leader_fn():
-    # Use cached_store and cached_config here
-    similar = list(cached_store.knn(embedding, 10))
-    ...
-```
 
 ## LLM Resilience
 
@@ -381,11 +371,10 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 
 | Don't | Do Instead | Why |
 |-------|-----------|-----|
-| `strict_eq()` for LLM calls | `prompt_comparative()` or `run_nondet_unsafe()` | LLM outputs are non-deterministic — strict_eq always fails consensus |
-| Read storage inside `leader_fn` | `gl.storage.copy_to_memory()` before the nondet block | Storage is inaccessible in non-deterministic context |
+| `strict_eq()` for LLM calls | `run_nondet_unsafe()` with custom validator | LLM outputs are non-deterministic — strict_eq always fails consensus |
 | Store `list` or `dict` | `DynArray[T]` or `TreeMap[K, V]` | Python builtins aren't persistable |
-| Use `float` for money/scores | Atto-scale `u256` (value * 10^18) | Floating point has rounding errors |
-| Insert fields in the middle of a dataclass | Append at END only | Storage layout is positional — insertion shifts all subsequent fields |
+| Use native `float` for money | Atto-scale `u256` (value * 10^18) | Standard across blockchains for cross-chain interop |
+| Insert fields in the middle of a dataclass | Append at END only (for upgradable contracts) | Storage layout is positional — insertion shifts all subsequent fields |
 | Store `Enum` directly | Store `enum.value` as `str` | Enum type not supported in storage |
 | Ignore LLM response format | Validate type, sanitize JSON, alias keys | LLMs return unpredictable formats |
 | Let validator agree on LLM errors | Return `False` (disagree) to force retry | Agreeing on broken LLM output locks bad state |
@@ -398,20 +387,3 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 1. **Lint first**: `genvm-lint check contracts/my_contract.py`
 2. **Direct mode tests**: Fast (30ms), no server. Tests business logic, validation, state transitions. Validator logic NOT exercised.
 3. **Integration tests**: Slow (seconds-minutes), full consensus. Tests validator agreement, real web/LLM calls. Run before deployment.
-
-### DEV MODE for external dependencies
-
-Skip cross-chain verification in tests by checking for zero address:
-
-```python
-def __init__(self, bridge_sender: str):
-    self.bridge_sender = Address(bridge_sender)
-
-def verify_deposit(self, ...):
-    if self.bridge_sender == Address("0x" + "0" * 40):
-        print("DEV MODE: skipping verification")
-        return True
-    # Real verification logic...
-```
-
-Deploy with `bridge_sender="0x0000...0000"` in tests, real address in production.
