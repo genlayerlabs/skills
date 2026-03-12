@@ -1,0 +1,125 @@
+name: validator-manage
+kind: action
+version: "1.0.0"
+description: "Manage GenLayer validators across testnets using the genlayer CLI. Join, fund, set identity, list, and organize validators per network and owner."
+severity: high
+tags:
+  - genlayer
+  - validators
+  - staking
+  - testnet
+
+purpose: |
+  Manage GenLayer validator lifecycle across multiple testnet networks.
+  Handles joining, funding, identity management, account organization,
+  and per-network reporting using the local genlayer CLI.
+
+owns:
+  - "Validator joining and staking"
+  - "Operator account creation and funding"
+  - "Validator identity (moniker) management"
+  - "Per-network validator reporting"
+  - "CLI account organization"
+
+inputs_required:
+  - id: network
+    description: "Target testnet network"
+    examples:
+      - "testnet-asimov"
+      - "testnet-bradbury"
+  - id: action
+    description: "What operation to perform"
+    examples:
+      - "list validators"
+      - "join 6 validators with 100K stake"
+      - "set monikers"
+      - "fund operators"
+
+defaults:
+  stake_amount: "100000gen"
+  operator_funding: "50000"
+  moniker_prefix: "GenLayerLabs Validator"
+
+patterns:
+  - id: network-switch
+    description: "Always switch to target network before operations"
+    commands:
+      - "genlayer network set <network>"
+      - "genlayer network info"
+
+  - id: batch-join
+    description: "Join multiple validators in sequence"
+    steps:
+      - "Create operator accounts: genlayer account create --name '<prefix> N' --password '<pw>' --no-set-active"
+      - "Join each: genlayer staking validator-join --amount '<stake>' --operator <addr> --account '<owner>'"
+      - "Fund each: genlayer account send --account '<owner>' <operator-addr> <amount>"
+      - "Set identity: genlayer staking set-identity <validator-addr> --moniker '<name>' --account '<owner>'"
+
+  - id: per-network-report
+    description: "Report validators grouped by network and owner using box-drawing tables"
+    format: |
+      Use ═══ headers for networks, box-drawing tables with columns:
+      Moniker | Validator | Operator | Status
+
+  - id: rename-account
+    description: "Rename a local CLI account by renaming the keystore file"
+    commands:
+      - "mv ~/.genlayer/keystores/'Old Name.json' ~/.genlayer/keystores/'New Name.json'"
+      - "genlayer account unlock --account 'New Name'"
+
+procedure:
+  - step: "Read memory"
+    detail: "Read validators.md and nodes.yaml for current state"
+    commands:
+      - "Read project memory validators.md"
+      - "Read ~/.claude/nodes.yaml"
+
+  - step: "Verify CLI and network"
+    detail: "Check genlayer version and switch to target network"
+    commands:
+      - "genlayer --version"
+      - "genlayer network set <target>"
+      - "genlayer network info"
+
+  - step: "Check current state"
+    detail: "List accounts and existing validators on target network"
+    commands:
+      - "genlayer account list"
+      - "genlayer staking validators"
+
+  - step: "Execute requested operation"
+    detail: "Perform join, fund, set-identity, rename, or list per user request"
+
+  - step: "Verify results"
+    detail: "Confirm operations succeeded"
+    commands:
+      - "genlayer staking validators"
+      - "genlayer account show --account '<name>'"
+
+  - step: "Update memory"
+    detail: "Update validators.md with new mappings"
+
+anti_patterns:
+  - id: wrong-account-for-identity
+    description: "Using operator account to set identity"
+    why_bad: "set-identity requires the owner account, not the operator. Will revert with OwnableUnauthorizedAccount."
+
+  - id: forget-network-switch
+    description: "Operating on wrong network"
+    why_bad: "Staking contracts differ per network. Operations on wrong network affect wrong validators."
+
+  - id: reuse-operators-across-networks
+    description: "Using same operator address on multiple networks"
+    why_bad: "Operators should be unique per network to avoid key conflicts on nodes."
+
+  - id: skip-memory-update
+    description: "Not updating validators.md after changes"
+    why_bad: "Memory goes stale. Next session won't know about new validators."
+
+  - id: markdown-tables-in-terminal
+    description: "Using markdown tables for validator reports"
+    why_bad: "Markdown tables render poorly in terminal. Use box-drawing characters instead."
+
+handoffs:
+  - skill: genlayernode
+    when: "User needs to set up the node software on the server for an operator"

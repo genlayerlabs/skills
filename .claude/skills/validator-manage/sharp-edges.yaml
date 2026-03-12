@@ -1,0 +1,49 @@
+sharp_edges:
+  - id: identity-requires-owner
+    description: "set-identity reverts if called from operator account"
+    detect: "Error message contains OwnableUnauthorizedAccount"
+    impact: "Transaction fails and wastes gas"
+    fix: "Use --account '<owner-cli-name>' instead of operator"
+    severity: high
+
+  - id: wrong-network
+    description: "Operations execute on wrong network if not switched first"
+    detect: "genlayer network list — check which network has the * marker"
+    impact: "Validators joined on wrong staking contract, funds sent on wrong chain"
+    fix: "Always run genlayer network set <target> before any operation"
+    severity: critical
+
+  - id: rename-breaks-unlock
+    description: "Renaming keystore file invalidates OS keychain cache"
+    detect: "Account shows as locked after rename"
+    impact: "Cannot sign transactions until re-unlocked"
+    fix: "Run genlayer account unlock --account 'New Name' after rename"
+    severity: medium
+
+  - id: insufficient-balance
+    description: "Owner doesn't have enough GEN to stake + fund all operators"
+    detect: "Check balance before batch operations: genlayer account show --account '<owner>'"
+    impact: "Partial completion — some validators joined, others not"
+    fix: "Calculate total needed (N × stake + N × operator_funding) and verify balance first"
+    severity: high
+
+  - id: operator-not-unlocked
+    description: "New operator accounts need to be unlocked before node can use them"
+    detect: "Account list shows no (unlocked) tag"
+    impact: "Node cannot sign transactions for validation"
+    fix: "genlayer account unlock --account '<name>' or export private key for node config"
+    severity: high
+
+  - id: validator-pending-epoch
+    description: "Newly joined validators are pending until next epoch"
+    detect: "Status shows 'pending' in validators list"
+    impact: "Validator won't participate in consensus until activated"
+    fix: "Wait for epoch transition. Check with: genlayer staking epoch-info"
+    severity: low
+
+  - id: same-chainid-different-contracts
+    description: "Asimov and bradbury share chainId 4221 but have different staking contracts"
+    detect: "genlayer network info — compare stakingContract addresses"
+    impact: "Confusing if reading raw on-chain data without checking contract address"
+    fix: "Always verify network info, not just chainId"
+    severity: medium
