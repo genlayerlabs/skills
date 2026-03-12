@@ -52,24 +52,19 @@ This is the most critical decision. Pick wrong and consensus will fail or be tri
 ### Decision Tree
 
 ```
-Is the external call deterministic (same input → same output)?
-├── YES → gl.eq_principle.strict_eq(fn)
-│         Examples: blockchain RPC, stable REST APIs, DNS lookups
+Can validators reproduce the exact same normalized output?
+├── YES → strict_eq
+│         Exact match. Use when outputs are deterministic or can be
+│         canonicalized (e.g., JSON with sort_keys=True).
+│         Examples: blockchain RPC, stable REST APIs.
 │
-└── NO (LLM, dynamic web content, variable APIs)
-    │
-    ├── DEFAULT → gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
-    │             Write custom comparison logic: tolerances, field extraction,
-    │             derived status, gate checks, etc.
-    │             Examples: scoring, price feeds, content analysis, oracles
-    │
-    └── Want a quick natural-language comparison rule?
-        └── gl.eq_principle.prompt_comparative(fn, principle="...")
-              Sends both outputs to an LLM with your principle string.
-              Convenient for prototyping, but narrow — only optimal when
-              comparison is best expressed in English.
-              Examples: simple yes/no decisions, content classification
+└── NO  → Write a custom validator function (run_nondet_unsafe)
+          You control the full logic: rerun and compare with tolerances,
+          derive status, extract stable fields, or evaluate the leader's
+          output directly without rerunning — whatever your contract needs.
 ```
+
+GenLayer also provides `prompt_comparative` and `prompt_non_comparative` as convenience wrappers, but most contracts outgrow them quickly. Start with a custom validator function for full flexibility.
 
 ### strict_eq — Deterministic calls only
 
@@ -83,7 +78,7 @@ def fetch_balance(self) -> int:
 
 Never use for LLM calls or web pages that change between requests.
 
-### run_nondet_unsafe — Custom validator logic (most common)
+### Custom Validator Function (most common)
 
 The default choice for non-deterministic operations. You write the leader function and a validator function with your own comparison logic.
 
@@ -117,9 +112,9 @@ def score_content(self, content: str) -> dict:
     return gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
 ```
 
-### prompt_comparative — Quick natural-language comparison
+### Convenience Wrappers
 
-Convenient for prototyping or when comparison is best expressed as an English rule. Both leader and validator outputs are sent to an LLM with your principle string. Narrow use case — for most production contracts, prefer `run_nondet_unsafe` with explicit comparison logic.
+`prompt_comparative` and `prompt_non_comparative` send both outputs to an LLM with your principle string. Convenient for prototyping but limited — for most production contracts, prefer a custom validator function with explicit comparison logic.
 
 ```python
 def resolve(self) -> str:
@@ -371,7 +366,7 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 
 | Don't | Do Instead | Why |
 |-------|-----------|-----|
-| `strict_eq()` for LLM calls | `run_nondet_unsafe()` with custom validator | LLM outputs are non-deterministic — strict_eq always fails consensus |
+| `strict_eq()` for LLM calls | Custom validator function | LLM outputs are non-deterministic — strict_eq always fails consensus |
 | Store `list` or `dict` | `DynArray[T]` or `TreeMap[K, V]` | Python builtins aren't persistable |
 | Use native `float` for money | Atto-scale `u256` (value * 10^18) | Standard across blockchains for cross-chain interop |
 | Insert fields in the middle of a dataclass | Append at END only (for upgradable contracts) | Storage layout is positional — insertion shifts all subsequent fields |
