@@ -136,7 +136,7 @@ Classify errors so validators know how to compare them. This is critical for con
 ERROR_EXPECTED  = "[EXPECTED]"   # Business logic (deterministic) — exact match required
 ERROR_EXTERNAL  = "[EXTERNAL]"   # External API 4xx (deterministic) — exact match required
 ERROR_TRANSIENT = "[TRANSIENT]"  # Network/5xx (non-deterministic) — agree if both transient
-ERROR_LLM       = "[LLM_ERROR]"  # LLM misbehavior — always disagree, force retry
+ERROR_LLM       = "[LLM_ERROR]"  # LLM misbehavior — always disagree, force rotation
 ```
 
 ### Canonical error handler for validators
@@ -372,7 +372,7 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 | Insert fields in the middle of a dataclass | Append at END only (for upgradable contracts) | Storage layout is positional — insertion shifts all subsequent fields |
 | Store `Enum` directly | Store `enum.value` as `str` | Enum type not supported in storage |
 | Ignore LLM response format | Validate type, sanitize JSON, alias keys | LLMs return unpredictable formats |
-| Let validator agree on LLM errors | Return `False` (disagree) to force retry | Agreeing on broken LLM output locks bad state |
+| Let validator agree on LLM errors | Return `False` (disagree) to force rotation | Agreeing on broken LLM output locks bad state |
 | Use bare `Exception` in contracts | Use `gl.vm.UserError` with error prefix | Bare exceptions become unrecoverable VMError |
 | Compare variable API fields in validators | Extract stable fields or derive status | Timestamps, counts change between calls |
 | O(n) scans over large collections | Maintain TreeMap indexes for O(1) lookups | Transactions have compute limits |
