@@ -6,6 +6,8 @@ allowed-tools:
   - Read
   - Write
   - Edit
+  - mcp__genlayer-docs__search_docs
+  - mcp__genlayer-docs__fetch_url
 ---
 
 # Writing Intelligent Contracts
@@ -326,9 +328,21 @@ json.dumps(result, sort_keys=True)  # stable for exact comparison
 
 ---
 
-## Reference Index
+## Looking Up Docs
 
-Quick links — load full docs when you need detail beyond this skill.
+Use the `genlayer-docs` MCP server when you need detail beyond this skill:
+
+```
+search_docs(library="genlayer-docs", query="<topic>")
+search_docs(library="genlayer-sdk", query="<topic>")
+```
+
+Examples:
+- `search_docs(library="genlayer-docs", query="equivalence principle patterns")`
+- `search_docs(library="genlayer-sdk", query="TreeMap DynArray storage")`
+- `search_docs(library="genlayer-docs", query="security prompt injection")`
+
+If the MCP server is unavailable, fetch docs directly:
 
 | Topic | URL |
 |-------|-----|
