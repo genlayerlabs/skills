@@ -29,6 +29,9 @@ Networks: `localnet`, `testnet-asimov`, `testnet-bradbury`, `mainnet`
 
 Per-command override: `--rpc <url>` or `--network <name>`
 
+**Testnet Bradbury faucet** (get free testnet GEN):
+https://testnet-faucet.genlayer.foundation/
+
 ## Account Management
 
 ```bash
