@@ -328,6 +328,70 @@ json.dumps(result, sort_keys=True)  # stable for exact comparison
 
 ---
 
+## Custom Storage Types
+
+Use `@allow_storage` + `@dataclass` for structured on-chain state:
+
+```python
+from dataclasses import dataclass
+
+@allow_storage
+@dataclass
+class UserData:
+    name: str
+    balance: u256
+    active: bool
+
+class MyContract(gl.Contract):
+    users: TreeMap[Address, UserData]
+```
+
+---
+
+## Contract Interactions
+
+### Call Other Contracts (Dynamic)
+```python
+other = gl.get_contract_at(Address("0x..."))
+result = other.view().some_method()
+other.emit(on='accepted').update_status("active")
+other.emit(on='finalized').confirm_transaction()
+```
+
+### Call Other Contracts (Static — better IDE support)
+```python
+@gl.contract_interface
+class TokenInterface:
+    class View:
+        def balance_of(self, owner: Address) -> u256: ...
+    class Write:
+        def transfer(self, to: Address, amount: u256) -> bool: ...
+
+token = TokenInterface(Address("0x..."))
+balance = token.view().balance_of(my_address)
+```
+
+### Deploy Child Contracts
+```python
+child_addr = gl.deploy_contract(code=contract_code, salt=u256(1))
+```
+
+### EVM Interop
+```python
+@gl.evm.contract_interface
+class ERC20:
+    class View:
+        def balance_of(self, owner: Address) -> u256: ...
+    class Write:
+        def transfer(self, to: Address, amount: u256) -> bool: ...
+
+token = ERC20(evm_address)
+balance = token.view().balance_of(addr)
+token.emit().transfer(recipient, u256(100))  # Messages only on finality
+```
+
+---
+
 ## Looking Up Docs
 
 Use the `genlayer-docs` MCP server when you need detail beyond this skill:
