@@ -80,7 +80,16 @@ sudo cp /opt/genlayer-node/configs/node/config.yaml \
   /opt/genlayer-node/${VERSION}/configs/node/config.yaml
 sudo cp /opt/genlayer-node/.env /opt/genlayer-node/${VERSION}/.env
 
-# 9. Enable LLM provider
+# 9a. Apply LLM strategy
+# See: common-procedures.md -> "LLM Strategy Selection"
+sudo cp /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-modules-llm-release.yaml \
+  /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+# If greybox strategy (check current config to preserve existing choice):
+grep -q 'genvm-llm-greybox.lua' /opt/genlayer-node/third_party/genvm/config/genvm-module-llm.yaml && \
+  sudo sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' \
+    /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+
+# 9b. Enable LLM provider
 # See: common-procedures.md -> "Enable LLM Provider"
 sudo sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' \
   /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml

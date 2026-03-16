@@ -37,9 +37,47 @@ python3 /opt/genlayer-node/${VERSION}/third_party/genvm/bin/setup.py
 
 **Wait for completion before proceeding.**
 
+## LLM Strategy Selection
+
+The release tarball includes two LLM strategies:
+- **default** — Random provider selection from all enabled backends (upstream behavior)
+- **greybox** — Deterministic ordered fallback via OpenRouter as primary aggregator
+
+**Ask the user which strategy they want.** This determines the LLM config and required API keys.
+
+### Apply LLM Strategy
+
+```bash
+# Step 1: Overlay the release LLM config (includes all backends: openrouter, morpheus, etc.)
+cp /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-modules-llm-release.yaml \
+   /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+
+# Step 2: If greybox strategy, switch the Lua script path
+# (skip this step for default strategy)
+sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' \
+  /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+```
+
+**Verify:**
+```bash
+grep lua_script_path /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+# default:  genvm-llm-default.lua
+# greybox:  genvm-llm-greybox.lua
+```
+
+**Required keys by strategy:**
+| Strategy | Required Key | Optional Keys |
+|----------|-------------|---------------|
+| default | At least one provider key (HEURISTKEY, COMPUT3KEY, etc.) | Any additional providers |
+| greybox | `OPENROUTERKEY` (primary aggregator) | HEURISTKEY, IOINTELLIGENCEKEY (fallback providers) |
+
 ## Enable LLM Provider
 
-The LLM provider must be enabled in GenVM config. By default, all providers are disabled.
+After applying the LLM strategy, enable providers that have API keys configured.
+
+The release config ships with all providers present but auto-detection depends on the key being set.
+For **greybox** strategy, OpenRouter is the primary — ensure `OPENROUTERKEY` is set in `.env`.
+For **default** strategy, enable at least one provider.
 
 **Provider mapping:**
 | Environment Variable | Config Name |
@@ -52,6 +90,8 @@ The LLM provider must be enabled in GenVM config. By default, all providers are 
 | `LIBERTAI_API_KEY` | libertai |
 | `XAIKEY` | xai |
 | `ATOMAKEY` | atoma |
+| `OPENROUTERKEY` | openrouter |
+| `MORPHEUS_API_KEY` | morpheus |
 
 ```bash
 # Replace <provider> with your provider name from the table above

@@ -257,7 +257,7 @@ edges:
     detect: |
       # PROACTIVE CHECK (before switching versions):
       # 1. Check which LLM key is set in .env
-      grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY)=' .env | grep -v '^#' | grep -v '=$'
+      grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY|OPENROUTERKEY|MORPHEUS_API_KEY)=' .env | grep -v '^#' | grep -v '=$'
 
       # 2. For each set key, check if that provider is enabled in GenVM config
       # Provider name mapping:
@@ -267,6 +267,8 @@ edges:
       #   LIBERTAI_API_KEY -> libertai
       #   ANTHROPICKEY -> anthropic
       #   GEMINIKEY -> google
+      #   OPENROUTERKEY -> openrouter
+      #   MORPHEUS_API_KEY -> morpheus
       grep -A 2 '<provider>:' third_party/genvm/config/genvm-module-llm.yaml | grep 'enabled'
 
       # REACTIVE DETECTION (after node fails to bootstrap):
@@ -312,13 +314,15 @@ edges:
       - LIBERTAI_API_KEY -> libertai
       - ANTHROPICKEY -> anthropic
       - GEMINIKEY -> google
+      - OPENROUTERKEY -> openrouter
+      - MORPHEUS_API_KEY -> morpheus
     fix: |
       PROACTIVE FIX (during update preparation, BEFORE switching):
       ================================================================
       After extracting new version, BEFORE switching symlinks:
 
       # 1. Identify which provider is configured in .env
-      grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY)=' /opt/genlayer-node/.env | grep -v '^#' | grep -v '=$'
+      grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY|OPENROUTERKEY|MORPHEUS_API_KEY)=' /opt/genlayer-node/.env | grep -v '^#' | grep -v '=$'
 
       # 2. Enable the corresponding provider in GenVM config
       # Replace <provider> with the provider name (heurist, comput3, ionet, libertai, anthropic, google)
@@ -491,6 +495,8 @@ edges:
       - LibertAI: LIBERTAI_API_KEY
       - Anthropic: ANTHROPICKEY
       - Google: GEMINIKEY
+      - OpenRouter: OPENROUTERKEY
+      - Morpheus: MORPHEUS_API_KEY
     severity: high
 
   - id: data-directory-permissions

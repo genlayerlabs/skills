@@ -156,18 +156,31 @@ GENLAYERNODE_ROLLUP_GENLAYERCHAINWEBSOCKETURL=wss://your-rpc-url/ws
 # HEURISTKEY=your-api-key-here
 # COMPUT3KEY=your-api-key-here
 # IOINTELLIGENCEKEY=your-api-key-here
+# OPENROUTERKEY=your-api-key-here
 # (see common-procedures.md for full provider list)
 
 # Required: Node password (min 8 characters)
 NODE_PASSWORD=your-secure-password
 ```
 
-**Enable LLM provider in GenVM config:**
+**Select LLM strategy and enable provider:**
+
+> **See `common-procedures.md` -> "LLM Strategy Selection"** for strategy details.
+
+```bash
+# Apply release LLM config (includes all backends)
+cp /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-modules-llm-release.yaml \
+   /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+
+# If using greybox strategy (deterministic via OpenRouter), switch lua script:
+sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' \
+  /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+```
 
 > **See `common-procedures.md` -> "Enable LLM Provider"** for provider mapping table.
 
 ```bash
-# Replace <provider> with your provider name (heurist, comput3, ionet, etc.)
+# Enable your provider (replace <provider> with provider name)
 sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' \
   /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
 ```

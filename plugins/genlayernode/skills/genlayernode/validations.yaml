@@ -129,9 +129,9 @@ validations:
 
   - id: llm-key-configured
     type: command
-    command: "[ -n \"${HEURISTKEY:-}\" ] || [ -n \"${COMPUT3KEY:-}\" ] || [ -n \"${IOINTELLIGENCE_API_KEY:-}\" ]"
+    command: "[ -n \"${HEURISTKEY:-}\" ] || [ -n \"${COMPUT3KEY:-}\" ] || [ -n \"${IOINTELLIGENCEKEY:-}\" ] || [ -n \"${OPENROUTERKEY:-}\" ]"
     expect: "exit 0"
-    message: "No LLM API key configured. Set HEURISTKEY, COMPUT3KEY, or IOINTELLIGENCE_API_KEY"
+    message: "No LLM API key configured. Set HEURISTKEY, COMPUT3KEY, IOINTELLIGENCEKEY, or OPENROUTERKEY"
 
   - id: webdriver-running
     type: command
