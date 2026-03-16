@@ -195,6 +195,14 @@ sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' \
 
 **Symptom if not enabled:** Node fails to start with "module_failed_to_start" error.
 
+### Updating Greybox on a Running Node
+To update the Lua script or LLM YAML without a full redeploy, see
+`common-procedures.md` -> "Update Greybox Config on Running Node".
+Key points:
+- Update files in all GenVM instance config directories
+- Restart LLM module per GenVM manager: `curl -X POST http://127.0.0.1:<port>/module/stop` then `/module/start`
+- No atomic restart — each instance restarts independently
+
 ---
 
 ## Requirements

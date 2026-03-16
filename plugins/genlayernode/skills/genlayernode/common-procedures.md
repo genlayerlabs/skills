@@ -105,6 +105,72 @@ grep -A2 '<provider>:' /opt/genlayer-node/${VERSION}/third_party/genvm/config/ge
 # Should show: enabled: true
 ```
 
+## Update Greybox Config on Running Node
+
+Update the greybox Lua script and/or LLM YAML config without a full redeploy.
+The LLM module must be restarted per GenVM instance — there is no atomic restart.
+
+**Prerequisites:** Node is running, you know which GenVM manager ports are active.
+
+### Step 1: Find GenVM manager ports
+
+```bash
+# Each validator runs its own GenVM manager on a different port
+# Check the deployed configs for bind addresses:
+grep -r bind_address /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+# Or check active processes:
+ss -tlnp | grep genvm
+```
+
+### Step 2: Update the files
+
+```bash
+GENVM_CONFIG="/opt/genlayer-node/${VERSION}/third_party/genvm/config"
+
+# Update the Lua script (source of truth: release/genvm-llm-greybox.lua)
+# Copy the new version to ALL genvm instance config directories
+cp /path/to/new/genvm-llm-greybox.lua ${GENVM_CONFIG}/genvm-llm-greybox.lua
+
+# If also updating the YAML config (new backends, model changes):
+cp /path/to/new/genvm-module-llm.yaml ${GENVM_CONFIG}/genvm-module-llm.yaml
+```
+
+**Note:** For multi-validator setups (infra deployments), each validator has its own
+genvm instance directory. Update the files in ALL instance config dirs, not just the
+shared config.
+
+### Step 3: Restart LLM module on each GenVM manager
+
+The Lua script is loaded at LLM module startup, NOT hot-reloaded per call.
+You must stop and start the LLM module for changes to take effect.
+
+```bash
+# For each GenVM manager port (e.g., 3999, or whatever port is active):
+PORT=3999
+
+# Stop the LLM module
+curl -X POST "http://127.0.0.1:${PORT}/module/stop" \
+  -H 'Content-Type: application/json' \
+  -d '{"module_type": "Llm"}'
+
+# Start the LLM module (reloads Lua script and YAML config)
+curl -X POST "http://127.0.0.1:${PORT}/module/start" \
+  -H 'Content-Type: application/json' \
+  -d '{"module_type": "Llm", "config": null}'
+```
+
+Repeat for each GenVM manager port. There is no atomic restart — each instance
+restarts independently.
+
+### Step 4: Verify
+
+```bash
+# Run a transaction that triggers an LLM call, then check logs for:
+#   "greybox: success" with the expected provider/model
+# The GenVMLog entries appear in the node's structured log per-transaction.
+grep "greybox" /opt/genlayer-node/data/node/logs/node.log | tail -5
+```
+
 ## Create Directory Structure
 
 ```bash
