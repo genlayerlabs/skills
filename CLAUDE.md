@@ -79,6 +79,12 @@ When a skill is invoked:
 4. Use config_wizard structure for interactive configuration
 5. Run post-installation validations
 
+## Website
+
+The file `index.html` is the public-facing website for this marketplace. It displays all **plugin skills** (from `plugins/`) organized into Build and Operate sections. It does NOT include internal development skills (from `.claude/skills/`).
+
+When you add, remove, or modify a plugin skill's description, name, or content, you **must** update `index.html` to reflect the change. The skill data lives in the `skills` JavaScript object inside the `<script>` tag, organized by section (`build` and `operate`).
+
 ## Security Constraints
 
 Skills that handle secrets must follow strict masking requirements:
