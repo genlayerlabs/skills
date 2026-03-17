@@ -23,8 +23,7 @@ Always lint with `genvm-lint check` after writing or modifying a contract.
 
 from genlayer import *
 
-@gl.contract
-class MyContract:
+class MyContract(gl.Contract):
     # Storage fields — typed, persisted on-chain
     owner: Address
     items: TreeMap[str, Item]

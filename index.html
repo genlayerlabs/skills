@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenLayer Skills — AI-native skills for intelligent contract development</title>
+<meta name="description" content="Claude Code plugin marketplace for GenLayer. Skills for writing intelligent contracts, running validators, and shipping code.">
+<style>
+/* ── GenLayer Green Phosphor CRT Theme ── */
+:root {
+    --bg:       #070d0b;
+    --bg-2:     #0b1411;
+    --fg:       #c2e0d0;
+    --accent:   #00e88a;
+    --accent-2: #00cc78;
+    --dimmed:   #4e7a66;
+    --border:   #152820;
+    --hover:    #0d1a15;
+    --card-bg:  #0a110e;
+    --danger:   #ff6b6b;
+    --radius:   4px;
+    --mono:     'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── CRT Scanline Overlay ── */
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.03) 2px,
+        rgba(0, 0, 0, 0.03) 4px
+    );
+}
+
+body {
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--fg);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Layout ── */
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+}
+
+/* ── ASCII Art Header ── */
+.ascii-header {
+    text-align: center;
+    margin-bottom: 0.5rem;
+    overflow-x: auto;
+}
+
+.ascii-header pre {
+    display: inline-block;
+    font-size: 8px;
+    line-height: 1.1;
+    color: var(--accent);
+    text-shadow: 0 0 10px rgba(0, 232, 138, 0.3);
+    white-space: pre;
+    letter-spacing: 1px;
+}
+
+@media (min-width: 640px) {
+    .ascii-header pre { font-size: 11px; }
+}
+
+/* ── Hero ── */
+.hero {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.tagline {
+    font-size: 15px;
+    color: var(--dimmed);
+    margin-bottom: 1.5rem;
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.hero-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.hero-cta:hover {
+    background: rgba(0, 232, 138, 0.08);
+    box-shadow: 0 0 15px rgba(0, 232, 138, 0.1);
+}
+
+.hero-cta svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.hero-methods {
+    margin-top: 1rem;
+    font-size: 12px;
+    color: var(--dimmed);
+}
+
+.hero-methods code {
+    background: var(--bg-2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    color: var(--fg);
+    font-size: 12px;
+}
+
+/* ── Section Headers ── */
+.section-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    margin-top: 2.5rem;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--dimmed);
+}
+
+.section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.section-label:first-of-type { margin-top: 0; }
+
+/* ── Skill Grid ── */
+.skill-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.skill-card {
+    position: relative;
+    padding: 1rem 1.1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.skill-card:hover {
+    background: var(--hover);
+    border-color: var(--accent-2);
+}
+
+.skill-card:hover .skill-name {
+    color: var(--accent);
+}
+
+.skill-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--fg);
+    margin-bottom: 0.3rem;
+    transition: color 0.15s ease;
+}
+
+.skill-desc {
+    font-size: 13px;
+    color: var(--dimmed);
+    line-height: 1.5;
+}
+
+.skill-badge {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    font-size: 10px;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.badge-plugin {
+    color: var(--accent);
+    background: rgba(0, 232, 138, 0.08);
+    border: 1px solid rgba(0, 232, 138, 0.2);
+}
+
+.badge-dev {
+    color: var(--dimmed);
+    background: rgba(78, 122, 102, 0.1);
+    border: 1px solid rgba(78, 122, 102, 0.2);
+}
+
+.copy-btn {
+    position: absolute;
+    bottom: 0.6rem;
+    right: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--dimmed);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    opacity: 0;
+}
+
+.skill-card:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+.copy-btn svg { width: 12px; height: 12px; }
+
+/* ── Modal ── */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(7, 13, 11, 0.85);
+    backdrop-filter: blur(4px);
+    display: none;
+    animation: fadeIn 0.2s ease;
+}
+
+.modal-backdrop.active { display: flex; justify-content: center; align-items: flex-start; padding: 3rem 1rem; overflow-y: auto; }
+
+.modal {
+    width: 100%;
+    max-width: 720px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    animation: slideUp 0.25s ease;
+    margin-bottom: 3rem;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-close, .modal-copy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--dimmed);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.modal-close:hover, .modal-copy:hover { color: var(--accent); border-color: var(--accent); }
+.modal-close svg, .modal-copy svg { width: 16px; height: 16px; }
+
+.modal-body {
+    padding: 1.5rem 1.25rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.modal-body::-webkit-scrollbar { width: 6px; }
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+.modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.modal-body::-webkit-scrollbar-thumb:hover { background: var(--dimmed); }
+
+/* ── Markdown Rendering ── */
+.md h1, .md h2, .md h3 { color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.md h1 { font-size: 18px; }
+.md h2 { font-size: 16px; }
+.md h3 { font-size: 14px; }
+.md h1:first-child, .md h2:first-child, .md h3:first-child { margin-top: 0; }
+
+.md p { margin-bottom: 0.75rem; color: var(--fg); }
+
+.md code {
+    background: var(--bg);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 13px;
+    color: var(--accent);
+}
+
+.md pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.md pre code { background: none; padding: 0; color: var(--fg); }
+
+.md ul, .md ol { margin-bottom: 0.75rem; padding-left: 1.5rem; }
+.md li { margin-bottom: 0.25rem; color: var(--fg); }
+.md li::marker { color: var(--dimmed); }
+
+.md strong { color: var(--accent); font-weight: 600; }
+.md em { color: var(--dimmed); font-style: normal; }
+
+.md blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+    background: rgba(0, 232, 138, 0.03);
+    color: var(--dimmed);
+}
+
+.md table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: 13px;
+}
+
+.md th, .md td {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+}
+
+.md th { color: var(--accent); background: var(--bg); font-weight: 600; }
+
+.md hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+}
+
+/* ── Contributing ── */
+.contributing {
+    font-size: 14px;
+    color: var(--dimmed);
+    margin-bottom: 0.5rem;
+}
+
+/* ── Footer ── */
+footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 12px;
+    color: var(--dimmed);
+}
+
+footer a { color: var(--dimmed); }
+footer a:hover { color: var(--accent); }
+
+.footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+/* ── Blinking Cursor ── */
+.cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: var(--accent);
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+    margin-left: 2px;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+    .container { padding: 1.5rem 1rem; }
+    .ascii-header pre { font-size: 5.5px; }
+    .skill-grid { grid-template-columns: 1fr; }
+    .copy-btn { opacity: 1; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ── ASCII Header ── -->
+    <div class="ascii-header">
+<pre>
+  ██████╗ ███████╗███╗   ██╗██╗      █████╗ ██╗   ██╗███████╗██████╗
+ ██╔════╝ ██╔════╝████╗  ██║██║     ██╔══██╗╚██╗ ██╔╝██╔════╝██╔══██╗
+ ██║  ███╗█████╗  ██╔██╗ ██║██║     ███████║ ╚████╔╝ █████╗  ██████╔╝
+ ██║   ██║██╔══╝  ██║╚██╗██║██║     ██╔══██║  ╚██╔╝  ██╔══╝  ██╔══██╗
+ ╚██████╔╝███████╗██║ ╚████║███████╗██║  ██║   ██║   ███████╗██║  ██║
+  ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
+
+ ███████╗██╗  ██╗██╗██╗     ██╗     ███████╗
+ ██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝
+ ███████╗█████╔╝ ██║██║     ██║     ███████╗
+ ╚════██║██╔═██╗ ██║██║     ██║     ╚════██║
+ ███████║██║  ██╗██║███████╗███████╗███████║
+ ╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝
+</pre>
+    </div>
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+        <p class="tagline">AI-native procedures for intelligent contract development and validator operations<span class="cursor"></span></p>
+
+        <button class="hero-cta" onclick="copyText('/plugin marketplace add genlayerlabs/claude-code-skills', this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            <span>/plugin marketplace add genlayerlabs</span>
+        </button>
+
+        <div class="hero-methods">
+            Then install: <code>/plugin install genlayer-dev@genlayerlabs</code> or <code>/plugin install genlayernode@genlayerlabs</code>
+        </div>
+    </div>
+
+    <!-- ── BUILD ── -->
+    <div class="section-label">Build</div>
+    <div class="skill-grid" id="grid-build"></div>
+
+    <!-- ── OPERATE ── -->
+    <div class="section-label">Operate</div>
+    <div class="skill-grid" id="grid-operate"></div>
+
+    <!-- ── Contributing ── -->
+    <div class="section-label">Contributing</div>
+    <p class="contributing">Something wrong or missing? Humans and agents alike are welcome to <a href="https://github.com/genlayerlabs/skills" target="_blank" rel="noopener">open a PR</a>.</p>
+
+    <!-- ── Footer ── -->
+    <footer>
+        <div class="footer-links">
+            <span>MIT License</span>
+            <a href="https://github.com/genlayerlabs/skills" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://docs.genlayer.com" target="_blank" rel="noopener">Docs</a>
+            <a href="https://genlayer.com" target="_blank" rel="noopener">GenLayer</a>
+        </div>
+    </footer>
+
+</div>
+
+<!-- ── Modal ── -->
+<div class="modal-backdrop" id="modal" aria-hidden="true">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title" id="modal-title"></span>
+            <div class="modal-actions">
+                <button class="modal-copy" id="modal-copy-btn" title="Copy install command">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button class="modal-close" id="modal-close" title="Close (Esc)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="modal-body md" id="modal-body"></div>
+    </div>
+</div>
+
+<script>
+/* ──────────────────────────────────────
+   Skill Data
+   ────────────────────────────────────── */
+const skills = {
+    build: [
+        {
+            id: 'write-contract',
+            name: 'Write Contract',
+            desc: 'Production-quality intelligent contracts with equivalence principle guidance',
+            badge: 'plugin',
+            content: `## Write Contract
+
+The core skill for building GenLayer intelligent contracts — Python classes that run on GenVM with built-in AI capabilities.
+
+### What It Covers
+
+- **Equivalence Principle** — The critical decision: \`strict_eq\` for deterministic calls, custom validator functions for LLM/web operations
+- **Storage Rules** — \`TreeMap\` instead of dict, \`DynArray\` instead of list, \`u256\` for money
+- **LLM Resilience** — Defensive parsing, key variation handling, aggressive coercion, JSON response format
+- **Cross-Contract Calls** — Synchronous reads, async writes with \`emit()\`, factory patterns
+- **Error Classification** — \`[EXPECTED]\`, \`[EXTERNAL]\`, \`[TRANSIENT]\`, \`[LLM_ERROR]\` each with distinct validator behavior
+
+### Contract Skeleton
+
+\`\`\`python
+from genlayer import *
+
+@gl.contract
+class MyContract:
+    owner: Address
+    items: TreeMap[str, Item]
+
+    def __init__(self):
+        self.owner = gl.message.sender_account
+
+    @gl.public.view
+    def get_item(self, item_id: str) -> dict:
+        return {"id": item_id}
+
+    @gl.public.write
+    def set_item(self, item_id: str, value: str):
+        if gl.message.sender_account != self.owner:
+            raise gl.UserError("Only owner")
+\`\`\`
+
+### Anti-Patterns
+
+- \`strict_eq()\` for LLM calls — LLM outputs are non-deterministic
+- \`dict\` / \`list\` for storage — use \`TreeMap\` / \`DynArray\`
+- \`float\` for money — use atto-scale \`u256\`
+- Inserting fields in middle of dataclass — always append at END
+
+> Part of the **genlayer-dev** plugin. Install with \`/plugin install genlayer-dev@genlayerlabs\``
+        },
+        {
+            id: 'genvm-lint',
+            name: 'GenVM Lint',
+            desc: 'Validate contracts for safety, correctness, and SDK compliance',
+            badge: 'plugin',
+            content: `## GenVM Lint
+
+Static analysis and validation for GenLayer intelligent contracts. Always lint before testing.
+
+### Commands
+
+| Command | What It Does | Speed |
+|---------|-------------|-------|
+| \`genvm-lint check <file>\` | Lint + validate (recommended) | ~250ms |
+| \`genvm-lint lint <file>\` | AST checks only | ~50ms |
+| \`genvm-lint validate <file>\` | SDK semantic checks | ~200ms |
+| \`genvm-lint schema <file>\` | Extract ABI | ~100ms |
+| \`genvm-lint typecheck <file>\` | Pyright/Pylance type checking | ~1s |
+
+### What It Catches
+
+- **Forbidden imports**: \`os\`, \`sys\`, \`subprocess\`, \`random\`
+- **Non-deterministic patterns**: bare float operations
+- **Type validity**: \`TreeMap\`, \`DynArray\`, \`Address\` usage
+- **Decorator correctness**: \`@gl.public.view\`, \`@gl.public.write\`
+- **Storage field types**: no \`dict\`/\`list\` in state
+
+### Agent Workflow
+
+\`\`\`
+1. Run check with --json
+2. Parse errors
+3. Fix iteratively
+4. Re-run until ok=true
+\`\`\`
+
+### Exit Codes
+
+- **0** — All checks passed
+- **1** — Lint or validation errors
+- **2** — Contract file not found
+- **3** — SDK download failed
+
+> Install: \`pip install genvm-linter\``
+        },
+        {
+            id: 'direct-tests',
+            name: 'Direct Tests',
+            desc: 'Fast in-memory tests — ~30ms per test, no server required',
+            badge: 'plugin',
+            content: `## Direct Tests
+
+Fast, in-memory tests for intelligent contracts. No server, no Docker, no consensus — just pure logic testing at ~30ms per test.
+
+### Running Tests
+
+\`\`\`bash
+pytest tests/direct/ -v
+pytest tests/direct/test_specific.py::test_one -v
+\`\`\`
+
+### Basic Pattern
+
+\`\`\`python
+def test_set_and_get(direct_vm, direct_deploy, direct_alice):
+    contract = direct_deploy("contracts/my_contract.py")
+    direct_vm.sender = direct_alice
+    contract.set_data("hello")
+    result = contract.get_data(direct_alice)
+    assert result == "hello"
+\`\`\`
+
+### Fixtures
+
+| Fixture | Purpose |
+|---------|---------|
+| \`direct_vm\` | VMContext with cheatcodes |
+| \`direct_deploy\` | Deploy contract function |
+| \`direct_alice\`, \`direct_bob\`, \`direct_charlie\` | Test addresses |
+| \`direct_owner\` | Owner address |
+
+### Cheatcodes
+
+- \`direct_vm.sender = address\` — Set transaction sender
+- \`direct_vm.expect_revert("msg")\` — Expect a revert
+- \`direct_vm.prank(address)\` — Temporary sender change
+- \`direct_vm.snapshot()\` / \`revert(id)\` — State snapshots
+- \`direct_vm.warp("2024-06-01T12:00:00Z")\` — Time travel
+- \`direct_vm.mock_web(regex, response)\` — Mock HTTP calls
+- \`direct_vm.mock_llm(regex, response)\` — Mock LLM calls
+
+### Important
+
+Direct mode runs the **leader function only**. Validator logic is not exercised. Use integration tests for consensus validation.`
+        },
+        {
+            id: 'integration-tests',
+            name: 'Integration Tests',
+            desc: 'Full consensus validation against real GenLayer environments',
+            badge: 'plugin',
+            content: `## Integration Tests
+
+Run contracts against real GenLayer environments with full consensus validation — leader execution, validator verification, and finalization.
+
+### Running Tests
+
+\`\`\`bash
+gltest tests/integration/ -v -s
+gltest tests/integration/ -v -s --network localnet
+gltest tests/integration/ -v -s --network testnet_bradbury
+\`\`\`
+
+### Test Pattern
+
+\`\`\`python
+from gltest import get_contract_factory
+from gltest.assertions import tx_execution_succeeded
+
+def test_full_flow():
+    factory = get_contract_factory("MyContract")
+    contract = factory.deploy(args=[])
+    receipt = contract.set_data(args=["hello"]).transact()
+    assert tx_execution_succeeded(receipt)
+    result = contract.get_data(args=[contract.address]).call()
+    assert result == "hello"
+\`\`\`
+
+### Direct vs Integration
+
+| Aspect | Direct | Integration |
+|--------|--------|-------------|
+| Speed | ~30ms | seconds–minutes |
+| Server | No | Yes |
+| Consensus | Leader only | Full + validators |
+| Write methods | Return values | Return receipts |
+| Mocking | Supported | Real calls |
+
+### Environments
+
+- **GLSim** — Lightweight, Python natively
+- **Studio local** — Full GenVM, Docker required
+- **studio.genlayer.com** — Hosted, no setup
+- **Testnet Bradbury** — Real network, funded accounts
+
+### When to Use
+
+- Validating consensus behavior
+- Testing real web/LLM interactions
+- Smoke tests before deploy to testnet`
+        },
+        {
+            id: 'genlayer-cli',
+            name: 'GenLayer CLI',
+            desc: 'Deploy, interact with, and debug contracts from the terminal',
+            badge: 'plugin',
+            content: `## GenLayer CLI
+
+The command-line interface for deploying, calling, and debugging intelligent contracts across all GenLayer networks.
+
+### Setup
+
+\`\`\`bash
+npm install -g genlayer
+\`\`\`
+
+### Core Commands
+
+| Command | Purpose |
+|---------|---------|
+| \`genlayer deploy --contract file.py\` | Deploy a contract |
+| \`genlayer call <addr> <method>\` | Read (view) call |
+| \`genlayer write <addr> <method>\` | Write transaction |
+| \`genlayer receipt <txHash>\` | Get transaction receipt |
+| \`genlayer schema <addr>\` | View contract ABI |
+| \`genlayer code <addr>\` | View deployed source |
+
+### Network Management
+
+\`\`\`bash
+genlayer network set testnet-bradbury
+genlayer network info
+genlayer network list
+\`\`\`
+
+Networks: \`localnet\`, \`testnet-asimov\`, \`testnet-bradbury\`, \`mainnet\`
+
+### Debugging Workflow
+
+\`\`\`
+1. Get receipt:  genlayer receipt <txHash> --stdout --stderr
+2. Check schema: genlayer schema <address>
+3. Read source:  genlayer code <address>
+4. Try read:     genlayer call <address> <view_method>
+5. Appeal:       genlayer appeal <txHash>
+\`\`\`
+
+### Account Management
+
+\`\`\`bash
+genlayer account create --name dev1
+genlayer account use dev1
+genlayer account list
+genlayer account send 0x123...abc 10gen
+\`\`\``
+        }
+    ],
+    operate: [
+        {
+            id: 'genlayernode',
+            name: 'Validator Node Setup',
+            desc: 'Interactive wizard — from bare Linux to running validator in 20–45 minutes',
+            badge: 'plugin',
+            content: `## Validator Node Setup
+
+A comprehensive interactive wizard that takes you from a bare Linux server to a fully operational GenLayer validator node.
+
+### Process Overview
+
+\`\`\`
+Step 0   Determine server location (local / SSH / cloud)
+Step 1   Check prerequisites (arch, Node.js, Docker, Python)
+Step 2   New validator or existing? (staking wizard)
+Step 3   Download & setup (tarball, GenVM, symlinks)
+Step 4   Environment config (.env — RPC, LLM key)
+Step 5   Node config (config.yaml — addresses, ports)
+Step 6   Operator key (upload / copy / generate)
+Step 7   Start WebDriver (Docker Compose)
+Step 8   Doctor check (verify configuration)
+Step 9   Deployment method (systemd / Docker / manual)
+Step 10  Verify node running (health, sync)
+Step 11  Monitoring setup (optional telemetry)
+\`\`\`
+
+### Requirements
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| Architecture | AMD64 only | — |
+| RAM | 16 GB | 32 GB |
+| CPU | 8 cores | 16+ cores |
+| Storage | 128 GB SSD | 256+ GB |
+| GEN tokens | 42,000+ | — |
+| ETH for gas | ~0.1 ETH | — |
+
+### Three Key Addresses
+
+| Address | Purpose |
+|---------|---------|
+| **Owner** | Cold wallet — controls validator, stays local |
+| **Operator** | Hot wallet — signs blocks, goes on server |
+| **Validator** | Smart contract on-chain, used in config |
+
+### Deployment Methods
+
+- **Systemd** (recommended) — Auto-restart, journal logs
+- **Docker Compose** — Container isolation
+- **Manual** — Screen/tmux for testing
+
+### Supported LLM Providers
+
+Heurist, Comput3, io.net, LibertAI, Anthropic, Google, xAI, Atoma
+
+> Install: \`/plugin install genlayernode@genlayerlabs\``
+        },
+        {
+            id: 'validator-manage',
+            name: 'Validator Management',
+            desc: 'Manage validators across testnets — join, fund, set identity, monitor',
+            badge: 'dev',
+            content: `## Validator Management
+
+Manage GenLayer validators across multiple testnets using the \`genlayer\` CLI. Handle joining, funding, identity, and monitoring.
+
+### Key Concepts
+
+- **Owner** — Controls validator on-chain. Can own many validators.
+- **Operator** — Runs node software. Each validator has exactly one.
+- **Network isolation** — Each testnet has its own staking contract.
+
+### Common Operations
+
+\`\`\`bash
+# Switch network
+genlayer network set testnet-bradbury
+
+# List all validators
+genlayer staking validators
+
+# Join as validator
+genlayer staking validator-join \\
+  --amount "100000gen" \\
+  --operator <address> \\
+  --account "<owner>"
+
+# Fund operator
+genlayer account send \\
+  --account "<owner>" <operator-address> <amount>
+
+# Set validator identity
+genlayer staking set-identity <validator-address> \\
+  --moniker "My Validator" \\
+  --account "<owner>"
+\`\`\`
+
+### Monitoring
+
+\`\`\`bash
+genlayer staking epoch-info
+genlayer staking active-validators
+genlayer staking quarantined-validators
+genlayer staking banned-validators
+\`\`\`
+
+### Batch Workflow
+
+\`\`\`
+1. Create operator accounts
+2. Join validators
+3. Fund operators
+4. Set monikers
+5. Verify all
+6. Update memory
+\`\`\``
+        }
+    ],
+};
+
+/* ──────────────────────────────────────
+   Render Skill Cards
+   ────────────────────────────────────── */
+function renderGrid(containerId, skillList) {
+    const grid = document.getElementById(containerId);
+    skillList.forEach(skill => {
+        const card = document.createElement('div');
+        card.className = 'skill-card';
+        card.setAttribute('data-skill', skill.id);
+        card.innerHTML = `
+            <span class="skill-badge badge-${skill.badge}">${skill.badge === 'plugin' ? 'plugin' : 'dev'}</span>
+            <div class="skill-name">${skill.name}</div>
+            <div class="skill-desc">${skill.desc}</div>
+            <button class="copy-btn" onclick="event.stopPropagation(); copySkill('${skill.id}', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                <span>copy</span>
+            </button>
+        `;
+        card.addEventListener('click', () => openModal(skill));
+        grid.appendChild(card);
+    });
+}
+
+renderGrid('grid-build', skills.build);
+renderGrid('grid-operate', skills.operate);
+
+/* ──────────────────────────────────────
+   Modal
+   ────────────────────────────────────── */
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modal-title');
+const modalBody = document.getElementById('modal-body');
+let currentSkill = null;
+
+function openModal(skill) {
+    currentSkill = skill;
+    modalTitle.textContent = skill.name;
+    modalBody.innerHTML = renderMarkdown(skill.content);
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    currentSkill = null;
+}
+
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-copy-btn').addEventListener('click', () => {
+    if (currentSkill) {
+        const badge = currentSkill.badge;
+        const cmd = badge === 'plugin'
+            ? `/plugin install genlayer-dev@genlayerlabs`
+            : currentSkill.id;
+        copyText(cmd, document.getElementById('modal-copy-btn'));
+    }
+});
+
+modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+});
+
+/* ──────────────────────────────────────
+   Markdown Renderer
+   ────────────────────────────────────── */
+function renderMarkdown(md) {
+    let html = '';
+    const lines = md.split('\n');
+    let inCode = false, codeLang = '', codeLines = [];
+    let inTable = false, tableRows = [];
+    let inList = false, listType = '', listItems = [];
+
+    function flushList() {
+        if (!inList) return;
+        const tag = listType === 'ol' ? 'ol' : 'ul';
+        html += `<${tag}>${listItems.join('')}</${tag}>`;
+        inList = false;
+        listItems = [];
+    }
+
+    function flushTable() {
+        if (!inTable) return;
+        let t = '<table>';
+        tableRows.forEach((row, i) => {
+            const cells = row.split('|').filter(c => c.trim() !== '');
+            const tag = i === 0 ? 'th' : 'td';
+            t += '<tr>' + cells.map(c => `<${tag}>${inline(c.trim())}</${tag}>`).join('') + '</tr>';
+        });
+        t += '</table>';
+        html += t;
+        inTable = false;
+        tableRows = [];
+    }
+
+    function inline(text) {
+        return text
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (line.startsWith('```')) {
+            if (inCode) {
+                html += `<pre><code>${codeLines.join('\n').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
+                inCode = false;
+                codeLines = [];
+            } else {
+                flushList();
+                flushTable();
+                inCode = true;
+                codeLang = line.slice(3).trim();
+            }
+            continue;
+        }
+
+        if (inCode) { codeLines.push(line); continue; }
+
+        // Table detection
+        if (line.includes('|') && line.trim().startsWith('|')) {
+            flushList();
+            if (!inTable) inTable = true;
+            if (line.replace(/[|\s-]/g, '') === '') continue; // separator row
+            tableRows.push(line);
+            continue;
+        } else {
+            flushTable();
+        }
+
+        // List items
+        const ulMatch = line.match(/^(\s*)[-*]\s+(.*)/);
+        const olMatch = line.match(/^(\s*)\d+\.\s+(.*)/);
+        if (ulMatch || olMatch) {
+            const match = ulMatch || olMatch;
+            const type = ulMatch ? 'ul' : 'ol';
+            if (!inList || listType !== type) { flushList(); inList = true; listType = type; }
+            listItems.push(`<li>${inline(match[2])}</li>`);
+            continue;
+        } else {
+            flushList();
+        }
+
+        if (line.trim() === '') { html += ''; continue; }
+        if (line.startsWith('### ')) { html += `<h3>${inline(line.slice(4))}</h3>`; continue; }
+        if (line.startsWith('## '))  { html += `<h2>${inline(line.slice(3))}</h2>`; continue; }
+        if (line.startsWith('# '))   { html += `<h1>${inline(line.slice(2))}</h1>`; continue; }
+        if (line.startsWith('> '))   { html += `<blockquote><p>${inline(line.slice(2))}</p></blockquote>`; continue; }
+        if (line.startsWith('---'))  { html += '<hr>'; continue; }
+
+        html += `<p>${inline(line)}</p>`;
+    }
+
+    flushList();
+    flushTable();
+
+    return html;
+}
+
+/* ──────────────────────────────────────
+   Copy Utilities
+   ────────────────────────────────────── */
+function copyText(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerHTML;
+        const label = btn.querySelector('span');
+        if (label) {
+            const origText = label.textContent;
+            label.textContent = 'copied!';
+            setTimeout(() => { label.textContent = origText; }, 1500);
+        }
+    }).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    });
+}
+
+function copySkill(skillId, btn) {
+    const allSkills = [...skills.build, ...skills.operate];
+    const skill = allSkills.find(s => s.id === skillId);
+    if (!skill) return;
+    const cmd = skill.badge === 'plugin'
+        ? `/plugin install genlayer-dev@genlayerlabs`
+        : skill.id;
+    copyText(cmd, btn);
+}
+
+</script>
+
+</body>
+</html>

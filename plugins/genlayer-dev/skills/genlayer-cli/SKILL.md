@@ -49,6 +49,33 @@ genlayer account send 0x123...abc 10gen
 
 Amount formats: `"10gen"`, `"0.5gen"`, or raw wei `"1000000000000000000"`
 
+### Non-interactive usage (CI/CD, containers, agents)
+
+`account create`, `account import`, and `account send` accept `--password <password>` to skip interactive prompts:
+
+```bash
+genlayer account create --name dev1 --password "mypassword"
+genlayer account import --name imported --private-key 0x... --password "mypassword"
+```
+
+`account unlock` requires an OS keychain (macOS Keychain, GNOME Keyring, etc.) and will fail in headless containers. When the account is locked, commands that sign transactions (`deploy`, `write`, `appeal`, `account send`) will prompt for the keystore password. To automate these, pipe the password via stdin:
+
+```bash
+echo "mypassword" | genlayer deploy --contract contracts/my_contract.py --args "arg1"
+```
+
+## Funding Testnet Accounts
+
+New accounts start with 0 GEN. To deploy or write on testnets, fund the account first.
+
+**Faucet**: [https://testnet-faucet.genlayer.foundation/](https://testnet-faucet.genlayer.foundation/)
+
+1. Get your address: `genlayer account` → copy the `address` field
+2. Go to the faucet URL, paste the address, and claim 100 GEN (once per 24 hours)
+3. Verify: `genlayer account` should show the updated balance
+
+The faucet uses Cloudflare Turnstile and cannot be automated from CLI — the user must claim manually in a browser. Works for both Testnet Bradbury and Testnet Asimov.
+
 ## Contract Deployment
 
 ```bash
