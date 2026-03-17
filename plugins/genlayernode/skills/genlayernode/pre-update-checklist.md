@@ -9,7 +9,7 @@ This checklist MUST be executed before starting any validator node update to cat
 
 ```bash
 # Check which LLM key is set in .env
-grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY)=' /opt/genlayer-node/.env | grep -v '^#' | grep -v '=$'
+grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY|OPENROUTERKEY|MORPHEUS_API_KEY)=' /opt/genlayer-node/.env | grep -v '^#' | grep -v '=$'
 
 # Provider mapping:
 #   HEURISTKEY -> heurist
@@ -18,6 +18,8 @@ grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|
 #   LIBERTAI_API_KEY -> libertai
 #   ANTHROPICKEY -> anthropic
 #   GEMINIKEY -> google
+#   OPENROUTERKEY -> openrouter
+#   MORPHEUS_API_KEY -> morpheus
 
 # For each non-empty key, check if that provider is enabled
 # Replace <provider> with the provider name from mapping above:
@@ -116,12 +118,28 @@ ls -la /opt/genlayer-node/${NEW_VERSION}/third_party/genvm/bin/genvm-modules
 
 **Action if missing:** Re-run setup.py, don't proceed to switch.
 
-### 3.2 Check LLM Config in New Version
+### 3.2 Preserve LLM Strategy in New Version
+**Purpose:** Apply release LLM config and preserve current strategy (default or greybox)
+
+```bash
+# Apply release LLM config to new version
+cp /opt/genlayer-node/${NEW_VERSION}/third_party/genvm/config/genvm-modules-llm-release.yaml \
+   /opt/genlayer-node/${NEW_VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+
+# Check current strategy and carry it forward
+grep lua_script_path /opt/genlayer-node/third_party/genvm/config/genvm-module-llm.yaml
+# If shows genvm-llm-greybox.lua, apply greybox to new version:
+grep -q 'genvm-llm-greybox.lua' /opt/genlayer-node/third_party/genvm/config/genvm-module-llm.yaml && \
+  sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' \
+    /opt/genlayer-node/${NEW_VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+```
+
+### 3.3 Check LLM Provider Enabled in New Version
 **Purpose:** Proactively fix LLM provider disabled issue BEFORE switching (edge: llm-provider-not-enabled)
 
 ```bash
 # Check if your provider is enabled in the new version
-# Replace <provider> with your provider name (heurist, comput3, ionet, libertai, anthropic, google):
+# Replace <provider> with your provider name (heurist, comput3, ionet, libertai, anthropic, google, openrouter):
 grep -A 2 '<provider>:' /opt/genlayer-node/${NEW_VERSION}/third_party/genvm/config/genvm-module-llm.yaml | grep 'enabled'
 
 # If disabled, enable it NOW before switching:

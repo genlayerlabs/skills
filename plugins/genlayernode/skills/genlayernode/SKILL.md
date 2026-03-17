@@ -164,9 +164,22 @@ For patch versions (v0.4.x), the database MUST be shared, not copied:
 /opt/genlayer-node/v0.4.4/data/node/genlayer.db  -> symlink to shared
 ```
 
-### LLM Provider Configuration
-Your chosen LLM provider MUST be enabled in GenVM config. Check and enable if needed:
+### LLM Strategy and Provider Configuration
+
+Two LLM strategies are available:
+- **default** — Random provider selection from enabled backends
+- **greybox** — Deterministic ordered fallback via OpenRouter (requires `OPENROUTERKEY`)
+
 ```bash
+# 1. Apply release LLM config (has all backends)
+cp third_party/genvm/config/genvm-modules-llm-release.yaml \
+   third_party/genvm/config/genvm-module-llm.yaml
+
+# 2. For greybox strategy, switch lua script:
+sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' \
+  third_party/genvm/config/genvm-module-llm.yaml
+
+# 3. Enable your provider (replace <provider> with name from mapping):
 # Provider mapping (env var -> config name):
 #   HEURISTKEY -> heurist
 #   COMPUT3KEY -> comput3
@@ -174,16 +187,21 @@ Your chosen LLM provider MUST be enabled in GenVM config. Check and enable if ne
 #   LIBERTAI_API_KEY -> libertai
 #   ANTHROPICKEY -> anthropic
 #   GEMINIKEY -> google
-
-# Check if your provider is enabled (replace <provider> with name from mapping):
-grep -A 2 '<provider>:' third_party/genvm/config/genvm-module-llm.yaml
-
-# If shows 'enabled: false', enable it:
+#   OPENROUTERKEY -> openrouter
+#   MORPHEUS_API_KEY -> morpheus
 sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' \
   third_party/genvm/config/genvm-module-llm.yaml
 ```
 
 **Symptom if not enabled:** Node fails to start with "module_failed_to_start" error.
+
+### Updating Greybox on a Running Node
+To update the Lua script or LLM YAML without a full redeploy, see
+`common-procedures.md` -> "Update Greybox Config on Running Node".
+Key points:
+- Update files in all GenVM instance config directories
+- Restart LLM module per GenVM manager: `curl -X POST http://127.0.0.1:<port>/module/stop` then `/module/start`
+- No atomic restart — each instance restarts independently
 
 ---
 
@@ -318,6 +336,8 @@ Guide validators through complete GenLayer node installation including:
 | Google | `GEMINIKEY` |
 | xAI (Grok) | `XAIKEY` |
 | Atoma | `ATOMAKEY` |
+| OpenRouter | `OPENROUTERKEY` |
+| Morpheus | `MORPHEUS_API_KEY` |
 
 ## Installation Flow
 
