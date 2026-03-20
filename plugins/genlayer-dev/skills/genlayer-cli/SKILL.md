@@ -25,9 +25,9 @@ genlayer network info                   # Show current network config
 genlayer network list                   # List all networks
 ```
 
-Networks: `localnet`, `testnet-asimov`, `testnet-bradbury`, `mainnet`
+Networks: `localnet`, `studionet`, `testnet-asimov`, `testnet-bradbury`
 
-Per-command override: `--rpc <url>` or `--network <name>`
+**Always use `genlayer network set` instead of `--rpc`** for built-in networks. The `--rpc` flag bypasses the chain configuration (consensus contract ABI, `isStudio` flag, etc.) and will cause transaction polling failures. Only use `--rpc` for custom/private networks not in the built-in list.
 
 ## Account Management
 

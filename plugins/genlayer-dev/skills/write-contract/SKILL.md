@@ -209,12 +209,35 @@ class Item:
     tags: DynArray[str]
 ```
 
+### Declaration rules
+
+- **Storage fields are class-level type annotations** — NOT assignments in `__init__`. The type annotation declares the storage slot; `__init__` only sets initial values.
+
+```python
+class MyContract(gl.Contract):
+    owner: Address            # ← storage field (class-level annotation)
+    items: DynArray[str]      # ← storage field
+    count: u256               # ← storage field
+
+    def __init__(self):
+        self.owner = gl.message.sender_address   # ← initial value only
+        # DynArray/TreeMap don't need initialization — they start empty
+```
+
+Wrong:
+```python
+def __init__(self):
+    self.owner: Address = gl.message.sender_address  # ← NOT a storage field!
+    self.items = []                                    # ← list is not a storage type
+```
+
 ### Layout rules
 
 - **Append new fields at END only** if using upgradable contracts. Storage layout is order-sensitive — reordering or inserting fields breaks deployed contracts. See the upgradability docs for details.
 - **Default values for new fields** — existing storage reads zero/empty for fields added after deployment.
 - **Initialize DynArray/TreeMap by appending** in `__init__`, not by assignment. `self.items = [x]` does not work.
 - **O(1) stat indexes** — maintain a `TreeMap[str, u256]` counter alongside collections for fast counts.
+- **Complex data in DynArray** — for storing structured data (dicts, nested objects), serialize to JSON string: `DynArray[str]` with `json.dumps()`/`json.loads()`.
 
 ## LLM Resilience
 
@@ -264,6 +287,55 @@ result = gl.nondet.exec_prompt(task, response_format="json")
 ```
 
 This tells the LLM to return JSON. Still validate and clean — LLMs don't always comply.
+
+## Agentic Pattern — LLM-Generated Code + Deterministic Eval
+
+LLMs can't reliably inspect characters in their input (they hallucinate em dashes, miscount characters, etc.). But they CAN generate correct Python code for these checks. Use `eval()` inside `spawn_sandbox()` to run LLM-generated code deterministically, then feed results back as ground truth.
+
+```python
+def check_rules(self, text: str, rules: str) -> dict:
+    def run():
+        # Step 1: LLM generates Python checks from natural language rules
+        checks = gl.nondet.exec_prompt(
+            f"""Generate Python expressions to verify these rules.
+Variable `text` contains the post. Skip subjective rules.
+Rules: {rules}
+Output JSON: {{"checks": [{{"rule": "...", "expression": "..."}}]}}""",
+            response_format="json",
+        ).get("checks", [])
+
+        # Step 2: eval() all checks in one sandbox — deterministic, no hallucination
+        def eval_checks():
+            results = []
+            for c in checks:
+                try:
+                    ok = eval(c["expression"], {
+                        "__builtins__": {"len": len, "any": any, "all": all, "str": str},
+                        "text": text,
+                    })
+                    results.append({"rule": c["rule"], "result": "SATISFIED" if ok else "VIOLATED"})
+                except Exception:
+                    pass  # skip broken expressions, let LLM handle the rule
+            return results
+
+        check_results = gl.vm.unpack_result(gl.vm.spawn_sandbox(eval_checks))
+
+        # Step 3: LLM scores with ground truth — can't hallucinate what code already verified
+        ground_truth = "\n".join(f"- {r['rule']}: {r['result']}" for r in check_results)
+        score = gl.nondet.exec_prompt(
+            f"""GROUND TRUTH (from code — do NOT override): {ground_truth}
+For rules not listed, use your judgment.
+Post: {text}  Rules: {rules}
+Output: {{"analysis": "...", "passed": true/false}}""",
+            response_format="json",
+        )
+
+        return {"passed": score.get("passed", False), "analysis": score.get("analysis", ""), "checks": check_results}
+
+    return gl.eq_principle.prompt_comparative(run, "Must agree on passed/failed and same rule violations")
+```
+
+When to use: any contract where rules are specified in natural language and include character-level or format checks that LLMs are unreliable at (specific punctuation, character counts, URL presence, hashtag limits, etc.).
 
 ## Cross-Contract Interaction
 
