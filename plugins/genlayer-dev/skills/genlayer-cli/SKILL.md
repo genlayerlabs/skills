@@ -64,17 +64,19 @@ genlayer account import --name imported --private-key 0x... --password "mypasswo
 echo "mypassword" | genlayer deploy --contract contracts/my_contract.py --args "arg1"
 ```
 
-## Funding Testnet Accounts
+## Funding Accounts
 
-New accounts start with 0 GEN. To deploy or write on testnets, fund the account first.
+**Studionet does not require GEN tokens.** It is a development network where transactions are free. You can deploy and interact with contracts on Studionet without any funding.
+
+For **Testnet Asimov** and **Testnet Bradbury**, new accounts start with 0 GEN. You must fund the account before deploying or writing contracts.
 
 **Faucet**: [https://testnet-faucet.genlayer.foundation/](https://testnet-faucet.genlayer.foundation/)
 
-1. Get your address: `genlayer account` → copy the `address` field
+1. Get your address: `genlayer account` -> copy the `address` field
 2. Go to the faucet URL, paste the address, and claim 100 GEN (once per 24 hours)
 3. Verify: `genlayer account` should show the updated balance
 
-The faucet uses Cloudflare Turnstile and cannot be automated from CLI — the user must claim manually in a browser. Works for both Testnet Bradbury and Testnet Asimov.
+The faucet uses Cloudflare Turnstile and cannot be automated from CLI -- the user must claim manually in a browser. Works for both Testnet Bradbury and Testnet Asimov.
 
 ## Contract Deployment
 
