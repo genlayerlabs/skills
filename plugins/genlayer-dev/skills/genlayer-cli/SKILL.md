@@ -27,6 +27,8 @@ genlayer network list                   # List all networks
 
 Networks: `localnet`, `studionet`, `testnet-asimov`, `testnet-bradbury`
 
+**Note**: `studionet` is gasless — no tokens are required to deploy or interact with contracts. A 0 GEN balance is expected and does not prevent any operations.
+
 **Always use `genlayer network set` instead of `--rpc`** for built-in networks. The `--rpc` flag bypasses the chain configuration (consensus contract ABI, `isStudio` flag, etc.) and will cause transaction polling failures. Only use `--rpc` for custom/private networks not in the built-in list.
 
 ## Account Management
@@ -64,9 +66,13 @@ genlayer account import --name imported --private-key 0x... --password "mypasswo
 echo "mypassword" | genlayer deploy --contract contracts/my_contract.py --args "arg1"
 ```
 
-## Funding Testnet Accounts
+## Funding Accounts
 
-New accounts start with 0 GEN. To deploy or write on testnets, fund the account first.
+New accounts start with 0 GEN. Funding requirements depend on the network:
+
+**StudioNet is gasless** — accounts with 0 GEN can deploy and interact with contracts without any funding. A zero balance on StudioNet is expected and normal. Skip funding entirely when using StudioNet.
+
+For **testnets** (Bradbury, Asimov), fund the account before deploying or writing.
 
 **Faucet**: [https://testnet-faucet.genlayer.foundation/](https://testnet-faucet.genlayer.foundation/)
 
