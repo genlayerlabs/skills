@@ -76,11 +76,11 @@ For **testnets** (Bradbury, Asimov), fund the account before deploying or writin
 
 **Faucet**: [https://testnet-faucet.genlayer.foundation/](https://testnet-faucet.genlayer.foundation/)
 
-1. Get your address: `genlayer account` → copy the `address` field
+1. Get your address: `genlayer account` -> copy the `address` field
 2. Go to the faucet URL, paste the address, and claim 100 GEN (once per 24 hours)
 3. Verify: `genlayer account` should show the updated balance
 
-The faucet uses Cloudflare Turnstile and cannot be automated from CLI — the user must claim manually in a browser. Works for both Testnet Bradbury and Testnet Asimov.
+The faucet uses Cloudflare Turnstile and cannot be automated from CLI -- the user must claim manually in a browser. Works for both Testnet Bradbury and Testnet Asimov.
 
 ## Contract Deployment
 
