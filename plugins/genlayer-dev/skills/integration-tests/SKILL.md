@@ -80,7 +80,7 @@ networks:
   localnet:
     # GenLayer Studio running locally
   studionet:
-    # studio.genlayer.com
+    # studio.genlayer.com — gasless, no funding needed (0 GEN balance is fine)
   testnet_bradbury:
     accounts:
       - "${ACCOUNT_PRIVATE_KEY_1}"
@@ -102,7 +102,7 @@ def test_expensive_operation():
 
 - **GLSim** (`pip install genlayer-test[sim]`, `glsim --port 4000 --validators 5`) — lightweight, no Docker, ~1s startup. Runs Python natively, not in GenVM. Good for fast iteration.
 - **Studio local** (`genlayer up`) — full GenVM, real consensus, Docker required. Validates runtime compatibility.
-- **studio.genlayer.com** — hosted Studio, no setup, rate-limited.
+- **studio.genlayer.com** (StudioNet) — hosted Studio, no setup, rate-limited. **Gasless: no tokens required.** Accounts with 0 GEN balance can deploy and run tests normally.
 - **Testnet Bradbury** — real network, requires funded accounts.
 
 ## When to Use Integration Tests
