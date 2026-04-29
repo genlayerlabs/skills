@@ -125,18 +125,43 @@ a:hover { text-decoration: underline; }
 
 .hero-cta svg { width: 14px; height: 14px; flex-shrink: 0; }
 
-.hero-methods {
-    margin-top: 1rem;
-    font-size: 12px;
-    color: var(--dimmed);
+.hero-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
 }
 
-.hero-methods code {
-    background: var(--bg-2);
-    padding: 0.15rem 0.4rem;
-    border-radius: 3px;
-    color: var(--fg);
+.hero-step {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.step-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    font-size: 11px;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.hero-step-choices {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.step-or {
     font-size: 12px;
+    color: var(--dimmed);
 }
 
 /* ── Section Headers ── */
@@ -462,13 +487,28 @@ footer a:hover { color: var(--accent); }
     <div class="hero">
         <p class="tagline">AI-native procedures for intelligent contract development and validator operations<span class="cursor"></span></p>
 
-        <button class="hero-cta" onclick="copyText('/plugin marketplace add genlayerlabs/claude-code-skills', this)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            <span>/plugin marketplace add genlayerlabs</span>
-        </button>
-
-        <div class="hero-methods">
-            Then install: <code>/plugin install genlayer-dev@genlayerlabs</code> or <code>/plugin install genlayernode@genlayerlabs</code>
+        <div class="hero-steps">
+            <div class="hero-step">
+                <span class="step-label">1</span>
+                <button class="hero-cta" onclick="copyText('/plugin marketplace add genlayerlabs/claude-code-skills', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    <span>/plugin marketplace add genlayerlabs</span>
+                </button>
+            </div>
+            <div class="hero-step">
+                <span class="step-label">2</span>
+                <div class="hero-step-choices">
+                    <button class="hero-cta" onclick="copyText('/plugin install genlayer-dev@genlayerlabs', this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                        <span>/plugin install genlayer-dev</span>
+                    </button>
+                    <span class="step-or">or</span>
+                    <button class="hero-cta" onclick="copyText('/plugin install genlayernode@genlayerlabs', this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                        <span>/plugin install genlayernode</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
