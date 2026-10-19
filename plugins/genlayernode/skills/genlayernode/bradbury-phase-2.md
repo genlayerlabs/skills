@@ -14,7 +14,12 @@ is published or compatible with this deployment.
 | Block-zero hash | `0x17d89764d4f4f963158fc4c5e8f2cb670c2837740b35f37081c12860c3df97e4` |
 | AddressManager (`consensusaddress`) | `0x3F71AE080BD6270A91dBcc7960d88797828538E0` |
 | Consensus start block (`consensus.genesis`) | `47930` (AddressManager creation block) |
-| Staking | `0xD8fBa96C0dBB0257028dBc0107060b958e5c7113` |
+| Staking / ConsensusMain | Resolve `getAddress("Staking")` / `getAddress("ConsensusMain")` on AddressManager |
+
+AddressManager is the deployment anchor. Resolve the current Staking and ConsensusMain
+entries through it and require code at those addresses; do not pin their initial
+addresses as network identity. The trusted node manifest remains a separate
+admission requirement and must match the approved deployment.
 
 The chain genesis hash and consensus start block are different settings.
 The legacy networks also used chain ID 4221. Do not accept chain ID alone, copy
@@ -33,11 +38,18 @@ If the check fails, stop before signing or starting the node and ask the RPC own
 to fix routing. A configured public hostname is not proof it is ready.
 
 A successful HTTP check does not qualify a validator's WebSocket connection.
-Obtain validator HTTP/WS access and any required keys from the Foundation's
-appointed RPC operator. Confirm ownership and delivery timing; do not invent a
-key provider, assume public access has sufficient quota, or derive a WS endpoint
-by replacing `https` with `wss`. Verify `eth_subscribe` / `eth_unsubscribe` using
-the assigned endpoint, and run the release's doctor before startup.
+Create a key at [app.conduit.xyz/rpc-keys](https://app.conduit.xyz/rpc-keys).
+Set it in the node's environment:
+
+```sh
+export GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY="<your Conduit API key>"
+```
+
+With Docker, add the same variable to the private `.env` file next to
+`docker-compose.yaml`. Never put the key in RPC/WebSocket URLs or anywhere in
+`config.yaml`. Current nodes send it as `X-AccessKey`.
+Verify `eth_subscribe` / `eth_unsubscribe` with the assigned WS endpoint and key;
+anonymous HTTP access does not establish WS readiness. Run doctor before startup.
 
 Provision the trusted Phase 2 manifest and set `consensus.chainid: "4221"` and
 `consensus.manifestpath: "configs/node/protocol-manifest.json"`. The HTTP and WS

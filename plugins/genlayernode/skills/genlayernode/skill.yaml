@@ -55,7 +55,7 @@ config_wizard:
 patterns:
   - id: network-preflight
     command: "node <skill-directory>/scripts/check-network.mjs"
-    notes: "Set BRADBURY_RPC_URL privately for assigned endpoints. Separately test WS with X-AccessKey."
+    notes: "Set BRADBURY_RPC_URL privately for assigned endpoints. Resolve current contracts through AddressManager. Create a key at https://app.conduit.xyz/rpc-keys; set GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY in the node environment or Compose .env. Separately test WS with X-AccessKey."
   - id: genvm-setup
     command: "python3 ./opt/genvm/current/bin/setup.py"
     notes: "Python 3.10+, pip and venv; run in the final install directory."

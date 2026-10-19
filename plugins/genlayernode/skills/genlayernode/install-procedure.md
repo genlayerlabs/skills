@@ -54,7 +54,8 @@ approved release/network publication at `configs/node/protocol-manifest.json`.
 Do not generate a trust manifest from the RPC you are trying to authenticate.
 The manifest must describe chain 4221 and the Phase 2 AddressManager.
 
-Set HTTP and WS endpoints and provision any key privately as
+Create a Conduit key at [app.conduit.xyz/rpc-keys](https://app.conduit.xyz/rpc-keys).
+Set HTTP and WS endpoints and provision the key privately as
 `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY`; the node sends `X-AccessKey`.
 Run the network preflight against the selected HTTP endpoint and verify WS
 subscription/unsubscription with that same identity. Do not log the key.
