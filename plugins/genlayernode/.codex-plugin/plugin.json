@@ -1,7 +1,7 @@
 {
   "name": "genlayernode",
-  "version": "1.0.1",
-  "description": "Interactive wizard to set up a GenLayer validator node on Linux.",
+  "version": "1.1.0",
+  "description": "Install, upgrade and diagnose Bradbury Phase 2 validator nodes with verified network identity and release artifacts.",
   "author": {
     "name": "GenLayer Labs",
     "url": "https://github.com/genlayerlabs"

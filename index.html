@@ -886,11 +886,11 @@ genlayer account send 0x123...abc 10gen
         {
             id: 'genlayernode',
             name: 'Validator Node Setup',
-            desc: 'Interactive wizard and triage runbook — from bare Linux to running validator in 20–45 minutes',
+            desc: 'Bradbury Phase 2 installation, network checks and validator operation',
             badge: 'plugin',
             content: `## Validator Node Setup
 
-A comprehensive interactive wizard that takes you from a bare Linux server to a fully operational GenLayer validator node.
+A comprehensive interactive wizard for Bradbury Phase 2 validator nodes. It verifies the chain genesis and deployed contracts before staking or startup, uses the public RPC and explorer domains, and requires an explicitly qualified node/CLI release.
 
 ### Process Overview
 
@@ -913,12 +913,12 @@ Step 11  Monitoring setup (optional telemetry)
 
 | Resource | Minimum | Recommended |
 |----------|---------|-------------|
-| Architecture | AMD64 only | — |
+| Architecture | Use a published artifact for the host | AMD64 or ARM64 where supported |
 | RAM | 16 GB | 32 GB |
 | CPU | 8 cores | 16+ cores |
 | Storage | 128 GB SSD | 256+ GB |
-| GEN tokens | 42,000+ | — |
-| ETH for gas | ~0.1 ETH | — |
+| Self-stake | Query the deployed minimum | GEN on Bradbury Phase 2 |
+| Operator gas | GEN on Bradbury Phase 2 | Monitor and replenish |
 
 ### Three Key Addresses
 
@@ -926,7 +926,7 @@ Step 11  Monitoring setup (optional telemetry)
 |---------|---------|
 | **Owner** | Cold wallet — controls validator, stays local |
 | **Operator** | Hot wallet — signs blocks, goes on server |
-| **Validator** | Smart contract on-chain, used in config |
+| **Validator** | On-chain wallet, distinct from the consensus AddressManager |
 
 ### Deployment Methods
 
@@ -940,7 +940,7 @@ Includes safe runbooks for shared RPC outages, temporary validator bans, and LLM
 
 ### Supported LLM Providers
 
-Heurist, Comput3, io.net, LibertAI, Anthropic, Google, xAI, Atoma
+Configure a backend supported by the pinned GenVM release; verify it with doctor and runtime health checks.
 
 > Install: \`/plugin install genlayernode@genlayerlabs\``
         },

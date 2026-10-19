@@ -1,287 +1,64 @@
 validations:
-  # ============================================================================
-  # SYSTEM REQUIREMENTS
-  # ============================================================================
-
-  - id: architecture-amd64
+  - id: architecture
     type: command
-    command: "uname -m | grep -E '^(x86_64|amd64)$' >/dev/null"
-    expect: "exit 0"
-    message: "Only AMD64 Linux is supported. ARM64 (including Apple Silicon) is not supported."
-
-  - id: ram-sufficient
+    command: "test \"$(uname -m)\" = x86_64 && test \"$(uname -s)\" = Linux"
+    expect: exit 0
+    message: "The validator binary requires AMD64 Linux."
+  - id: python-version
     type: command
-    command: "[ $(free -g | awk '/Mem:/ {print $2}') -ge 15 ]"
-    expect: "exit 0"
-    message: "At least 16GB RAM is required. Current system has insufficient memory."
-
-  - id: disk-sufficient
+    command: "python3 -c 'import sys; assert sys.version_info >= (3, 10)'"
+    expect: exit 0
+    message: "Python 3.10+ is required for GenVM setup."
+  - id: python-tools
     type: command
-    command: "[ $(df -BG . | awk 'NR==2 {print $4}' | tr -d 'G') -ge 100 ]"
-    expect: "exit 0"
-    message: "At least 100GB free disk space is required."
-
-  # ============================================================================
-  # SOFTWARE PREREQUISITES
-  # ============================================================================
-
-  - id: nodejs-installed
+    command: "python3 -m pip --version && python3 -m venv --help >/dev/null"
+    expect: exit 0
+    message: "Install pip and venv for the selected python3."
+  - id: docker-compose
     type: command
-    command: "node --version 2>/dev/null | grep -E 'v(1[89]|[2-9][0-9])' >/dev/null"
-    expect: "exit 0"
-    message: "Node.js v18+ is required. Install with: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
-
-  - id: npm-installed
+    command: "docker compose version"
+    expect: exit 0
+    message: "Docker and the Compose plugin are required."
+  - id: host-capacity
+    type: manual
+    expect: "At least 16 GB RAM, 8 CPU cores and 128 GB SSD/NVMe"
+    message: "Check available capacity on the actual target host."
+  - id: bradbury-network
     type: command
-    command: "command -v npm >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "npm is required. Usually installed with Node.js."
-
-  - id: docker-installed
+    command: "node <skill-directory>/scripts/check-network.mjs"
+    expect: exit 0
+    message: "Require chain ID, pinned genesis and deployed Phase 2 contracts."
+  - id: websocket-access
+    type: manual
+    expect: "Authenticated handshake, matching chain/genesis, subscription and unsubscription succeed"
+    message: "HTTP 401 requires the assigned RPC key; do not log headers or credentials."
+  - id: release-verified
+    type: manual
+    expect: "Approved release tarball and signed checksums exist; cosign and tarball SHA256 verification pass"
+    message: "A changelog entry or image tag is not proof of a published binary."
+  - id: protocol-manifest
+    type: manual
+    expect: "Trusted manifest matches chain 4221 and AddressManager 0x3F71AE080BD6270A91dBcc7960d88797828538E0"
+    message: "Set consensus.manifestpath and preserve the trusted publication provenance."
+  - id: secrets-provisioned
+    type: manual
+    expect: "Node password, required RPC key and enabled LLM keys are present privately"
+    message: "Report configured/not configured only. Binary uses GENLAYERNODE_PASSWORD; Compose uses NODE_PASSWORD."
+  - id: operator-registration
+    type: manual
+    expect: "Imported operator public address matches the registered Phase 2 validator wallet"
+    message: "Owner key stays off-server; operator needs GEN on the new L2."
+  - id: doctor
     type: command
-    command: "command -v docker >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "Docker is required. Install with: curl -fsSL https://get.docker.com | sh"
-
-  - id: docker-compose-installed
+    command: "./bin/genlayernode doctor"
+    expect: exit 0
+    message: "Run from the final installation with actual config, trusted manifest and exported secrets."
+  - id: node-health
     type: command
-    command: "docker compose version >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "Docker Compose is required. Usually included with Docker."
-
-  - id: python3-installed
-    type: command
-    command: "command -v python3 >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "Python 3 is required. Install with: sudo apt install python3"
-
-  - id: python3-pip-installed
-    type: command
-    command: "command -v pip3 >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "pip3 is required. Install with: sudo apt install python3-pip"
-
-  - id: python3-venv-installed
-    type: command
-    command: "dpkg -l python3-venv >/dev/null 2>&1 || python3 -m venv --help >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "python3-venv is required. Install with: sudo apt install python3-venv"
-
-  - id: wget-installed
-    type: command
-    command: "command -v wget >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "wget is required. Install with: sudo apt install wget"
-
-  - id: jq-installed
-    type: command
-    command: "command -v jq >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "jq is recommended. Install with: sudo apt install jq"
-
-  # ============================================================================
-  # GENLAYER CLI
-  # ============================================================================
-
-  - id: genlayer-cli-installed
-    type: command
-    command: "command -v genlayer >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "GenLayer CLI not installed. Install with: npm install -g genlayer"
-
-  # ============================================================================
-  # DOCKER STATE
-  # ============================================================================
-
-  - id: docker-running
-    type: command
-    command: "docker info >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "Docker daemon is not running. Start with: sudo systemctl start docker"
-
-  - id: docker-no-sudo
-    type: command
-    command: "docker ps >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "Cannot run Docker without sudo. Run: sudo usermod -aG docker $USER, then log out and back in."
-
-  # ============================================================================
-  # POST-INSTALLATION CHECKS
-  # ============================================================================
-
-  - id: config-file-exists
-    type: command
-    command: "[ -f configs/node/config.yaml ]"
-    expect: "exit 0"
-    message: "Configuration file not found. Create configs/node/config.yaml"
-
-  - id: config-valid-yaml
-    type: command
-    command: "python3 -c 'import yaml; yaml.safe_load(open(\"configs/node/config.yaml\"))' 2>/dev/null"
-    expect: "exit 0"
-    message: "Configuration file has YAML syntax errors."
-
-  - id: genvm-binaries-exist
-    type: command
-    command: "[ -f third_party/genvm/bin/genvm ] && [ -f third_party/genvm/bin/genvm-modules ]"
-    expect: "exit 0"
-    message: "GenVM binaries not found. Run: python3 ./third_party/genvm/bin/setup.py"
-
-  - id: llm-key-configured
-    type: command
-    command: "[ -n \"${HEURISTKEY:-}\" ] || [ -n \"${COMPUT3KEY:-}\" ] || [ -n \"${IOINTELLIGENCEKEY:-}\" ] || [ -n \"${OPENROUTERKEY:-}\" ]"
-    expect: "exit 0"
-    message: "No LLM API key configured. Set HEURISTKEY, COMPUT3KEY, IOINTELLIGENCEKEY, or OPENROUTERKEY"
-
-  - id: webdriver-running
-    type: command
-    command: "docker ps | grep -q webdriver"
-    expect: "exit 0"
-    message: "WebDriver container not running. Start with: docker compose up -d"
-
-  - id: node-health-ok
-    type: command
-    command: "curl -sf http://localhost:9153/health | grep -q 'up'"
-    expect: "exit 0"
-    message: "Node health check failed. Check if node is running."
-
-  # ============================================================================
-  # SYSTEMD SERVICE CHECKS
-  # ============================================================================
-
-  - id: systemd-service-exists
-    type: command
-    command: "[ -f /etc/systemd/system/genlayer-node.service ]"
-    expect: "exit 0"
-    message: "Systemd service not installed. Create service file in /etc/systemd/system/"
-
-  - id: systemd-service-enabled
-    type: command
-    command: "systemctl is-enabled genlayer-node >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "Service not enabled. Run: sudo systemctl enable genlayer-node"
-
-  - id: systemd-service-active
-    type: command
-    command: "systemctl is-active genlayer-node >/dev/null 2>&1"
-    expect: "exit 0"
-    message: "Service not running. Run: sudo systemctl start genlayer-node"
-
-  # ============================================================================
-  # WEBDRIVER HEALTH CHECKS
-  # ============================================================================
-
-  - id: webdriver-healthy
-    type: command
-    command: "docker inspect --format='{{.State.Health.Status}}' genlayer-node-webdriver 2>/dev/null | grep -q 'healthy'"
-    expect: "exit 0"
-    message: "WebDriver not healthy. Check: docker logs genlayer-node-webdriver"
-
-  # ============================================================================
-  # ENVIRONMENT FILE CHECKS
-  # ============================================================================
-
-  - id: env-file-exists
-    type: command
-    command: "[ -f /opt/genlayer-node/.env ] || [ -f .env ]"
-    expect: "exit 0"
-    message: ".env file not found. Create from template."
-
-  - id: rpc-url-configured
-    type: command
-    command: "grep -q 'GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL' /opt/genlayer-node/.env 2>/dev/null || grep -q 'GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL' .env 2>/dev/null"
-    expect: "exit 0"
-    message: "RPC URL not configured in .env file"
-
-  - id: validator-address-configured
-    type: command
-    command: "grep -q 'GENLAYERNODE_NODE_VALIDATORWALLETADDRESS' /opt/genlayer-node/.env 2>/dev/null || grep -q 'GENLAYERNODE_NODE_VALIDATORWALLETADDRESS' .env 2>/dev/null"
-    expect: "exit 0"
-    message: "Validator address not configured in .env file"
-
-  - id: rpc-url-reachable
-    type: command
-    command: |
-      sh -c '. /opt/genlayer-node/.env 2>/dev/null; [ -n "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] || . ./.env 2>/dev/null; [ -n "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] || exit 1; curl -sf -m 30 -X POST "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" -H "Content-Type: application/json" -d '\''{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'\'' | grep -q "\"result\":\"0x"'
-    expect: "exit 0"
-    message: "Cannot reach the configured rollup RPC endpoint. Check network connectivity."
-
-  - id: configured-rpc-chainid-reachable
-    type: command
-    command: |
-      sh -c '. /opt/genlayer-node/.env 2>/dev/null; [ -n "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] || . ./.env 2>/dev/null; [ -n "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] || exit 1; curl -sf -m 10 -X POST "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" -H "Content-Type: application/json" -d '\''{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'\'' | grep -q "\"result\":\"0x"'
-    expect: "exit 0"
-    message: "Configured rollup RPC did not answer eth_chainId. This may be a shared RPC outage; verify before changing node config."
-
-  - id: health-not-temporarily-banned
-    type: command
-    command: "curl -sf http://localhost:9153/health | grep -vi 'validator is banned' >/dev/null"
-    expect: "exit 0"
-    message: "Health endpoint reports a temporary validator ban. Fix the root cause, run doctor, then request unban with the validator wallet address only."
-
-  # ============================================================================
-  # ALLOY TELEMETRY CHECKS
-  # ============================================================================
-
-  - id: alloy-container-running
-    type: command
-    command: "docker ps | grep -q genlayer-node-alloy"
-    expect: "exit 0"
-    message: "Alloy telemetry container not running. Start with: docker compose --profile monitoring up -d"
-
-  - id: alloy-bind-mount-fresh
-    type: command
-    command: |
-      # Compare host and container log timestamps
-      # If they differ by more than 5 minutes, bind mount is stale
-      HOST_TIME=$(stat -c %Y /opt/genlayer-node/data/node/logs/node.log 2>/dev/null || echo 0)
-      CONTAINER_TIME=$(docker exec genlayer-node-alloy stat -c %Y /var/log/genlayer/node.log 2>/dev/null || echo 0)
-      DIFF=$((HOST_TIME - CONTAINER_TIME))
-      [ ${DIFF#-} -lt 300 ]  # Difference less than 5 minutes
-    expect: "exit 0"
-    message: |
-      Alloy bind mount is stale - container sees old log files.
-      This means telemetry is NOT being sent to Grafana.
-      Fix: docker restart genlayer-node-alloy
-      See sharp-edges.yaml -> alloy-stale-bind-mount
-
-  - id: alloy-logs-no-errors
-    type: command
-    command: "! docker logs genlayer-node-alloy 2>&1 | tail -50 | grep -q '401\\|403\\|error'"
-    expect: "exit 0"
-    message: "Alloy has authentication or other errors. Check: docker logs genlayer-node-alloy"
-
-  - id: systemd-has-alloy-restart
-    type: command
-    command: "grep -q 'genlayer-node-alloy' /etc/systemd/system/genlayer-node.service 2>/dev/null"
-    expect: "exit 0"
-    message: |
-      Systemd service missing ExecStartPost for Alloy restart.
-      Add this line after ExecStart in /etc/systemd/system/genlayer-node.service:
-      ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
-      Then run: sudo systemctl daemon-reload
-
-# Validations that must pass before installation
-on_stop:
-  - architecture-amd64
-  - nodejs-installed
-  - docker-installed
-  - docker-running
-  - python3-installed
-
-# Validations that are warnings
-on_warn:
-  - ram-sufficient
-  - disk-sufficient
-  - jq-installed
-  - docker-no-sudo
-  - python3-pip-installed
-  - python3-venv-installed
-  - systemd-has-alloy-restart
-
-# Post-update validations (run after upgrade)
-post_update:
-  - node-health-ok
-  - alloy-container-running
-  - alloy-bind-mount-fresh
-  - alloy-logs-no-errors
+    command: "curl -fsS http://localhost:9153/health"
+    expect: "Healthy required checks; inspect body, not only HTTP status"
+    message: "Check sync and validator identity separately from active-set membership."
+  - id: monitoring-delivery
+    type: manual
+    expect: "When enabled, metrics and logs arrive in the operator-selected tenant"
+    message: "A running Alloy container alone is not a delivery check."
