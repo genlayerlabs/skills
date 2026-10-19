@@ -239,8 +239,8 @@ python3 -c "import json; m=json.load(open('/opt/genlayer-node/${VERSION}/configs
 (replace each key in its section; never add a second `rollup:` or `consensus:`). Example — Testnet Bradbury:
 ```yaml
 rollup:
-  genlayerchainrpcurl: "https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
-  genlayerchainwebsocketurl: "wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
+  genlayerchainrpcurl: "https://rpc.testnet-chain.genlayer.com/"
+  genlayerchainwebsocketurl: "wss://rpc.testnet-chain.genlayer.com/"
   provider: "conduit"
 
 consensus:

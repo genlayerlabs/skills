@@ -256,8 +256,8 @@ sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'
 
 **Expected output** (example: Testnet Bradbury):
 ```
-  ✓ GenLayer Chain RPC: Connected to https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz
-  ✓ GenLayer Chain WebSocket: Connected to wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz
+  ✓ GenLayer Chain RPC: Connected to https://rpc.testnet-chain.genlayer.com
+  ✓ GenLayer Chain WebSocket: Connected to wss://rpc.testnet-chain.genlayer.com
   ✓ All required config fields are present
   ✓ Consensus Deployment (admission):
     ✓ registry 0x3F71AE080BD6270A91dBcc7960d88797828538E0 is sealed
