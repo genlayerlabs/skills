@@ -4,7 +4,7 @@
 - [Phase 2 preflight](bradbury-phase-2.md) passed: genesis, AddressManager and staking code.
 - Current and target network identities match; otherwise use fresh chain state.
 - Release tarball and signed checksums exist and verify; no guessed `latest`.
-- Python 3.10+, pip/venv, capacity and Docker Compose verified.
+- [Host prerequisites](host-prerequisites.md) checked: Python 3.10+, pip/venv, libstdc++, verification tools, Node 20+, capacity and Compose 2.24+.
 - GenVM setup run in the target release's final location (`opt/genvm/current`).
 - Trusted protocol manifest provisioned and referenced in config.
 - HTTP/WS access and any RPC key available; anonymous HTTP is not a WS test.

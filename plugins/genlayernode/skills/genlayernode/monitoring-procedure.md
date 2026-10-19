@@ -32,3 +32,38 @@ the node process. Do not export that variable into shells used for Docker
 administration, give the node Docker-group membership, or mount the host socket.
 
 Reference: [monitoring guide](https://docs.genlayer.com/validators/monitoring).
+
+## Enable and diagnose delivery
+
+Before starting Alloy, confirm `/metrics` returns Prometheus text and that the
+configured log file exists and grows. Use the validator-wallet address for
+`NODE_ID`; use a stable, distinct `VALIDATOR_NAME` per node. Prometheus and Loki
+usernames may differ. Get both destination/auth pairs from the monitoring operator.
+
+Start only the intended monitoring service and its dependencies:
+
+```bash
+docker compose --profile monitoring up -d alloy
+docker compose ps alloy
+```
+
+For binary nodes, verify the endpoint as reached from the container; host loopback
+inside Alloy is not the host's loopback. Use the release's host gateway mapping
+and `NODE_METRICS_ENDPOINT`. Check the actual log directory bind mount against the
+node's log configuration. Inspect logs locally for auth failures (401/403), wrong
+receiver paths (404), throttling (429), connection failures and unreadable log
+files. Redact secrets and authenticated URLs before sharing any output. Do not
+validate receiver credentials by printing them or placing them in process arguments.
+
+After a release-directory/symlink switch, recreate Alloy so its bind mounts follow
+the new paths; restarting an old container can retain obsolete mounts:
+
+```bash
+docker compose --profile monitoring up -d --no-deps --force-recreate alloy
+```
+
+Verify new sample/log timestamps in the receiver. If they do not advance, inspect
+mount sources, permissions, labels and receiver errors. Do not erase Alloy's WAL
+or positions as a first response. Preserve its data across ordinary restarts.
+For multiple nodes, configure distinct targets/labels and verify each one, rather
+than accepting one successful sample as proof that every node is monitored.

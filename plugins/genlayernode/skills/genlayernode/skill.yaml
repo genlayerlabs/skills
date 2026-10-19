@@ -87,7 +87,7 @@ procedure:
   - phase: scope
     action: "Explain steps; identify host, authorization, release and operation."
   - phase: preflight
-    action: "Read bradbury-phase-2.md; run validations and proactively check sharp-edges.yaml."
+    action: "Read host-prerequisites.md and install missing tools; then bradbury-phase-2.md, validations and sharp-edges.yaml."
   - phase: staking
     action: "Follow staking-wizard-procedure.md or inspect existing registration."
   - phase: install-or-upgrade

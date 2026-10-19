@@ -79,3 +79,33 @@ edges:
     detect: "Validator is registered but absent from the active-validator list in epoch 0."
     impact: "Registration may be mistaken for failure or for active participation."
     fix: "Inspect the joined registry, live self-stake minimum and activation/priming state separately. Do not advance epochs."
+  - id: missing-clean-host-dependencies
+    severity: high
+    detect: "Run host-prerequisites.md checks before download, CLI or setup."
+    impact: "A developer machine can hide absent curl, cosign, Python venv, libstdc++ or supported Node.js."
+    fix: "Install the documented packages for the actual distribution and verify tool versions; do not skip failed checks."
+  - id: compose-too-old
+    severity: high
+    detect: "docker compose version is older than 2.24 or rejects env_file.required."
+    impact: "The shipped Compose file cannot be loaded."
+    fix: "Install a supported Compose plugin through the approved Docker package repository."
+  - id: llm-host-config-not-mounted
+    severity: high
+    detect: "Docker still uses image defaults after editing host GenVM configuration."
+    impact: "The chosen provider or strategy is never applied."
+    fix: "Use the explicit read-only LLM module override in common-procedures.md and rerun doctor."
+  - id: alloy-stale-bind-mount
+    severity: high
+    detect: "After switching release paths, monitoring reads the previous node log inode or samples stop advancing."
+    impact: "A healthy new node can lose monitoring visibility."
+    fix: "Recreate only the Alloy service with the new release paths and verify fresh logs and metrics at the receiver."
+  - id: operator-unfunded
+    severity: high
+    detect: "Doctor reports insufficient operator gas; inspect balance on the verified chain."
+    impact: "Owner self-stake does not pay operator transaction fees."
+    fix: "Arrange the authorized GEN transfer to the registered operator and verify its receipt."
+  - id: temporary-validator-ban
+    severity: high
+    detect: "validator-info reports a ban, ineligibility or deferred activation."
+    impact: "A running node may not participate in consensus."
+    fix: "Diagnose RPC, LLM, web and stake/epoch conditions; do not change identity or staking automatically."

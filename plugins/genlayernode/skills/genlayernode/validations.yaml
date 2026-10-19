@@ -62,3 +62,22 @@ validations:
     type: manual
     expect: "When enabled, metrics and logs arrive in the operator-selected tenant"
     message: "A running Alloy container alone is not a delivery check."
+  - id: node-version
+    type: command
+    command: "node -e 'if (Number(process.versions.node.split(\".\")[0]) < 20) process.exit(1)'"
+    expect: exit 0
+    message: "Node.js 20+ is required for the v0.40 CLI; use Node 22 on a fresh machine."
+  - id: host-tools
+    type: command
+    command: "for tool in curl tar sha256sum cosign; do command -v \"$tool\" || exit 1; done"
+    expect: exit 0
+    message: "Complete host-prerequisites.md before release download/verification."
+  - id: docker-daemon
+    type: command
+    command: "docker info >/dev/null"
+    expect: exit 0
+    message: "Run with the selected host administrator's Docker permissions; do not grant the node Docker-group access."
+  - id: llm-module
+    type: manual
+    expect: "Selected backend enabled; default/greybox strategy preserved; Docker override mounted if customized"
+    message: "Follow common-procedures.md; setting an API key alone is insufficient."

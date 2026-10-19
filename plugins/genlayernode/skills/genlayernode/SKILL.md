@@ -52,7 +52,8 @@ Do not print partial secrets, `.env`, authorization headers or raw provider erro
 ## Non-negotiable preflight
 
 - AMD64 Linux, 16 GB RAM, 8 cores, 128 GB SSD/NVMe, Python **3.10+** with pip and
-  venv; Docker and Compose. The staking CLI also needs its supported Node.js version.
+  venv; Docker and Compose. The staking CLI and network preflight need Node.js 20+; use Node 22 for a fresh host.
+  Follow [host-prerequisites.md](host-prerequisites.md) to install and verify missing tools.
 - Run `node scripts/check-network.mjs` from this skill's directory. Configure
   `BRADBURY_RPC_URL` privately to check an assigned endpoint. Chain ID 4221 alone
   is insufficient: older deployments reused it.

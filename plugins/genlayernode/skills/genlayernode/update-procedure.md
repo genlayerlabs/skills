@@ -32,3 +32,32 @@ stopped until its rollback state is known to be compatible.
 
 A restart entails interruption; this procedure does not promise zero downtime.
 No consensus deployment or epoch changes are part of an upgrade.
+
+## State handover and rollback details
+
+Before the maintenance window, record the resolved data/keystore paths (including
+symlink targets), service user, active release and backup location. For the same
+network, preserve the existing database through an explicitly configured data
+path only when the release supports that migration. Never point a Phase 2 node at
+old Bradbury or Asimov state. A database symlink used by a host binary can escape a
+Docker bind mount; container migrations must mount the real directory.
+
+Prepare the new release, dependencies, GenVM setup and public config while the old
+node still runs. Preserve the LLM strategy using the new release's template as
+explained in common procedures. Do not start the new validator until the old one
+has stopped. Take a consistent database backup during the stop window if the
+release provides no online snapshot mechanism. Keep the private backup readable
+only by the selected administrator/service identity.
+
+For systemd, update `WorkingDirectory`, `ExecStart` and `EnvironmentFile` together,
+then `systemctl daemon-reload`. For Compose, use the new version directory and its
+actual config/data/LLM mounts. If compatibility symlinks already exist, switch
+all relevant release assets, including `opt`, configs, module files, Compose and
+Alloy configuration; do not carry over a legacy `third_party` path.
+
+After startup, verify sync, LLM/web probes and operator identity. If monitoring is
+enabled, recreate Alloy with the new paths as described in monitoring-procedure.md.
+Rollback means stopping the new process first, restoring a compatible database
+backup when needed, restoring the old service paths/config and starting exactly
+one old process. Recheck health and telemetry; merely switching a binary symlink
+does not undo a database migration.

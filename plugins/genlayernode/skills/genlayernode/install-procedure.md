@@ -5,8 +5,9 @@ Read [network preflight](bradbury-phase-2.md) and [SKILL.md](SKILL.md) first.
 ## 1. Host and release
 
 Identify the target host and access method; execute all host operations there.
-Check AMD64 Linux, 16 GB RAM, 8 cores, 128 GB SSD/NVMe, Docker Compose and Python
-3.10+ with pip/venv. Use the operator-approved release version, not `latest`.
+Complete [host prerequisites](host-prerequisites.md), including installation of
+missing dependencies and Docker daemon access. Use the operator-approved release
+version, not `latest`.
 Check its publication before modifying the host:
 
 ```sh
@@ -15,8 +16,18 @@ base=https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${version}
 curl -fI "${base}/genlayer-node-linux-amd64-${version}.tar.gz"
 ```
 
-Download the tarball, `genlayer-node_${version}_SHA256SUMS` and
-`genlayer-node_${version}_SHA256SUMS.sigstore.json` into a staging directory.
+Download all three artifacts into a new staging directory:
+
+```bash
+staging=$(mktemp -d)
+cd "$staging"
+for artifact in "genlayer-node-linux-amd64-${version}.tar.gz" \
+  "genlayer-node_${version}_SHA256SUMS" \
+  "genlayer-node_${version}_SHA256SUMS.sigstore.json"; do
+  curl -fSL "${base}/${artifact}" -o "$artifact" || exit 1
+done
+```
+
 Verify before extraction:
 
 ```sh
@@ -35,7 +46,7 @@ tarball. A missing file or failed signature stops installation. See
 ## 2. Install and initialize GenVM
 
 ```sh
-mkdir -p "/opt/genlayer-node/${version}"
+sudo install -d -o "$(id -un)" -g "$(id -gn)" "/opt/genlayer-node/${version}"
 tar -xzf "genlayer-node-linux-amd64-${version}.tar.gz" \
   -C "/opt/genlayer-node/${version}" --strip-components=1
 cd "/opt/genlayer-node/${version}"
@@ -43,7 +54,11 @@ python3 ./opt/genvm/current/bin/setup.py
 ```
 
 Run setup in the final directory: it writes absolute paths into GenVM binaries.
-Do not move the installation afterward without rerunning setup.
+Do not move the installation afterward without rerunning setup. For Docker-only
+operation, the image initializes GenVM itself; host Python setup is only needed
+when executing the host binary. Extract the release configuration assets for both
+modes. Follow [LLM configuration](common-procedures.md#configure-the-llm-module-and-strategy)
+to select and enable the provider and, for Docker, mount the configured module.
 
 ## 3. Network configuration and manifest
 
@@ -67,24 +82,42 @@ machine, or inspect an existing Phase 2 registration. Transfer only the operator
 keystore to the server using the selected secure access method.
 The owner wallet remains off the node.
 
-Create a private mode-0600 environment file. The binary needs
+Initialize a private environment file without overwriting an existing one:
+
+```bash
+umask 077
+if [ ! -e .env ]; then cp .env.example .env; fi
+chmod 600 .env
+```
+
+Edit values privately. The binary needs
 `GENLAYERNODE_PASSWORD`; Compose uses `NODE_PASSWORD`. Provision at least one
 LLM provider key actually enabled by the selected release's module configuration.
 Source a trusted environment file with `set -a; source .env; set +a` for a manual
 binary run, without displaying it.
 
-For a binary installation, import the operator using the release's supported
-interactive/password input options; check `account import --help` first:
+For the CLI's encrypted Web3/geth-compatible operator export, install the encrypted
+file directly into the configured keystore directory. With the release default
+`datadir: ./data/node` and `node.keystoredir: keystore`:
 
-```sh
-./bin/genlayernode account import --path /secure/operator-keystore.json \
-  -c "$(pwd)/configs/node/config.yaml" --setup
+```bash
+install -d -m 700 ./data/node/keystore
+test ! -e ./data/node/keystore/operator.json || exit 1
+install -m 600 /secure/operator-keystore.json ./data/node/keystore/operator.json
 ```
 
-The export passphrase and node password are separate secrets. Have the operator
-provide them through supported private input; never interpolate them in generated
-chat commands. Verify that the resulting public address matches the registration.
-Set `node.mode: validator` and the validator-wallet address explicitly.
+Run as the selected service user, or set the destination ownership to that user.
+Set `GENLAYERNODE_PASSWORD` privately to this file's **export passphrase**; this
+method preserves the encryption and does not change its password. Adapt the
+path when the configured data/keystore directories differ. Verify the export's
+public address matches the registered operator, and set `node.mode: validator`,
+`node.operatorAddress` and `node.validatorWalletAddress` explicitly in config.
+Doctor must successfully unlock the keystore before startup.
+
+The current binary's `account import --passphrase` does not prompt interactively
+for the export password. Do not claim it does, put the password in argv, or use
+`--setup` against Docker's read-only config. If re-encryption is required, use an
+approved tool with private password input before transferring the encrypted file.
 
 ## 5. WebDriver and doctor
 
@@ -103,7 +136,17 @@ starting. Do not bypass manifest verification.
 
 Run from the version directory. For a service, use an operator-selected dedicated
 user that owns the installation's writable data and does not have Docker-socket
-access. Example (substitute the selected version/user/path):
+access. On a fresh installation, after configuring and initializing this version:
+
+```bash
+id genlayer >/dev/null 2>&1 || sudo useradd --system --home-dir /opt/genlayer-node \
+  --shell /usr/sbin/nologin genlayer
+# Only the newly created version directory; never a shared data parent.
+sudo chown -R genlayer:genlayer "/opt/genlayer-node/${version}"
+```
+
+Keep the private environment and keystore files mode 0600. Example unit
+(substitute the selected version/user/path):
 
 ```ini
 [Unit]
@@ -134,9 +177,23 @@ Set `NODE_CONFIG_PATH`, `NODE_MANIFEST_PATH` and `NODE_DATA_PATH` as needed.
 The node runs as uid 10001: grant it ownership of the **new installation's** data
 directory. Do not recursively change ownership of unrelated or shared paths.
 
-The config is read-only in the container. Import the operator into the writable
-data mount and edit public addresses in the host config; do not use `--setup`
-inside the container. Keep `genvm-module-web-docker.yaml` next to Compose.
+The config is read-only in the container. Install the encrypted operator export
+on the host into the actual data mount. With the default `./data:/app/data` mount
+and `datadir: ./data/node`:
+
+```bash
+sudo install -d -m 700 -o 10001 -g 10001 ./data/node/keystore
+test ! -e ./data/node/keystore/operator.json || exit 1
+sudo install -m 600 -o 10001 -g 10001 /secure/operator-keystore.json \
+  ./data/node/keystore/operator.json
+```
+
+Set `NODE_PASSWORD` privately to the encrypted export's passphrase. Set the public
+operator/validator addresses on the host config and verify them with doctor.
+Adapt both paths to `NODE_DATA_PATH` and the selected node data configuration.
+Keep `genvm-module-web-docker.yaml` next to Compose. Use the LLM override described
+in common procedures in every Compose invocation when selecting a custom provider.
+The example below assumes the shipped image module is appropriate.
 
 ```sh
 docker compose --profile node run --rm --entrypoint /app/bin/genlayernode genlayer-node doctor
