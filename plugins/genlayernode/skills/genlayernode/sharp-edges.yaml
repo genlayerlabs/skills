@@ -54,13 +54,14 @@ edges:
     severity: high
 
   - id: nodejs-not-installed
-    description: "Node.js is not installed or version too old"
+    description: "Node.js is not installed or too old on the machine that runs the GenLayer CLI"
     detect: |
+      # LOCAL machine (validator mode: staking wizard). The node SERVER does not need Node.js.
       node --version
-      # Should be v18 or higher
-    impact: "Cannot install genlayer CLI."
+      # Should be v20 or higher (22 for a fresh install)
+    impact: "Cannot install the GenLayer CLI or run the staking wizard."
     fix: |
-      Install Node.js 18+:
+      Install Node.js 20+ (on the LOCAL machine):
       curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
       sudo apt install -y nodejs
     severity: critical
@@ -72,8 +73,8 @@ edges:
       docker compose version
     impact: "Cannot run WebDriver or Docker-based deployment."
     fix: |
-      Install Docker:
-      curl -fsSL https://get.docker.com | sh
+      Install Docker ('env -u VERSION': the script reads $VERSION as the Docker version):
+      curl -fsSL https://get.docker.com | env -u VERSION sh
       sudo usermod -aG docker $USER
       # Log out and back in
     severity: critical
@@ -83,12 +84,13 @@ edges:
   # ============================================================================
 
   - id: insufficient-gen-balance
-    description: "Wallet has less than 42,000 GEN for staking"
+    description: "Owner wallet has less than the deployed self-stake minimum (+ gas)"
     detect: |
-      genlayer staking balance --address YOUR_ADDRESS
-    impact: "Cannot create validator. Staking wizard will fail."
+      genlayer staking epoch-info --network testnet-bradbury   # deployed minimum
+      genlayer account show --account "Owner Name"             # owner balance
+    impact: "Cannot create validator (or it never activates). Staking wizard stops at the balance check."
     fix: |
-      Acquire at least 42,000 GEN tokens:
+      Acquire at least the deployed minimum (42,000 GEN is only the protocol default) plus gas:
       - Purchase on supported exchanges
       - Transfer from another wallet
       - Use testnet faucet (for testnet only)
@@ -108,8 +110,9 @@ edges:
   - id: wrong-network-selected
     description: "Selected wrong network in staking wizard"
     detect: |
-      Check the RPC URL in your config matches the network
-      you selected during wallet creation.
+      Check the RPC URL, consensusaddress and chainid in config.yaml match the network
+      you selected during wallet creation (Bradbury Phase 2: chain 4221,
+      AddressManager 0x3F71AE080BD6270A91dBcc7960d88797828538E0, CLI --network testnet-bradbury).
     impact: "Validator won't be recognized on the correct network."
     fix: |
       Re-run staking wizard with correct network selection
@@ -130,38 +133,64 @@ edges:
       Check network connectivity:
       curl -I https://storage.googleapis.com
 
-      Retry download or use alternative mirror.
+      Retry the download. If a release file returns 404, STOP: the version is not published
+      (yet). Never fall back to an older version — it may belong to another network.
     severity: high
+
+  - id: release-verification-failed
+    description: "cosign verify-blob or sha256sum -c fails for the downloaded release"
+    detect: |
+      cosign verify-blob --bundle genlayer-node_${VERSION}_SHA256SUMS.sigstore.json \
+        --certificate-identity-regexp '^https://github\.com/genlayerlabs/genlayer-node/\.github/workflows/release-package\.yml@' \
+        --certificate-oidc-issuer https://token.actions.githubusercontent.com genlayer-node_${VERSION}_SHA256SUMS
+      sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing
+    impact: |
+      The checksum file was not produced by GenLayer's release workflow, or the tarball does not
+      match it. Extraction feeds the GenVM setup script, so a tampered tarball runs code on the server.
+    fix: |
+      Do NOT extract. Delete the download directory, download again, verify again.
+      If it still fails, stop and report it. A locally built (pre-release) tarball has no
+      .sigstore.json: verify sha256 only and tell the user provenance was not verified.
+    severity: critical
 
   - id: extraction-failed
     description: "Tar extraction failed or incomplete"
     detect: |
       ls -la ${VERSION}/bin/genlayernode
-      ls -la ${VERSION}/third_party/genvm/bin/
+      ls -la ${VERSION}/opt/genvm/
     impact: "Missing binaries, node won't start."
     fix: |
-      Re-download and extract:
-      rm -rf ${VERSION}
-      tar -xzvf genlayer-node-linux-amd64-${VERSION}.tar.gz -C ./${VERSION}
+      Re-install from the verified tarball (install.sh refuses a non-empty dir; --force wipes it):
+      ./install.sh --install-dir /opt/genlayer-node/${VERSION} --tarball <tarball> --force
     severity: high
 
   - id: setup-py-failed
     description: "GenVM setup.py failed to download dependencies"
     detect: |
-      ls ${VERSION}/third_party/genvm/bin/genvm
-      ls ${VERSION}/third_party/genvm/bin/genvm-modules
+      cd /opt/genlayer-node/${VERSION}
+      R=$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)
+      ls $R/bin/genvm-modules $R/executor/*/bin/genvm
     impact: "GenVM cannot execute intelligent contracts."
     fix: |
-      Check Python and pip are installed:
-      python3 --version
-      pip3 --version
+      Check Python 3.10+ with pip and venv (ensurepip) are installed:
+      python3 --version; python3 -m pip --version; python3 -c 'import venv, ensurepip'
 
-      Re-run setup:
-      # v0.6+: setup.py lives under opt/genvm/<ver>/bin (there is NO third_party/)
-      cd ${VERSION} && python3 ./opt/genvm/<genvm-ver>/bin/setup.py --interactive false --os linux --arch amd64
-      # older layout:
-      cd ${VERSION} && python3 ./third_party/genvm/bin/setup.py
+      Re-run setup IN THE FINAL DIRECTORY, as the service user:
+      cd /opt/genlayer-node/${VERSION} && sudo -u genlayer python3 $R/bin/setup.py
+      (older layout: python3 ./third_party/genvm/bin/setup.py)
     severity: critical
+
+  - id: setup-py-final-path
+    description: "GenVM set up in one directory, then the directory was moved -> exec fails ENOENT"
+    detect: |
+      # 'fork/exec .../genvm-modules: no such file or directory' although the file exists:
+      # the ENOENT is the binary's INTERPRETER path, which setup.py baked in absolute.
+      readelf -l opt/genvm/*/bin/genvm-modules | grep interpreter
+    impact: "Node/doctor cannot start GenVM; the error points at the binary, not at the stale interpreter path."
+    fix: |
+      Never move a set-up version directory. Re-run setup.py in place (setup-py-failed fix);
+      install.sh always runs it in the final --install-dir.
+    severity: high
 
   - id: genvm-macos-executor-in-linux-tarball
     description: "linux-amd64 tarball ships a macOS (Mach-O) GenVM executor -> Exec format error"
@@ -224,19 +253,55 @@ edges:
       grep -E "GENLAYERNODE_CONSENSUS_CONSENSUSADDRESS|GENLAYERNODE_CONSENSUS_GENESIS" .env 2>/dev/null
     impact: "Node cannot interact with consensus, or scans from block 0 (very slow) if genesis is wrong/missing."
     fix: |
-      The AddressManager address AND genesis block are PER-DEPLOYMENT — there is no
-      single correct value. Get them from the deployment you are joining:
-        - asimov / bradbury: from official docs or a working peer's config
-        - custom / pre-release deployments: from the release's shipped config.yaml
-      v0.6+ sets them in configs/node/config.yaml under `consensus:`
+      The AddressManager address, chain id and genesis block are PER-DEPLOYMENT. Take them from
+      the official docs for the network you join. Testnet Bradbury (Phase 2):
         consensus:
-          consensusaddress: "0x...."   # AddressManager for THIS deployment
-          genesis: <deploy-block>       # AddressManager deployment block (pin it!)
-      A missing/wrong `genesis` makes the node auto-scan from block 0 of a ~14M-block
-      chain (synced_block stuck at 0). Confirm the address resolves at runtime:
-      /health should report the intended `network`, and `genlayer_node_info` should show
-      the expected address_manager + staking_address.
+          consensusaddress: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"
+          chainid: "4221"                       # DECIMAL, not hex
+          manifestpath: "configs/node/protocol-manifest.json"
+          genesis: 47930                        # AddressManager deployment block
+      v0.6 refuses to start when the manifest's registry/chain do not match these values.
+      A missing/wrong `genesis` makes the node auto-scan from block 0. Confirm at runtime:
+      /health reports `network: bradbury-phase2`.
     severity: critical
+
+  - id: protocol-manifest-missing-or-mismatch
+    description: "v0.6+ node refuses to start: protocol manifest missing, or its registry/chain do not match config"
+    detect: |
+      ls -la /opt/genlayer-node/configs/node/protocol-manifest.json
+      python3 -c "import json; m=json.load(open('/opt/genlayer-node/configs/node/protocol-manifest.json')); print(m['chainId'], m['registry'])"
+      grep -E '^  (consensusaddress|chainid|manifestpath):' /opt/genlayer-node/configs/node/config.yaml
+      # doctor: "Consensus Deployment (admission)" fails; logs: manifest / admission errors at start
+    impact: "The node does not start (deployment admission check). The release package ships NO network files."
+    fix: |
+      Download the network's manifest from the official docs to the path manifestpath names:
+        curl -fsSL https://docs.genlayer.com/validators/bradbury.protocol-manifest.json \
+          -o /opt/genlayer-node/<version>/configs/node/protocol-manifest.json
+      Expected: chainId 4221, registry 0x3F71AE080BD6270A91dBcc7960d88797828538E0, matching
+      consensus.consensusaddress and consensus.chainid ("4221", decimal). Never hand-write a manifest.
+      Docker: releases from rc.2 mount it via NODE_MANIFEST_PATH (default ./configs/node/protocol-manifest.json).
+    severity: critical
+
+  - id: conduit-websocket-key-missing
+    description: "Bradbury Phase 2 WebSocket refuses connections without the Conduit API key (HTTP 401)"
+    detect: |
+      sudo awk -F= '/^GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=/{print (length($2)>0?"set":"EMPTY")}' /opt/genlayer-node/.env
+      # doctor: "GenLayer Chain WebSocket" fails; node exits at start (the WebSocket dial is fatal, in every mode)
+    impact: "Full nodes and validators both fail to start. The HTTP RPC answers without a key, which hides the problem."
+    fix: |
+      The USER creates a key at https://app.conduit.xyz/rpc-keys and sets it in the node's .env:
+        GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=<key>
+      The node sends it as X-AccessKey (header name: rollup.genlayerchainrpckeyheader).
+    severity: critical
+
+  - id: rpc-key-in-url
+    description: "The RPC provider API key is put in the RPC/WebSocket URL or in config.yaml"
+    detect: |
+      grep -nE 'genlayerchain(rpc|websocket)url:.*(key|token|[?&]|/[0-9a-f]{24,})' /opt/genlayer-node/configs/node/config.yaml
+    impact: "A key in a URL ends up in logs, metrics labels and error texts."
+    fix: |
+      Keep the URLs key-free; set only GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY in .env (mode 600).
+    severity: high
 
   - id: rpc-url-unreachable
     description: "RPC or WebSocket URL is not accessible"
@@ -254,12 +319,12 @@ edges:
   - id: shared-rpc-outage
     description: "Configured rollup RPC or WebSocket endpoint is experiencing a shared outage"
     detect: |
-      # HTTP RPC smoke tests against the configured endpoint
-      source /opt/genlayer-node/.env 2>/dev/null || source .env
-      curl -sS -m 10 -X POST "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" \
+      # HTTP RPC smoke tests against the configured endpoint (v0.6: URL is in config.yaml)
+      U=$(sed -n 's/^  genlayerchainrpcurl: *"\([^"]*\)".*/\1/p' /opt/genlayer-node/configs/node/config.yaml)
+      curl -sS -m 10 -X POST "$U" \
         -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'
-      curl -sS -m 10 -X POST "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" \
+      curl -sS -m 10 -X POST "$U" \
         -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":2}'
 
@@ -337,14 +402,14 @@ edges:
   - id: no-llm-key-set
     description: "No LLM provider API key configured"
     detect: |
-      env | grep -E "(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCE_API_KEY)"
-    impact: "Node cannot execute intelligent contracts."
+      # Presence only — never print the values
+      sudo awk -F= '/^(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|OPENROUTERKEY|ANTHROPICKEY|GEMINIKEY|XAIKEY|OPENAIKEY|MORPHEUS_API_KEY|LIBERTAI_API_KEY|ATOMAKEY)=/{print $1": "(length($2)>0?"set":"EMPTY")}' /opt/genlayer-node/.env
+    impact: |
+      A validator cannot execute LLM contracts (votes Timeout on them). A full node still syncs
+      (replay never calls the LLM), but doctor fails and gen_call on LLM contracts fails.
     fix: |
-      Set at least one LLM API key:
-      export HEURISTKEY='your_key'
-
-      Add to shell profile for persistence:
-      echo "export HEURISTKEY='your_key'" >> ~/.bashrc
+      The USER sets at least one provider key in /opt/genlayer-node/.env (mode 600), e.g.
+      `sudo nano /opt/genlayer-node/.env`. Never in a shell profile, never on a command line.
     severity: critical
 
   - id: llm-key-invalid
@@ -361,8 +426,8 @@ edges:
     description: "LLM provider is configured in .env but not enabled in GenVM config"
     detect: |
       # PROACTIVE CHECK (before switching versions):
-      # 1. Check which LLM key is set in .env
-      grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY|OPENROUTERKEY|MORPHEUS_API_KEY)=' .env | grep -v '^#' | grep -v '=$'
+      # 1. Check which LLM key is set in .env — NAMES ONLY, never the values
+      sudo awk -F= '/^(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY|OPENROUTERKEY|MORPHEUS_API_KEY)=/ && length($2)>0 {print $1}' .env
 
       # 2. For each set key, check if that provider is enabled in GenVM config
       # Provider name mapping:
@@ -374,13 +439,19 @@ edges:
       #   GEMINIKEY -> google
       #   OPENROUTERKEY -> openrouter
       #   MORPHEUS_API_KEY -> morpheus
-      grep -A 2 '<provider>:' third_party/genvm/config/genvm-module-llm.yaml | grep 'enabled'
+      GENVM_CFG=$(readlink -f "$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)")/config
+      grep -A 2 '<provider>:' ${GENVM_CFG}/genvm-module-llm.yaml | grep 'enabled'
+      # Or simply: doctor lists every enabled backend and whether its key is set.
 
       # REACTIVE DETECTION (after node fails to bootstrap):
       # Node logs show: "failed to start module via manager error=\"starting module Llm: manager request failed: 500"
       journalctl -u genlayer-node | grep -i "module_failed_to_start\|starting module Llm"
     impact: |
-      CRITICAL BOOTSTRAP FAILURE - NODE NEVER BECOMES OPERATIONAL
+      v0.6: the node starts in DEGRADED mode — the LLM module may start with no usable backend —
+      and votes Timeout on every transaction that needs an LLM (doctor: "0 of N enabled backends
+      are usable"). A validator then misses those votes until fixed.
+
+      v0.5 and older: CRITICAL BOOTSTRAP FAILURE - NODE NEVER BECOMES OPERATIONAL
 
       This is NOT a runtime failure - this is a COMPLETE BOOTSTRAP FAILURE:
       - Node NEVER successfully starts
@@ -426,16 +497,16 @@ edges:
       ================================================================
       After extracting new version, BEFORE switching symlinks:
 
-      # 1. Identify which provider is configured in .env
-      grep -E '(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY|OPENROUTERKEY|MORPHEUS_API_KEY)=' /opt/genlayer-node/.env | grep -v '^#' | grep -v '=$'
+      # 1. Identify which provider is configured in .env (names only)
+      sudo awk -F= '/^(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY|OPENROUTERKEY|MORPHEUS_API_KEY)=/ && length($2)>0 {print $1}' /opt/genlayer-node/.env
 
-      # 2. Enable the corresponding provider in GenVM config
-      # Replace <provider> with the provider name (heurist, comput3, ionet, libertai, anthropic, google)
-      sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' \
-        /opt/genlayer-node/${NEW_VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+      # 2. Enable the corresponding provider in the NEW version's GenVM config
+      # Replace <provider> with the provider name (heurist, comput3, ionet, libertai, anthropic, google, openrouter, morpheus)
+      NEW_CFG=$(cd /opt/genlayer-node/${NEW_VERSION} && readlink -f "$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)")/config
+      sudo -u genlayer sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' ${NEW_CFG}/genvm-module-llm.yaml
 
       # 3. Verify it's enabled
-      grep -A 2 '<provider>:' /opt/genlayer-node/${NEW_VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+      grep -A 2 '<provider>:' ${NEW_CFG}/genvm-module-llm.yaml
       # Should show: enabled: true
 
       REACTIVE FIX (after node failed to bootstrap):
@@ -444,11 +515,11 @@ edges:
          sudo systemctl stop genlayer-node
 
       2. Enable the provider in GenVM config:
-         sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' \
-           /opt/genlayer-node/third_party/genvm/config/genvm-module-llm.yaml
+         CFG=$(cd /opt/genlayer-node && readlink -f "$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)")/config
+         sudo -u genlayer sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' ${CFG}/genvm-module-llm.yaml
 
       3. Verify the change:
-         grep -A 2 '<provider>:' /opt/genlayer-node/third_party/genvm/config/genvm-module-llm.yaml
+         grep -A 2 '<provider>:' ${CFG}/genvm-module-llm.yaml
          # Should show: enabled: true
 
       4. Restart the node:
@@ -461,7 +532,7 @@ edges:
 
       6. Verify node is operational:
          curl -s http://localhost:9153/health | jq '.status'
-         # Should show: "up" or "down" (syncing) but NOT connection refused
+         # v0.6: "healthy" (or a degraded state while catching up) — NOT connection refused
     severity: critical
     when_to_check: |
       MANDATORY CHECKS:
@@ -498,10 +569,10 @@ edges:
     impact: "Web module cannot execute, contracts fail."
     fix: |
       Start WebDriver:
-      docker compose up -d
+      cd /opt/genlayer-node && sudo docker compose up -d
 
       Check logs:
-      docker logs genlayer-node-webdriver
+      sudo docker logs genlayer-node-webdriver
     severity: high
 
   - id: node-not-syncing
@@ -512,9 +583,9 @@ edges:
     impact: "Validator cannot participate in consensus."
     fix: |
       Check:
-      1. RPC URL is correct and accessible
-      2. Network has sufficient peers
-      3. Firewall allows outbound connections
+      1. RPC URL is correct and accessible; the Conduit key is set (WebSocket 401 otherwise)
+      2. consensus.genesis is pinned (47930 on Bradbury Phase 2)
+      3. Firewall allows outbound HTTPS/WSS
 
       Check logs for errors.
     severity: high
@@ -555,6 +626,55 @@ edges:
       See create-systemd-service pattern.
     severity: high
 
+  - id: node-user-in-docker-group
+    description: "The node runs as root or as a user in the docker group, or gets the Docker socket"
+    detect: |
+      systemctl show -p User genlayer-node
+      id -nG genlayer | grep -w docker
+    impact: "Docker-group membership is root-equivalent: a node compromise becomes host root."
+    fix: |
+      Run the node as the system user genlayer (not in the docker group). For WebDriver metrics,
+      start docker-socket-proxy (read-only, loopback 2375) and set DOCKER_HOST=tcp://127.0.0.1:2375
+      only in the node's unit — not in a shell you also use for docker commands.
+    severity: high
+
+  - id: two-writers-on-shared-data
+    description: "Two node processes open the same data directory, or two nodes use the same operator"
+    detect: |
+      pgrep -af 'genlayernode run'
+      sudo docker ps --format '{{.Names}}' | grep -x genlayer-node
+      # the second process fails to open data/node/genvm.db or ops.db
+    impact: |
+      Pebble allows one writer: the second process cannot open the databases. ops.db holds this
+      node's vote salts and its operator's nonces and is stamped to node.operatorAddress: two nodes
+      with the same operator, or a copied ops.db, break that record (missed reveals).
+    fix: |
+      Stop the old node before starting the new one (update Phase 2). Never copy ops.db to another
+      node; never run two nodes with the same operator.
+    severity: critical
+
+  - id: docker-default-llm-config
+    description: "Docker node uses the image's default LLM config, not the one configured on the host"
+    detect: |
+      cd /opt/genlayer-node/${VERSION} && sudo docker compose --profile node run --rm --entrypoint /app/bin/genlayernode genlayer-node doctor | grep -A8 'LLM Providers'
+      # "0 of 4 enabled backends are usable" with only (anthropic, google, heurist, xai) listed
+    impact: "Doctor fails; the node starts degraded and votes Timeout on LLM transactions."
+    fix: |
+      Mount the host's genvm-module-llm.yaml into the container with docker-compose.override.yml
+      (SKILL.md -> Docker Compose Deployment), or set a key for one of the image defaults.
+    severity: high
+
+  - id: docker-data-not-owned-by-10001
+    description: "Docker node cannot write ./data (the container runs as uid 10001)"
+    detect: |
+      sudo docker logs genlayer-node 2>&1 | grep -i 'permission denied'
+      stat -c '%u' /opt/genlayer-node/${VERSION}/data/node
+    impact: "The node container exits at start."
+    fix: |
+      sudo chown -R 10001:10001 /opt/genlayer-node/${VERSION}/data/
+      (trailing slash: data is a link; chown -R on the link name changes only the link)
+    severity: high
+
   # ============================================================================
   # SYSTEMD SERVICE (from infrastructure patterns)
   # ============================================================================
@@ -579,9 +699,9 @@ edges:
       [ -z "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] && echo "not set"
     impact: "Node fails to connect to rollup or consensus contracts."
     fix: |
-      For manual runs, source the .env file first:
-      source /opt/genlayer-node/.env
-      ./bin/genlayernode run --password "$NODE_PASSWORD"
+      For manual runs, EXPORT the .env values first (plain `source` does not export):
+      cd /opt/genlayer-node && sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode run -c $(pwd)/configs/node/config.yaml'
+      (validator mode reads GENLAYERNODE_PASSWORD from the environment — never --password)
 
       For systemd, ensure EnvironmentFile is set in service file.
     severity: high
@@ -607,15 +727,13 @@ edges:
   - id: data-directory-permissions
     description: "Data directory has wrong ownership"
     detect: |
-      ls -la /opt/genlayer-node/data/
-      # Should be owned by the user running the node
+      ls -la /opt/genlayer-node/data/node/
+      # binary/systemd: owned by genlayer; Docker: owned by uid 10001 (the container user)
     impact: "Node cannot write to data directory, fails to start."
     fix: |
-      Fix ownership:
-      sudo chown -R $USER:$USER /opt/genlayer-node/data/
-
-      Or for systemd service user:
-      sudo chown -R ansible:ansible /opt/genlayer-node/data/
+      Fix ownership (trailing slash: data/ is a link and chown -R on a link name changes only the link):
+      sudo chown -R genlayer:genlayer /opt/genlayer-node/data/      # binary/systemd
+      sudo chown -R 10001:10001 /opt/genlayer-node/${VERSION}/data/ # Docker
     severity: high
 
   - id: webdriver-not-healthy
@@ -629,22 +747,25 @@ edges:
       docker logs genlayer-node-webdriver
 
       Restart if needed:
-      docker compose down
-      docker compose up -d
+      sudo docker compose down
+      sudo docker compose up -d
 
-      Wait for healthy:
-      until docker inspect --format='{{.State.Health.Status}}' genlayer-node-webdriver | grep -q 'healthy'; do sleep 2; done
+      Wait for healthy (at most 3 minutes):
+      for i in $(seq 1 36); do sudo docker inspect -f '{{.State.Health.Status}}' genlayer-node-webdriver | grep -q '^healthy$' && break; sleep 5; done
     severity: high
 
   - id: missing-python-packages
-    description: "Missing python3-pip or python3-venv packages"
+    description: "Python older than 3.10, or python3-pip / python3-venv missing"
     detect: |
-      dpkg -l | grep -E "python3-pip|python3-venv"
-    impact: "GenVM setup.py fails to install dependencies."
+      python3 -c 'import sys; print(sys.version); sys.exit(sys.version_info < (3,10))'
+      python3 -m pip --version
+      python3 -c 'import venv, ensurepip'   # 'python3 -m venv --help' passes WITHOUT python3-venv
+    impact: "GenVM setup.py fails to create its venv / install dependencies."
     fix: |
       Install required Python packages:
       sudo apt update
       sudo apt install -y python3 python3-pip python3-venv
+      Python < 3.10 (Ubuntu 20.04, Debian 11): upgrade the OS or install a newer python3.
     severity: high
 
   - id: new-operator-not-funded
@@ -655,12 +776,12 @@ edges:
       journalctl -u genlayer-node | grep -i "insufficient funds"
     impact: "Node cannot submit transactions (activate, propose, vote). Validator will miss duties."
     fix: |
-      1. Get operator address from node logs or keystore
-      2. Send ETH to the operator address for gas fees
-      3. Recommended minimum: 0.1 ETH for initial operations
+      1. Get the operator address (config.yaml node.operatorAddress, or the keystore's "address" field)
+      2. Send GEN to the operator address for gas fees
+      3. Recommended minimum: 10 GEN for initial operations
 
       To find operator address:
-      cat /opt/genlayer-node/data/node/keystore/*/address
+      grep operatorAddress /opt/genlayer-node/configs/node/config.yaml
 
       Or check logs:
       journalctl -u genlayer-node | grep "operator"
@@ -681,8 +802,9 @@ edges:
       - Find your validator
       - Update operator address to the new one
 
-      Option 2: Using genlayer CLI
-      genlayer staking update-operator --validator YOUR_VALIDATOR_ADDRESS --new-operator NEW_OPERATOR_ADDRESS
+      Option 2: Using genlayer CLI (signed by the OWNER; Phase 2 may also need the new
+      operator's proof of possession — check `genlayer staking set-operator --help`)
+      genlayer staking set-operator YOUR_VALIDATOR_WALLET NEW_OPERATOR_ADDRESS --account "Owner Name" --network testnet-bradbury
     severity: critical
 
   - id: consensus-genesis-not-set
@@ -690,17 +812,17 @@ edges:
     detect: |
       # v0.6+: in config.yaml under consensus:
       grep -E "^\s*genesis:" configs/node/config.yaml
-      # Symptom: synced_block stays 0 while latest_block is ~14M
+      # Symptom: synced_block stays 0 while the chain head is far ahead
       curl -s http://localhost:9153/metrics | grep -E "genlayer_node_synced|blocks_behind"
     impact: |
       Without a pinned genesis the node auto-detects by scanning from block 0 of the
-      settlement chain (~14M blocks); synced_block stays 0 and sync never catches up.
+      settlement chain; on a long chain synced_block stays 0 for a long time.
       NOTE: genesis is NOT "0" — it is the AddressManager DEPLOYMENT block for the
       specific deployment.
     fix: |
       Pin the deployment's AddressManager deploy block in config.yaml:
         consensus:
-          genesis: <deploy-block>   # the AddressManager deployment block for THIS deployment
+          genesis: 47930            # Bradbury Phase 2 (the AddressManager deployment block)
       Restart. With genesis pinned the node catches up to head in seconds.
     severity: high
 
@@ -711,34 +833,28 @@ edges:
       ls /opt/genlayer-node/genlayer-node-*/
     impact: "Binaries at wrong path, commands fail."
     fix: |
-      Use --strip-components=1 when extracting:
-      sudo tar -xzvf genlayer-node.tar.gz -C /opt/genlayer-node --strip-components=1
+      Use install.sh (it extracts with --strip-components=1), or when extracting by hand:
+      sudo tar -xzvf genlayer-node.tar.gz -C /opt/genlayer-node/${VERSION} --strip-components=1
 
       Or move files to correct location:
       sudo mv /opt/genlayer-node/genlayer-node-*/* /opt/genlayer-node/
     severity: medium
 
   - id: docker-db-symlink
-    description: "Docker deploy fails with PebbleDB error because DB symlink points outside container mount"
+    description: "Docker node fails to open its DB because a link INSIDE data/node points outside the mount"
     detect: |
-      # Check if docker node is crash-looping with genlayer.db error
-      docker logs genlayer-node 2>&1 | grep "genlayer.db"
-      # Check if genlayer.db is a symlink (shouldn't be for docker deploys)
-      ls -la /opt/genlayer-node/${VERSION}/data/node/genlayer.db
+      # v0.6 message (the node renames a genlayer.db link to genvm.db on start, link included):
+      sudo docker logs genlayer-node 2>&1 | grep -E 'error opening database at "data/node/(genvm|genlayer).db"'
+      ls -la /opt/genlayer-node/${VERSION}/data/node/   # genvm.db / genlayer.db must not be links
     impact: |
-      Docker container cannot follow symlinks that point outside the mounted volume.
-      The node will crash with "mkdir data/node/genlayer.db: file exists" or similar
-      PebbleDB error because the symlink target is not accessible inside the container.
+      Docker cannot follow a link whose target is outside the mounted volume. The node stops
+      with "mkdir data/node/genvm.db: file exists" and restarts in a loop.
     fix: |
-      Replace the symlink with a real directory:
-        rm /opt/genlayer-node/${VERSION}/data/node/genlayer.db
-        mkdir -p /opt/genlayer-node/${VERSION}/data/node/genlayer.db
-
-      Then restart the container:
-        docker compose --profile node up -d
-
-      PREVENTION: When deploying as docker, skip the DB symlink creation step.
-      The database should live directly in the version directory for docker deploys.
+      With the node stopped, put the real database directory in place of the link
+      (mv the link's target over it; do NOT create an empty directory — that resyncs and loses
+      ops.db). Then use the v0.6 layout (common-procedures.md -> Create Directory Structure): the whole data/ is the
+      shared link — a link as the mount SOURCE is resolved by Docker on the host and works;
+      links inside the mounted tree do not.
     severity: high
 
   - id: docker-webdriver-host-ssrf-address-forbidden
@@ -777,17 +893,15 @@ edges:
     description: "`doctor check` and an unexported .env break the v0.6 doctor command"
     detect: |
       ./bin/genlayernode doctor --help
-      # v0.6: subcommand is just `doctor` (NO `check`); flags include -N and --expected-consensus-address
+      # v0.6: subcommand is just `doctor` (NO `check`)
     impact: |
       `doctor check` errors ('accepts 0 arg(s), received 1'). And plain `source .env` does NOT
-      export vars, so doctor reports LLM keys as 'not set' even when present. For custom/pre-release
-      deployments the built-in network registry won't recognize the consensus address.
+      export vars, so doctor reports LLM keys / the RPC key as 'not set' even when present.
     fix: |
       cd /opt/genlayer-node
-      set -a; source .env; set +a                          # EXPORT env so doctor sees LLM keys
-      ./bin/genlayernode doctor --expected-consensus-address 0x<AddressManager>
-      # -N asimov|bradbury only covers built-in networks; use --expected-consensus-address for
-      # custom / pre-release deployments.
+      sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'
+      # Doctor checks the consensus deployment against consensus.consensusaddress / chainid and
+      # the protocol manifest from config.yaml (no extra flag needed for Bradbury Phase 2).
     severity: medium
 
   - id: full-node-mode-vs-validator
@@ -798,13 +912,14 @@ edges:
     impact: |
       A full node syncs and serves RPC but does NOT participate in consensus, so it needs no
       validator wallet, operator address, keystore, staking, or gas funding (logs: 'full node
-      mode detected, skipping validator setup'). It DOES still need an LLM provider + genvm
-      config (for gen_call). Running the staking wizard / importing an operator keystore for a
-      full node is wasted effort.
+      mode detected, skipping validator setup'). It syncs without an LLM key (replay never calls
+      the LLM), but doctor fails and gen_call on LLM contracts fails without one. It DOES need the
+      Conduit RPC key (the WebSocket dial at boot is fatal without it). Running the staking wizard /
+      importing an operator keystore for a full node is wasted effort.
     fix: |
       For a full node: set node.mode: "full", leave validatorWalletAddress/operatorAddress empty,
-      and skip the staking wizard + keystore import entirely. Still configure RPC/WS, the
-      consensus address + genesis, and one LLM provider key.
+      and skip the staking wizard + keystore import entirely. Still configure RPC/WS + the Conduit
+      key, the consensus values + manifest, and (recommended) one LLM provider key.
     severity: low
 
   # ============================================================================
@@ -857,7 +972,9 @@ edges:
       Docker bind mounts are established at container start time and resolve symlinks
       to their target inodes. When symlinks change (e.g., /opt/genlayer-node/data
       switches from v0.4.3/data to v0.4.4/data), the container still sees the old
-      directory's inode.
+      directory's inode. (v0.6 layout: every version's data/ resolves to the same shared
+      /opt/genlayer-node/<minor>/data, so this mostly bites across minor versions — keep the
+      restart anyway.)
     fix: |
       IMMEDIATE FIX (after node restart):
       =====================================
@@ -876,7 +993,8 @@ edges:
 
         [Service]
         ...
-        ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+        ExecStartPost=-+/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy >/dev/null 2>&1 || true'
+        # '+' = run as root: the node's service user is not in the docker group
 
       This ensures Alloy's bind mount is refreshed on every node restart.
 
@@ -921,6 +1039,20 @@ edges:
       - But Grafana shows no data / validator appears offline
       - Alloy container is running but log timestamps are old
 
+  - id: v05-to-v06-not-in-place
+    description: "Trying to update a v0.5 (Bradbury Phase 1 / Asimov) node in place to v0.6 (Bradbury Phase 2)"
+    detect: |
+      /opt/genlayer-node/bin/genlayernode version | grep -E 'Version: +v0\.5'
+      grep -E '^  genlayerchainrpcurl:.*(zksync|genlayer-testnet)' /opt/genlayer-node/configs/node/config.yaml
+    impact: |
+      Phase 2 is a new chain (Arbitrum Orbit, chain id 4221) with new contracts and a new validator
+      registration (proof of possession). Old data, config and registration do not carry over.
+    fix: |
+      Stop and disable the old node, then do a fresh install (install-procedure.md) in a new
+      version directory with a fresh data directory. Register the validator again with the
+      qualified CLI (staking-wizard-procedure.md).
+    severity: high
+
   - id: high-downtime-update
     description: "Stopping old node before preparing new version causes 3-4 minute downtime"
     detect: |
@@ -943,14 +1075,12 @@ edges:
 
       Phase 1: PREPARE WHILE OLD NODE RUNS (No Downtime)
       ===================================================
-      1. Download new version to /tmp
-      2. Create new version directory
-      3. Extract tarball
-      4. Run GenVM setup (THIS IS THE SLOW PART - 2+ minutes)
-      5. Copy config.yaml and .env
-      6. Enable LLM provider in GenVM config if needed
-      7. Create data directory and symlinks to shared DB
-      8. Copy keystore
+      1. Download + verify new version (cosign + sha256)
+      2. install.sh into the new version directory
+      3. (install.sh) GenVM setup — THIS IS THE SLOW PART, 2+ minutes
+      4. Copy config.yaml (keep the new genvm.root_dir) + protocol manifest + .env
+      5. Apply LLM config / enable LLM provider if needed
+      6. Link the shared data directory (genvm.db, ops.db, keystore — no copy)
 
       Phase 2: QUICK SWITCH (10-15 seconds downtime)
       ==============================================
@@ -965,16 +1095,12 @@ edges:
     validator_impact: "missed validations, lost rewards, priming delay, potential slashing"
 
   - id: database-not-shared-patch-versions
-    description: "Database copied instead of shared between v0.4.x patch versions"
+    description: "Data directory copied instead of shared between patch versions"
     detect: |
-      # Check if each patch version has its own database instead of shared
-      ls -la /opt/genlayer-node/v0.4.3/data/node/genlayer.db
-      ls -la /opt/genlayer-node/v0.4.4/data/node/genlayer.db
-      # If both are directories (not symlinks), they're not shared
-
-      # Correct structure should show:
-      # v0.4.3/data/node/genlayer.db -> ../../../v0.4/data/node/genlayer.db (symlink)
-      # v0.4.4/data/node/genlayer.db -> ../../../v0.4/data/node/genlayer.db (symlink)
+      # v0.6 layout: each version's data/ is a link to the shared /opt/genlayer-node/<minor>/data
+      for d in /opt/genlayer-node/v0.6.*/data; do printf '%s -> %s\n' "$d" "$(readlink "$d" || echo REAL-DIR)"; done
+      # v0.4/v0.5 layout (older installs): data/node/genlayer.db per version
+      ls -la /opt/genlayer-node/v0.4.*/data/node/genlayer.db 2>/dev/null
     impact: |
       - Wasted disk space (duplicate databases)
       - Each version has different sync state
@@ -1008,14 +1134,15 @@ edges:
       6. Start the node:
          sudo systemctl start genlayer-node
 
-      STRUCTURE FOR NEW INSTALLATIONS:
+      STRUCTURE FOR NEW INSTALLATIONS (v0.6+):
 
-      For major.minor versions (v0.4.x), use shared database:
-      /opt/genlayer-node/v0.4/data/node/genlayer.db (shared DB)
-      /opt/genlayer-node/v0.4.3/data/node/genlayer.db -> symlink to shared
-      /opt/genlayer-node/v0.4.4/data/node/genlayer.db -> symlink to shared
-
-      Keystore and logs remain version-specific (not shared).
+      Share the WHOLE data directory per minor line (v0.6 splits state into genvm.db =
+      chain history and ops.db = this node's vote salts / nonces / operator stamp — both must
+      persist across patch updates, and ops.db must never be copied to another node):
+      /opt/genlayer-node/v0.6/data/node/{genvm.db,ops.db,keystore,logs}   (shared)
+      /opt/genlayer-node/v0.6.0/data -> ../v0.6/data
+      /opt/genlayer-node/v0.6.1/data -> ../v0.6/data
+      See common-procedures.md -> "Create Directory Structure".
     severity: high
     note: "This issue typically occurs when upgrading from old installations that weren't set up with shared storage"
 
@@ -1051,7 +1178,7 @@ edges:
       # The validator wallet address is a SMART CONTRACT, not the owner account.
       # Common mistake: using owner address in config.yaml instead of validator wallet.
       # Check: validator-info should work with the address in config.yaml
-      genlayer staking validator-info --validator <ADDRESS_FROM_CONFIG>
+      genlayer staking validator-info <ADDRESS_FROM_CONFIG> --network testnet-bradbury
       # If it returns "Address is not a validator", the wrong address is being used.
     impact: |
       Node starts but cannot validate. It won't recognize itself as a validator
@@ -1090,24 +1217,24 @@ edges:
 
       If the operator account was deleted:
         - Create a new operator account
-        - Update the validator to use the new operator:
-          genlayer staking set-operator \
-            --account "Owner Name" \
-            --validator 0xVALIDATOR_WALLET \
-            --operator 0xNEW_OPERATOR
-        - Fund the new operator address with ETH for gas
+        - Update the validator to use the new operator (owner signs; Phase 2 may also need the
+          new operator's proof of possession — check `genlayer staking set-operator --help`):
+          genlayer staking set-operator 0xVALIDATOR_WALLET 0xNEW_OPERATOR \
+            --account "Owner Name" --network testnet-bradbury
+        - Fund the new operator address with GEN for gas
     severity: high
 
   - id: wizard-insufficient-balance
     description: "Running wizard without enough GEN tokens"
     detect: |
+      genlayer staking epoch-info --network testnet-bradbury   # deployed self-stake minimum
       genlayer account show
-      # Balance must be >= 42,000 GEN (plus small gas buffer)
+      # Balance must be >= the deployed minimum (42,000 GEN is the protocol default) plus gas
     impact: |
       Wizard exits at balance check step. No on-chain changes made.
     fix: |
       1. Check current balance: genlayer account show
-      2. Fund account with 42,000+ GEN
+      2. Fund account with the deployed minimum + gas
       3. Re-run the wizard
     severity: medium
 
@@ -1147,7 +1274,7 @@ edges:
       2. If balance is 0 or low, send GEN from owner:
          genlayer account send 0xOPERATOR_ADDRESS 10gen \
            --account "Owner Name" \
-           --network testnet-asimov
+           --network testnet-bradbury
 
       3. Verify operator now has funds:
          genlayer account show --account "Operator Name"

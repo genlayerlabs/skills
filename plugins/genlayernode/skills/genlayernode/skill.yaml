@@ -28,10 +28,15 @@ owns:
 
 # Default configuration values (from infrastructure)
 defaults:
-  network: testnet-asimov
-  # NOTE: rpc_url and websocket_url have NO defaults - user must provide
-  consensus_contract_address: "0xe66B434bc83805f380509642429eC8e43AE9874a"
-  consensus_genesis: 17326
+  network: testnet-bradbury
+  # Bradbury Phase 2 (Arbitrum Orbit). The Conduit API key has NO default - the user sets
+  # GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY in .env
+  rpc_url: "https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
+  websocket_url: "wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
+  consensus_contract_address: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"
+  consensus_chain_id: "4221"
+  consensus_genesis: 47930
+  protocol_manifest_url: "https://docs.genlayer.com/validators/bradbury.protocol-manifest.json"
   install_path: "/opt/genlayer-node"
   data_dir: "./data/node"
   node_rpc_port: 9151
@@ -43,8 +48,7 @@ defaults:
 
 # Required user configuration (no defaults)
 required_inputs:
-  - rpc_url: "GenLayer Chain ZKSync HTTP RPC URL"
-  - websocket_url: "GenLayer Chain ZKSync WebSocket URL"
+  - rpc_key: "Conduit API key for the GenLayer Chain RPC/WebSocket (set by the user in .env)"
   - validator_wallet_address: "From staking wizard or existing wallet"
   - operator_address: "From keystore import or generate new"
   - llm_api_key: "From chosen LLM provider"
@@ -57,18 +61,16 @@ directory_structure:
       description: "Version-specific directory containing all node files"
       contents:
         - "bin/genlayernode"
-        - "third_party/genvm/"
+        - "opt/genvm/<genvm-version>/"
         - "docker-compose.yaml"
         - ".env"
-        - "data/node/genlayer.db"
-        - "data/node/keystore/"
-        - "data/node/logs/"
-        - "data/node/merkle/"
+        - "data -> ../{MINOR}/data (shared: genvm.db, ops.db, keystore/, logs/)"
         - "configs/node/config.yaml"
+        - "configs/node/protocol-manifest.json"
     - path: "bin -> {VERSION}/bin"
       description: "Symlink to current version binary"
-    - path: "third_party -> {VERSION}/third_party"
-      description: "Symlink to current version third_party"
+    - path: "opt -> {VERSION}/opt"
+      description: "Symlink to current version GenVM tree"
     - path: "data -> {VERSION}/data"
       description: "Symlink to current version data"
     - path: "configs -> {VERSION}/configs"
@@ -127,7 +129,7 @@ inputs_required:
     options:
       - label: "Yes, run staking wizard"
         value: true
-        description: "I need to create validator wallet and stake 42,000+ GEN"
+        description: "I need to create validator wallet and stake the deployed self-stake minimum"
       - label: "No, I already have a validator wallet"
         value: false
         description: "I already completed staking and have my operator keystore"
@@ -185,6 +187,19 @@ inputs_required:
         description: "Create a new operator key (requires updating validator settings)"
     required: true
 
+  - id: node_mode
+    description: "Full node (no staking) or validator"
+    type: choice
+    question: "Will this node run as a full node or as a validator?"
+    options:
+      - label: "Full node"
+        value: full
+        description: "Syncs and serves RPC; no staking wizard, operator key or keystore password"
+      - label: "Validator"
+        value: validator
+        description: "Needs a registered validator wallet and the operator keystore"
+    required: true
+
   - id: llm_provider
     description: "LLM provider for intelligent contract execution"
     type: choice
@@ -214,6 +229,9 @@ inputs_required:
       - label: "Atoma"
         value: atoma
         env_var: "ATOMAKEY"
+      - label: "OpenRouter"
+        value: openrouter
+        env_var: "OPENROUTERKEY"
     required: true
 
   - id: llm_api_key
@@ -252,16 +270,18 @@ inputs_required:
 config_wizard:
   sections:
     - id: rollup
-      name: "Rollup Configuration (Required - No Defaults)"
+      name: "Rollup Configuration (Bradbury Phase 2 defaults)"
       questions:
         - id: genlayerchainrpcurl
           prompt: "GenLayer Chain RPC URL"
           required: true
-          validation: "Must be a valid HTTP(S) URL - user must provide ZKSync RPC endpoint"
+          default: "https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
+          validation: "Must be a valid HTTP(S) URL without an API key in it"
         - id: genlayerchainwebsocketurl
           prompt: "GenLayer Chain WebSocket URL"
           required: true
-          validation: "Must be a valid WSS URL - user must provide ZKSync WebSocket endpoint"
+          default: "wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
+          validation: "Must be a valid WSS URL without an API key in it"
 
     - id: node_identity
       name: "Node Identity"
@@ -290,7 +310,7 @@ config_wizard:
         - id: rpc_groups
           prompt: "Which RPC endpoint groups to enable?"
           type: multi_choice
-          default: ["genlayer", "ethereum", "zksync"]
+          default: ["genlayer", "ethereum"]
           options:
             - label: "genlayer"
               description: "gen_* methods (call, getContractSchema, etc.)"
@@ -378,13 +398,12 @@ patterns:
       Check all required software is installed before proceeding.
     commands:
       - "uname -m | grep -E '^(x86_64|amd64)$'"
-      - "node --version"
-      - "npm --version"
       - "docker --version"
       - "docker compose version"
-      - "python3 --version"
+      - "python3 -c 'import sys; sys.exit(sys.version_info < (3,10))'"
       - "pip3 --version"
-      - "python3 -m venv --help"
+      - "python3 -c 'import venv, ensurepip'"
+      - "cosign version"
 
   - id: install-prerequisites-ubuntu
     description: |
@@ -392,20 +411,22 @@ patterns:
     commands:
       - "sudo apt update"
       - "sudo apt install -y python3 python3-pip python3-venv wget curl jq tar"
+      - "sudo apt install -y docker.io docker-compose-v2 && sudo systemctl enable --now docker"
+      - "curl -fsSLo /tmp/cosign.deb https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign_2.4.1_amd64.deb && sudo dpkg -i /tmp/cosign.deb"
 
   - id: install-genlayer-cli
     description: |
       Install the GenLayer CLI globally via npm.
-    command: "npm install -g genlayer"
+    command: 'npm install -g "genlayer@${CLI_VERSION}"  # exact version from the Bradbury Phase 2 announcement'
 
   - id: create-validator-wallet
     description: |
       Run the interactive staking wizard to create validator wallet.
-      User must have 42,000+ GEN tokens.
+      User must have the deployed self-stake minimum (genlayer staking epoch-info).
       The wizard is FULLY INTERACTIVE (requires TTY) and cannot be automated.
       It runs on the user's LOCAL machine, not the validator server.
       See staking-wizard-procedure.md for the complete walkthrough.
-    command: "genlayer staking wizard --network testnet-asimov"
+    command: "genlayer staking wizard --network testnet-bradbury"
     notes:
       - "The wizard creates THREE addresses: owner, operator, and validator wallet"
       - "Owner = cold wallet that controls withdrawals (stays local)"
@@ -413,6 +434,7 @@ patterns:
       - "Validator Wallet = smart contract deployed on-chain (used in config.yaml)"
       - "The wizard handles: account selection, balance check, operator creation, keystore export, staking transaction, and identity setup"
       - "If user cannot run wizard, use individual CLI commands (see staking-wizard-procedure.md)"
+      - "Phase 2: the operator must be a CLI account so it can sign the proof of possession; an address alone fails"
     outputs:
       - "validator_wallet_address (from on-chain transaction result)"
       - "operator_address (from operator account creation)"
@@ -433,8 +455,8 @@ patterns:
       - "genlayer account create --name 'Operator Name'"
       - "genlayer account unlock --account 'Operator Name'"
       - "genlayer account export --account 'Operator Name' --output './operator-keystore.json'"
-      - "genlayer staking validator-join --account 'Owner Name' --amount 42000gen --operator 0xOPERATOR_ADDRESS --network testnet-asimov"
-      - "genlayer staking set-identity --account 'Owner Name' --validator 0xVALIDATOR_WALLET"
+      - "genlayer staking validator-join --account 'Owner Name' --amount <deployed minimum>gen --operator 0xOPERATOR_ADDRESS --network testnet-bradbury"
+      - "genlayer staking set-identity 0xVALIDATOR_WALLET --account 'Operator Name' --moniker 'My Validator' --network testnet-bradbury"
     notes:
       - "account create, account unlock, and account export require interactive password input"
       - "validator-join is non-interactive when all flags are provided"
@@ -453,7 +475,7 @@ patterns:
       the validator misses validation rounds.
     commands:
       - "genlayer account show --account '${OPERATOR_ACCOUNT_NAME}'"
-      - "genlayer account send ${OPERATOR_ADDRESS} 10gen --account '${OWNER_ACCOUNT_NAME}' --network testnet-asimov"
+      - "genlayer account send ${OPERATOR_ADDRESS} 10gen --account '${OWNER_ACCOUNT_NAME}' --network testnet-bradbury"
       - "genlayer account show --account '${OPERATOR_ACCOUNT_NAME}'"
     notes:
       - "Recommended initial funding: 10 GEN"
@@ -463,12 +485,12 @@ patterns:
   - id: verify-validator-info
     description: |
       Verify validator registration after staking wizard completes.
-    command: "genlayer staking validator-info --validator 0xVALIDATOR_WALLET_ADDRESS"
+    command: "genlayer staking validator-info 0xVALIDATOR_WALLET_ADDRESS --network testnet-bradbury"
     notes:
       - "Use the validatorWallet address, NOT the owner address"
       - "Check selfStakePendingDeposits for activation epoch"
       - "live: false until deposit activates (typically 2 epochs)"
-      - "needsPriming may need to be resolved with: genlayer staking validator-prime"
+      - "needsPriming may need to be resolved with: genlayer staking validator-prime 0xVALIDATOR_WALLET_ADDRESS --network testnet-bradbury"
 
   - id: list-available-versions
     description: |
@@ -479,22 +501,24 @@ patterns:
 
   - id: download-and-extract
     description: |
-      Download to /tmp, then extract to versioned directory structure.
+      Download to a temp dir, verify (cosign + SHA256), then install to the versioned directory
+      with the release install.sh (extract + GenVM setup). See install-procedure.md Phase 2.
     commands:
       - "export VERSION=${VERSION}"
-      - "wget https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}/genlayer-node-linux-amd64-${VERSION}.tar.gz -O /tmp/genlayer-node-${VERSION}.tar.gz"
-      - "sudo mkdir -p /opt/genlayer-node/${VERSION}"
-      - "sudo tar -xzvf /tmp/genlayer-node-${VERSION}.tar.gz -C /opt/genlayer-node/${VERSION} --strip-components=1"
-      - "sudo mkdir -p /opt/genlayer-node/${VERSION}/{data/node,configs/node}"
-      - "sudo chown -R $USER:$USER /opt/genlayer-node"
-      - "rm /tmp/genlayer-node-${VERSION}.tar.gz"
+      - "base=https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}"
+      - "wget ${base}/genlayer-node-linux-amd64-${VERSION}.tar.gz ${base}/genlayer-node_${VERSION}_SHA256SUMS ${base}/genlayer-node_${VERSION}_SHA256SUMS.sigstore.json ${base}/install.sh"
+      - "cosign verify-blob --bundle genlayer-node_${VERSION}_SHA256SUMS.sigstore.json --certificate-identity-regexp '^https://github\\.com/genlayerlabs/genlayer-node/\\.github/workflows/release-package\\.yml@' --certificate-oidc-issuer https://token.actions.githubusercontent.com genlayer-node_${VERSION}_SHA256SUMS"
+      - "sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing"
+      - "sudo install -d -o genlayer -g genlayer /opt/genlayer-node"
+      - "chmod +x install.sh && sudo -u genlayer -H ./install.sh --install-dir /opt/genlayer-node/${VERSION} --tarball genlayer-node-linux-amd64-${VERSION}.tar.gz"
 
   - id: setup-symlinks
     description: |
       Create symlinks for current version for easy access from /opt/genlayer-node.
     commands:
+      - "sudo -u genlayer ln -sfn ../${MINOR}/data /opt/genlayer-node/${VERSION}/data"
       - "ln -sfn /opt/genlayer-node/${VERSION}/bin /opt/genlayer-node/bin"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/third_party /opt/genlayer-node/third_party"
+      - "ln -sfn /opt/genlayer-node/${VERSION}/opt /opt/genlayer-node/opt"
       - "ln -sfn /opt/genlayer-node/${VERSION}/data /opt/genlayer-node/data"
       - "ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs"
       - "ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml"
@@ -504,8 +528,9 @@ patterns:
 
   - id: run-genvm-setup
     description: |
-      Run GenVM post-install script to download dependencies.
-    command: "python3 /opt/genlayer-node/third_party/genvm/bin/setup.py"
+      Run GenVM post-install script (install.sh already runs it). Run it in the final
+      directory: it writes that absolute path into the GenVM binaries.
+    command: "cd /opt/genlayer-node/${VERSION} && sudo -u genlayer python3 \"$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)/bin/setup.py\""
 
   - id: create-env-file
     description: |
@@ -518,11 +543,15 @@ patterns:
       # Node identification
       NODE_ID=${NODE_ID}
       NODE_TYPE=validator
-      NODE_ENV=testnet-asimov
+      NODE_ENV=testnet-bradbury
       NODE_VERSION=${VERSION}
 
-      # Node password (for keystore encryption)
-      NODE_PASSWORD=${PASSWORD}
+      # Keystore password (validator only; the user sets it, Claude leaves it empty)
+      GENLAYERNODE_PASSWORD=
+      NODE_PASSWORD=
+
+      # Conduit API key for the GenLayer Chain RPC/WebSocket (the user sets it)
+      GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=
 
       # LLM API Key (only set the one you're using)
       HEURISTKEY=${HEURIST_KEY}
@@ -533,19 +562,9 @@ patterns:
       GEMINIKEY=${GEMINI_KEY}
       XAIKEY=${XAI_KEY}
       ATOMAKEY=${ATOMA_KEY}
+      OPENROUTERKEY=${OPENROUTER_KEY}
 
-      # Rollup configuration
-      GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL=${RPC_URL}
-      GENLAYERNODE_ROLLUP_GENLAYERCHAINWEBSOCKETURL=${WEBSOCKET_URL}
-
-      # Consensus configuration (AddressManager)
-      GENLAYERNODE_CONSENSUS_CONSENSUSADDRESS=0xe66B434bc83805f380509642429eC8e43AE9874a
-      GENLAYERNODE_CONSENSUS_GENESIS=17326
-
-      # Node configuration
-      GENLAYERNODE_NODE_VALIDATORWALLETADDRESS=${VALIDATOR_ADDRESS}
-      GENLAYERNODE_NODE_OPERATORADDRESS=${OPERATOR_ADDRESS}
-      GENLAYERNODE_NODE_MODE=validator
+      # Rollup, consensus and node values live in config.yaml (generate-config-yaml)
 
       # Ports
       NODE_RPC_PORT=${RPC_PORT:-9151}
@@ -566,15 +585,18 @@ patterns:
       # GenLayer Node Configuration
       # Generated by genlayernode skill
 
-      # Rollup configuration
+      # Rollup configuration (the API key goes in .env, never here)
       rollup:
         genlayerchainrpcurl: "${RPC_URL}"
         genlayerchainwebsocketurl: "${WEBSOCKET_URL}"
+        provider: "conduit"
 
-      # Consensus configuration (AddressManager)
+      # Consensus configuration (AddressManager) - Bradbury Phase 2
       consensus:
-        consensusaddress: "0xe66B434bc83805f380509642429eC8e43AE9874a"
-        genesis: 17326
+        consensusaddress: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"
+        chainid: "4221"
+        manifestpath: "configs/node/protocol-manifest.json"
+        genesis: 47930
 
       # Data directory
       datadir: "./data/node"
@@ -595,7 +617,7 @@ patterns:
 
       # Node configuration
       node:
-        mode: "validator"
+        mode: "${NODE_MODE:-validator}"
         validatorWalletAddress: "${VALIDATOR_ADDRESS}"
         operatorAddress: "${OPERATOR_ADDRESS}"
         admin:
@@ -607,7 +629,7 @@ patterns:
               genlayer: ${RPC_GENLAYER:-true}
               genlayer_debug: ${RPC_DEBUG:-false}
               ethereum: ${RPC_ETHEREUM:-true}
-              zksync: ${RPC_ZKSYNC:-true}
+              zksync: ${RPC_ZKSYNC:-false}
         ops:
           port: ${OPS_PORT:-9153}
           endpoints:
@@ -619,7 +641,7 @@ patterns:
 
       # GenVM configuration
       genvm:
-        root_dir: ./third_party/genvm
+        root_dir: ./opt/genvm/current   # keep the value install.sh wrote
         start_manager: true
         manager_url: http://127.0.0.1:3999
         permits:
@@ -656,14 +678,12 @@ patterns:
 
   - id: import-operator-key-from-wizard
     description: |
-      Import operator keystore exported from staking wizard.
+      Install the operator keystore exported from the staking wizard as-is (encrypted).
+      No password or passphrase on any command line: the user sets GENLAYERNODE_PASSWORD
+      (Docker: NODE_PASSWORD) in .env to the export passphrase.
     command: |
-      cd /opt/genlayer-node && \
-      ./bin/genlayernode account import \
-        --password "${NODE_PASSWORD}" \
-        --passphrase "${EXPORT_PASSPHRASE}" \
-        --path "${KEYSTORE_PATH}" \
-        --quiet
+      sudo install -d -m 700 -o genlayer -g genlayer /opt/genlayer-node/data/node/keystore && \
+      sudo install -m 600 -o genlayer -g genlayer "${KEYSTORE_PATH}" /opt/genlayer-node/data/node/keystore/operator.json
 
   - id: copy-operator-key-from-previous
     description: |
@@ -676,15 +696,13 @@ patterns:
       Generate a new operator key.
     command: |
       cd /opt/genlayer-node && \
-      ./bin/genlayernode account new \
-        --setup \
-        --password "${NODE_PASSWORD}"
+      sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode account new -c $(pwd)/configs/node/config.yaml --setup'
     warnings:
       - "You must update your validator's operator address after generating!"
-      - "You must fund the new operator address with ETH for gas fees!"
+      - "You must fund the new operator address with GEN for gas fees!"
     post_steps:
       - "Note the new operator address from command output"
-      - "Fund the operator address with ETH (for transaction gas)"
+      - "Fund the operator address with GEN (for transaction gas)"
       - "Update validator settings to use new operator address"
 
   - id: start-webdriver
@@ -699,15 +717,14 @@ patterns:
   - id: run-doctor-check
     description: |
       Validate configuration before starting.
-    command: "cd /opt/genlayer-node && source .env && ./bin/genlayernode doctor"
+    command: "cd /opt/genlayer-node && sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'"
 
   - id: run-node-manual
     description: |
       Start node manually (use with screen/tmux).
     commands:
       - "cd /opt/genlayer-node"
-      - "source .env"
-      - "./bin/genlayernode run --password '${NODE_PASSWORD}'"
+      - "sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode run -c $(pwd)/configs/node/config.yaml'"
 
   - id: create-systemd-service
     description: |
@@ -722,12 +739,13 @@ patterns:
 
       [Service]
       Type=simple
-      User=${USER}
-      Group=${USER}
+      User=genlayer
+      Group=genlayer
       WorkingDirectory=/opt/genlayer-node
       EnvironmentFile=/opt/genlayer-node/.env
-      ExecStart=/opt/genlayer-node/bin/genlayernode run --password ${NODE_PASSWORD}
-      ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+      Environment=DOCKER_HOST=tcp://127.0.0.1:2375
+      ExecStart=/opt/genlayer-node/bin/genlayernode run -c /opt/genlayer-node/configs/node/config.yaml
+      ExecStartPost=-+/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy >/dev/null 2>&1 || true'
       Restart=always
       RestartSec=10
       StandardOutput=journal
@@ -746,12 +764,14 @@ patterns:
       - "ExecStartPost restarts Alloy to refresh its bind mount after symlink changes"
       - "The '-' prefix means systemd ignores failures (e.g., if Alloy isn't installed)"
       - "The 5-second sleep ensures the node has started before restarting Alloy"
+      - "The '+' runs ExecStartPost as root: the genlayer service user is not in the docker group"
+      - "The node reads GENLAYERNODE_PASSWORD from EnvironmentFile - no --password argument"
 
   - id: run-node-docker
     description: |
       Start node using Docker Compose method.
     commands:
-      - "cd /opt/genlayer-node && source .env && docker compose --profile node up -d"
+      - "cd /opt/genlayer-node/${VERSION} && sudo chown -R 10001:10001 ./data/ && sudo docker compose --profile node up -d"
 
   - id: verify-node-running
     description: |
@@ -802,7 +822,7 @@ patterns:
       Diagnose validator downtime before changing configuration or requesting unban.
       Covers shared RPC outages, temporary validator bans, and LLM provider capability errors.
     commands:
-      - "cd /opt/genlayer-node && source .env && ./bin/genlayernode doctor"
+      - "cd /opt/genlayer-node && sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'"
       - "curl -s http://localhost:9153/health | jq"
       - "journalctl -u genlayer-node --since '1 hour ago' --no-pager | grep -Ei 'temporary ban|validator is banned|NO_PROVIDER_FOR_PROMPT|Gateway Timeout|504|get chain ID'"
     decision_tree:
@@ -836,9 +856,9 @@ anti_patterns:
     fix: "Use an AMD64 Linux server."
 
   - id: insufficient-tokens
-    description: "Creating validator with less than 42,000 GEN"
+    description: "Creating validator with less than the deployed self-stake minimum"
     why_bad: "Cannot stake and validator won't be active."
-    fix: "Acquire 42,000+ GEN before running staking wizard."
+    fix: "Acquire the deployed minimum (genlayer staking epoch-info; 42,000 GEN is the protocol default) before running staking wizard."
 
   - id: missing-llm-key
     description: "Not setting any LLM API key"
@@ -884,7 +904,7 @@ anti_patterns:
     fix: |
       Use EnvironmentFile directive:
       - EnvironmentFile=/opt/genlayer-node/.env
-      - ExecStart=.../genlayernode run --password "${NODE_PASSWORD}"
+      - ExecStart=.../genlayernode run -c /opt/genlayer-node/configs/node/config.yaml (reads GENLAYERNODE_PASSWORD from the environment)
 
   - id: secrets-in-command-output
     description: "Showing secrets in command output or verification steps"
@@ -928,14 +948,14 @@ procedure:
     detail: |
       Verify system meets requirements:
       - AMD64 architecture (x86_64)
-      - Node.js v18+, Docker, Python 3
+      - Docker, Python 3.10+ (pip, venv), cosign
       - 16GB+ RAM, 8+ cores, 128GB+ SSD
     commands:
       - "uname -m"
-      - "node --version"
       - "docker compose version"
       - "python3 --version"
-    on_failure: "Install missing prerequisites"
+      - "cosign version"
+    on_failure: "Install missing prerequisites (after the user confirms)"
 
   - step: "Decide: New validator or existing?"
     decision_point: true
@@ -962,18 +982,20 @@ procedure:
       - Validator wallet address: smart contract deployed on-chain
 
       Prerequisites:
-      - genlayer CLI installed (npm install -g genlayer)
-      - Owner account created and unlocked with 42,000+ GEN
+      - genlayer CLI installed (exact Bradbury Phase 2 version: npm install -g "genlayer@${CLI_VERSION}")
+      - Owner account created and unlocked with the deployed self-stake minimum
       - Terminal with TTY for interactive prompts
 
       Wizard steps:
       1. Account selection (or creation)
       2. Network selection
-      3. Balance verification (42,000+ GEN)
-      4. Operator setup (create new operator, export keystore)
-      5. Stake amount confirmation
-      6. On-chain validator registration (returns validator wallet address)
-      7. Identity setup (optional: moniker, website, socials)
+      3. Funding source (wallet or vesting)
+      4. Balance verification (deployed minimum + gas)
+      5. Operator setup (create new operator, export keystore)
+      6. Stake amount confirmation
+      7. On-chain validator registration (returns validator wallet address)
+      8. Identity setup (optional: moniker, website, socials)
+      9. Summary
 
       If wizard cannot be used, individual CLI commands are available:
       - genlayer account create/unlock (interactive)
@@ -981,13 +1003,13 @@ procedure:
       - genlayer staking validator-join (non-interactive with all flags)
       - genlayer staking set-identity (interactive)
     commands:
-      - "npm install -g genlayer"
-      - "genlayer staking wizard --network testnet-asimov"
+      - 'npm install -g "genlayer@${CLI_VERSION}"'
+      - "genlayer staking wizard --network testnet-bradbury"
     outputs:
-      - "validator_wallet_address (from Step 6 on-chain result)"
-      - "operator_address (from Step 4 operator creation)"
-      - "operator-keystore.json (exported to current directory in Step 4)"
-      - "export_passphrase (set by user in Step 4)"
+      - "validator_wallet_address (from Step 7 on-chain result)"
+      - "operator_address (from Step 5 operator creation)"
+      - "operator-keystore.json (exported to current directory in Step 5)"
+      - "export_passphrase (set by user in Step 5)"
     notes:
       - "The wizard runs on LOCAL machine, not the validator server"
       - "Save the operator keystore file — needed for upload to server"
@@ -1008,13 +1030,13 @@ procedure:
 
       If balance is 0, transfer GEN from the owner:
         genlayer account send 0xOPERATOR_ADDRESS 10gen \
-          --account "Owner Name" --network testnet-asimov
+          --account "Owner Name" --network testnet-bradbury
 
       Recommended initial funding: 10 GEN (covers thousands of transactions).
       Monitor and top up when operator balance drops below 1 GEN.
     commands:
       - "genlayer account show --account '${OPERATOR_ACCOUNT_NAME}'"
-      - "genlayer account send ${OPERATOR_ADDRESS} 10gen --account '${OWNER_ACCOUNT_NAME}' --network testnet-asimov"
+      - "genlayer account send ${OPERATOR_ADDRESS} 10gen --account '${OWNER_ACCOUNT_NAME}' --network testnet-bradbury"
     on_failure: "Fund operator manually via wallet or exchange"
     notes:
       - "Operator needs GEN for gas fees to sign validation transactions"
@@ -1040,63 +1062,47 @@ procedure:
 
   - step: "Download node software"
     detail: |
-      Download and extract to versioned directory structure with shared storage for database.
+      Download, verify and install to versioned directory structure with shared storage for data.
 
       Directory structure created:
       /opt/genlayer-node/
-      ├── v0.4/                    # Major version (shared storage)
-      │   └── data/node/           # Shared database directory
-      │       └── genlayer.db      # Database shared across v0.4.x
-      ├── v0.4.3/                  # Patch version
+      ├── v0.6/                    # Major version (shared storage)
+      │   └── data/node/           # Shared data directory (all v0.6.x)
+      │       ├── genvm.db         # Chain history
+      │       ├── ops.db           # This node's state (vote salts, nonces)
+      │       ├── keystore/
+      │       └── logs/
+      ├── v0.6.0/                  # Patch version
       │   ├── bin/
-      │   ├── third_party/
+      │   ├── opt/genvm/
       │   ├── configs/
-      │   ├── data/node/
-      │   │   ├── genlayer.db -> ../../v0.4/data/node/genlayer.db (symlink)
-      │   │   ├── keystore/        # Version-specific keystore
-      │   │   └── logs/            # Version-specific logs
+      │   ├── data -> ../v0.6/data (symlink)
       │   ├── docker-compose.yaml
       │   └── .env
       └── [convenience symlinks pointing to current version]
 
     command: |
-      # Extract major version for shared storage (e.g., v0.4 from v0.4.3)
+      # Extract major version for shared storage (e.g., v0.6 from v0.6.0)
       MAJOR_VERSION=$(echo ${VERSION} | grep -oE 'v[0-9]+\.[0-9]+' || echo ${VERSION})
       echo "Installing version: ${VERSION} (major: ${MAJOR_VERSION})"
 
-      # Download to /tmp
-      wget https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}/genlayer-node-linux-amd64-${VERSION}.tar.gz -O /tmp/genlayer-node-${VERSION}.tar.gz
+      # Download, verify (cosign + SHA256) and install with the release install.sh
+      # (extract + GenVM setup in the final directory) - see install-procedure.md Phase 2
+      sudo install -d -o genlayer -g genlayer /opt/genlayer-node
+      sudo -u genlayer -H ./install.sh --install-dir /opt/genlayer-node/${VERSION} \
+        --tarball genlayer-node-linux-amd64-${VERSION}.tar.gz
 
       # Create major version directory for shared storage FIRST
-      # genlayer.db is a PebbleDB directory, not a file
-      sudo mkdir -p /opt/genlayer-node/${MAJOR_VERSION}/data/node/genlayer.db
-      echo "Created major version directory: /opt/genlayer-node/${MAJOR_VERSION}/data/node/genlayer.db"
+      sudo -u genlayer mkdir -p /opt/genlayer-node/${MAJOR_VERSION}/data/node/keystore /opt/genlayer-node/${MAJOR_VERSION}/data/node/logs
+      echo "Created major version directory: /opt/genlayer-node/${MAJOR_VERSION}/data/node"
 
-      # Create patch version directory structure
-      sudo mkdir -p /opt/genlayer-node/${VERSION}
-      sudo tar -xzvf /tmp/genlayer-node-${VERSION}.tar.gz -C /opt/genlayer-node/${VERSION} --strip-components=1
-
-      # Create version-specific directories (keystore and logs are NOT shared)
-      sudo mkdir -p /opt/genlayer-node/${VERSION}/data/node/keystore
-      sudo mkdir -p /opt/genlayer-node/${VERSION}/data/node/logs
-      sudo mkdir -p /opt/genlayer-node/${VERSION}/configs/node
-      echo "Created version-specific directories"
-
-      # Remove any existing genlayer.db in patch version (we'll symlink it)
-      # NOTE: For binary (systemd) deploys only. Docker deploys cannot use
-      # symlinks because the target is outside the container's mounted volume.
-      sudo rm -rf /opt/genlayer-node/${VERSION}/data/node/genlayer.db
-
-      # Create symlink from patch version to major version shared database
-      sudo ln -sfn ../../../${MAJOR_VERSION}/data/node/genlayer.db /opt/genlayer-node/${VERSION}/data/node/genlayer.db
-      echo "Created symlink: /opt/genlayer-node/${VERSION}/data/node/genlayer.db -> ../../../${MAJOR_VERSION}/data/node/genlayer.db"
-
-      # Change ownership
-      sudo chown -R $USER:$USER /opt/genlayer-node
+      # Link the patch version's data/ to the shared data directory (binary and Docker)
+      sudo -u genlayer ln -sfn ../${MAJOR_VERSION}/data /opt/genlayer-node/${VERSION}/data
+      echo "Created symlink: /opt/genlayer-node/${VERSION}/data -> ../${MAJOR_VERSION}/data"
 
       # Setup convenience symlinks pointing to current version
       ln -sfn /opt/genlayer-node/${VERSION}/bin /opt/genlayer-node/bin
-      ln -sfn /opt/genlayer-node/${VERSION}/third_party /opt/genlayer-node/third_party
+      ln -sfn /opt/genlayer-node/${VERSION}/opt /opt/genlayer-node/opt
       ln -sfn /opt/genlayer-node/${VERSION}/data /opt/genlayer-node/data
       ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs
       ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml
@@ -1115,8 +1121,8 @@ procedure:
       ls -la /opt/genlayer-node/${VERSION}/data/node/
 
   - step: "Run GenVM setup"
-    detail: "Download GenVM dependencies."
-    command: "python3 /opt/genlayer-node/third_party/genvm/bin/setup.py"
+    detail: "install.sh already ran it. Re-run only after a failure, in the final directory."
+    command: "cd /opt/genlayer-node/${VERSION} && sudo -u genlayer python3 \"$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)/bin/setup.py\""
 
   - step: "Create .env file"
     decision_point: true
@@ -1147,8 +1153,8 @@ procedure:
     sub_steps:
       - name: "Rollup URLs (Required - No Defaults)"
         questions:
-          - "GenLayer Chain RPC URL (user must provide ZKSync HTTP RPC URL)"
-          - "GenLayer Chain WebSocket URL (user must provide ZKSync WebSocket URL)"
+          - "GenLayer Chain RPC URL (default: Bradbury Phase 2 Conduit HTTPS URL)"
+          - "GenLayer Chain WebSocket URL (default: Bradbury Phase 2 Conduit WSS URL)"
       - name: "Node Identity"
         questions:
           - "Validator Wallet Address"
@@ -1160,7 +1166,7 @@ procedure:
           - "Enable genlayer group? (default: yes)"
           - "Enable genlayer_debug group? (default: no)"
           - "Enable ethereum group? (default: yes)"
-          - "Enable zksync group? (default: yes)"
+          - "Enable zksync group? (default: no)"
       - name: "Ops Endpoints"
         questions:
           - "Enable ops endpoints? (default: yes)"
@@ -1181,17 +1187,17 @@ procedure:
     question: "How would you like to configure the operator key?"
     options:
       - answer: "Import from staking wizard export"
-        command: "./bin/genlayernode account import --password '${PASSWORD}' --passphrase '${PASSPHRASE}' --path '${KEYSTORE_PATH}' --quiet"
+        command: "sudo install -m 600 -o genlayer -g genlayer '${KEYSTORE_PATH}' /opt/genlayer-node/data/node/keystore/operator.json  # passphrase goes in .env as GENLAYERNODE_PASSWORD"
       - answer: "Copy from previous installation"
         command: "cp -r ${PREV_KEYSTORE}/* /opt/genlayer-node/data/node/keystore/"
       - answer: "Generate new operator key"
-        command: "./bin/genlayernode account new --setup --password '${PASSWORD}'"
+        command: "sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode account new -c $(pwd)/configs/node/config.yaml --setup'"
         warnings:
           - "You must update your validator's operator address after generating!"
-          - "You must fund the new operator address with ETH for gas fees!"
+          - "You must fund the new operator address with GEN for gas fees!"
         post_steps:
           - "Note the new operator address from command output"
-          - "Send ETH to the new operator address for transaction gas"
+          - "Send GEN to the new operator address for transaction gas"
           - "Update validator settings via staking UI or CLI to use new operator"
 
   - step: "Configure LLM provider"
@@ -1214,7 +1220,7 @@ procedure:
 
   - step: "Run doctor check"
     detail: "Validate configuration before starting."
-    command: "cd /opt/genlayer-node && source .env && ./bin/genlayernode doctor"
+    command: "cd /opt/genlayer-node && sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'"
 
   - step: "Decide: Deployment method"
     decision_point: true

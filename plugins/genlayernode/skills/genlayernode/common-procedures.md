@@ -5,36 +5,44 @@ Shared commands and procedures used by both install and update workflows.
 ## Download & Extract Node Software
 
 ```bash
-# Fetch latest version automatically
-VERSION=$(curl -s "https://storage.googleapis.com/storage/v1/b/gh-af/o?prefix=genlayer-node/bin/amd64" | \
-  grep -o '"name": *"[^"]*"' | sed -n 's/.*\/\(v[^/]*\)\/.*/\1/p' | sort -Vr | head -1)
+# Set the exact version approved for Bradbury Phase 2 (release announcement).
+# Do not take the newest listed version automatically: it may not be approved yet.
+VERSION=v0.6.0
 
-# Or set specific version manually
-# VERSION=v0.4.4
+# Download tarball, checksums, signature and install.sh to a temp dir
+# (stop on any 404 — never fall back to an older version)
+base=https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}
+DL=$(mktemp -d /tmp/genlayer-${VERSION}.XXXX) && chmod 755 "$DL" && cd "$DL"
+wget -q ${base}/genlayer-node-linux-amd64-${VERSION}.tar.gz ${base}/genlayer-node_${VERSION}_SHA256SUMS \
+        ${base}/genlayer-node_${VERSION}_SHA256SUMS.sigstore.json ${base}/install.sh
 
-# Download tarball to /tmp
-wget https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}/genlayer-node-linux-amd64-${VERSION}.tar.gz \
-  -O /tmp/genlayer-node-${VERSION}.tar.gz
+# Verify before extracting
+cosign verify-blob --bundle genlayer-node_${VERSION}_SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/genlayerlabs/genlayer-node/\.github/workflows/release-package\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com genlayer-node_${VERSION}_SHA256SUMS
+sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing
 
-# Create version directory
-sudo mkdir -p /opt/genlayer-node/${VERSION}
-
-# Extract
-sudo tar -xzvf /tmp/genlayer-node-${VERSION}.tar.gz \
-  -C /opt/genlayer-node/${VERSION} --strip-components=1
-
-# Set ownership
-sudo chown -R $USER:$USER /opt/genlayer-node/${VERSION}
+# Create version directory, extract and run the GenVM setup (install.sh), as the service user
+sudo install -d -o genlayer -g genlayer /opt/genlayer-node
+chmod +x install.sh
+sudo -u genlayer -H ./install.sh --install-dir /opt/genlayer-node/${VERSION} \
+  --tarball genlayer-node-linux-amd64-${VERSION}.tar.gz
 ```
+
+Details and expected output: `install-procedure.md` Phase 2.
 
 ## GenVM Setup
 
-Downloads GenVM binaries (genvm and genvm-modules).
+`install.sh` runs it. To run it by hand (for example after a failed setup), use the GenVM tree
+that `genvm.root_dir` names, **in the final directory** (it writes absolute paths into the binaries):
 
 ```bash
-python3 /opt/genlayer-node/${VERSION}/third_party/genvm/bin/setup.py
+cd /opt/genlayer-node/${VERSION}
+GENVM_ROOT=$(readlink -f "$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)")
+sudo -u genlayer python3 ${GENVM_ROOT}/bin/setup.py
 ```
 
+It verifies the runners, patches the binaries' interpreter path and precompiles the runners.
 **Wait for completion before proceeding.**
 
 ## LLM Strategy Selection
@@ -48,19 +56,22 @@ The release tarball includes two LLM strategies:
 ### Apply LLM Strategy
 
 ```bash
+# GenVM config dir of the version being configured (genvm.root_dir in its config.yaml)
+GENVM_CFG=$(cd /opt/genlayer-node/${VERSION} && readlink -f "$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)")/config
+
 # Step 1: Overlay the release LLM config (includes all backends: openrouter, morpheus, etc.)
-cp /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-modules-llm-release.yaml \
-   /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+cp ${GENVM_CFG}/genvm-modules-llm-release.yaml \
+   ${GENVM_CFG}/genvm-module-llm.yaml
 
 # Step 2: If greybox strategy, switch the Lua script path
 # (skip this step for default strategy)
 sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' \
-  /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+  ${GENVM_CFG}/genvm-module-llm.yaml
 ```
 
 **Verify:**
 ```bash
-grep lua_script_path /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+grep lua_script_path ${GENVM_CFG}/genvm-module-llm.yaml
 # default:  genvm-llm-default.lua
 # greybox:  genvm-llm-greybox.lua
 ```
@@ -96,12 +107,12 @@ For **default** strategy, enable at least one provider.
 ```bash
 # Replace <provider> with your provider name from the table above
 sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' \
-  /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+  ${GENVM_CFG}/genvm-module-llm.yaml
 ```
 
 **Verify it's enabled:**
 ```bash
-grep -A2 '<provider>:' /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+grep -A2 '<provider>:' ${GENVM_CFG}/genvm-module-llm.yaml
 # Should show: enabled: true
 ```
 
@@ -117,7 +128,7 @@ The LLM module must be restarted per GenVM instance — there is no atomic resta
 ```bash
 # Each validator runs its own GenVM manager on a different port
 # Check the deployed configs for bind addresses:
-grep -r bind_address /opt/genlayer-node/${VERSION}/third_party/genvm/config/genvm-module-llm.yaml
+grep -r bind_address ${GENVM_CFG}/genvm-module-llm.yaml
 # Or check active processes:
 ss -tlnp | grep genvm
 ```
@@ -125,7 +136,7 @@ ss -tlnp | grep genvm
 ### Step 2: Update the files
 
 ```bash
-GENVM_CONFIG="/opt/genlayer-node/${VERSION}/third_party/genvm/config"
+GENVM_CONFIG="${GENVM_CFG}"
 
 # Update the Lua script (source of truth: release/genvm-llm-greybox.lua)
 # Copy the new version to ALL genvm instance config directories
@@ -173,10 +184,13 @@ grep "greybox" /opt/genlayer-node/data/node/logs/node.log | tail -5
 
 ## Create Directory Structure
 
+The tarball ships `configs/node/`. The data directory is shared per minor line and linked from
+each version (see `install-procedure.md` Phase 2):
+
 ```bash
-# Create data and config directories
-mkdir -p /opt/genlayer-node/${VERSION}/data/node
-mkdir -p /opt/genlayer-node/${VERSION}/configs/node
+MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+')
+sudo -u genlayer mkdir -p /opt/genlayer-node/${MINOR}/data/node/keystore /opt/genlayer-node/${MINOR}/data/node/logs
+sudo -u genlayer ln -sfn ../${MINOR}/data /opt/genlayer-node/${VERSION}/data
 ```
 
 ## Setup Symlinks
@@ -185,14 +199,10 @@ Symlinks provide a stable path (`/opt/genlayer-node/bin`) that points to the cur
 
 ```bash
 cd /opt/genlayer-node
-ln -sfn ${VERSION}/bin bin
-ln -sfn ${VERSION}/third_party third_party
-ln -sfn ${VERSION}/data data
-ln -sfn ${VERSION}/configs configs
-ln -sfn ${VERSION}/docker-compose.yaml docker-compose.yaml
-ln -sfn ${VERSION}/.env .env
-ln -sfn ${VERSION}/alloy-config.river alloy-config.river
-ln -sfn ${VERSION}/genvm-module-web-docker.yaml genvm-module-web-docker.yaml
+for p in bin opt configs data docker-compose.yaml alloy-config.river alloy-healthcheck.sh genvm-module-web-docker.yaml .env; do
+  sudo -u genlayer ln -sfn ${VERSION}/$p $p
+done
+# 'opt' makes the config's relative genvm.root_dir (./opt/genvm/...) resolve from /opt/genlayer-node
 ```
 
 > **Note:** `alloy-config.river` ships with the node tarball. It must be symlinked like all other
@@ -200,8 +210,8 @@ ln -sfn ${VERSION}/genvm-module-web-docker.yaml genvm-module-web-docker.yaml
 > during an upgrade, restart Alloy to pick up the new config: `docker restart genlayer-node-alloy`
 
 **After symlinks, you can use:**
-- `/opt/genlayer-node/bin/genlayernode` instead of `/opt/genlayer-node/v0.4.4/bin/genlayernode`
-- `/opt/genlayer-node/.env` instead of `/opt/genlayer-node/v0.4.4/.env`
+- `/opt/genlayer-node/bin/genlayernode` instead of `/opt/genlayer-node/v0.6.0/bin/genlayernode`
+- `/opt/genlayer-node/.env` instead of `/opt/genlayer-node/v0.6.0/.env`
 
 ## Start WebDriver
 
@@ -209,14 +219,16 @@ WebDriver is required for web-based contract operations.
 
 ```bash
 cd /opt/genlayer-node
-docker compose up -d
+sudo docker compose up -d                          # sudo: .env is mode 600 (secrets)
+sudo docker compose up -d docker-socket-proxy     # optional: WebDriver metrics for a binary node
 
-# Wait for healthy status
-until docker inspect --format='{{.State.Health.Status}}' genlayer-node-webdriver 2>/dev/null | grep -q 'healthy'; do
-  echo "Waiting for WebDriver..."
-  sleep 2
+# Wait for healthy status (at most 3 minutes)
+for i in $(seq 1 36); do
+  s=$(sudo docker inspect -f '{{.State.Health.Status}}' genlayer-node-webdriver 2>/dev/null)
+  [ "$s" = healthy ] && break
+  echo "Waiting for WebDriver (${s:-not created})..."; sleep 5
 done
-echo "WebDriver is healthy!"
+[ "$s" = healthy ] && echo "WebDriver is healthy!" || sudo docker logs --tail 30 genlayer-node-webdriver
 ```
 
 **If WebDriver fails to start:**
@@ -228,7 +240,7 @@ docker ps -a | grep webdriver
 docker rm -f genlayer-node-webdriver
 
 # Retry
-docker compose up -d
+sudo docker compose up -d
 ```
 
 ## Doctor Check
@@ -236,20 +248,26 @@ docker compose up -d
 Verifies all configuration is correct before starting the node.
 
 ```bash
-cd /opt/genlayer-node/${VERSION}
-set -a && source .env && set +a
-./bin/genlayernode doctor
+cd /opt/genlayer-node
+sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'
 ```
 
 **Expected output:**
 ```
-✓ GenLayer Chain RPC: Connected
-✓ GenLayer Chain WebSocket: Connected
-✓ Validator Wallet Configuration: OK
-✓ GenVM Binaries: Found
-✓ WebDriver: Successfully rendered test page
+  ✓ GenLayer Chain RPC: Connected to https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz
+  ✓ GenLayer Chain WebSocket: Connected to wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz
+  ✓ All required config fields are present
+  ✓ Consensus Deployment (admission):
+    ✓ registry 0x3F71AE080BD6270A91dBcc7960d88797828538E0 is sealed
+    ✓ chain 4221, 97 contracts match the trusted manifest
+  ✓ GenVM Binaries: Found at ./opt/genvm/current
+  ✓ LLM Providers: 1 of 6 enabled backends usable
+  ✓ WebDriver: Successfully rendered test page at http://127.0.0.1:4444
 All configuration checks passed!
 ```
+
+(Validator mode also checks the validator wallet / operator key. `ℹ interpreter outside the genvm
+tree` lines are informational. "you have no fallback" warns that only one LLM provider works.)
 
 **Note:** Use `set -a && source .env && set +a` to properly export environment variables. Plain `source .env` does not export them.
 
@@ -267,7 +285,7 @@ curl -s http://localhost:9153/health | jq '.node_version'
 
 **Check sync status:**
 ```bash
-curl -s http://localhost:9153/health | jq '.checks.validating'
+curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_behind|synced_block)'
 ```
 
 **View logs:**
@@ -299,11 +317,13 @@ Requires=docker.service
 
 [Service]
 Type=simple
-User=root
+User=genlayer
+Group=genlayer
 WorkingDirectory=/opt/genlayer-node
 EnvironmentFile=/opt/genlayer-node/.env
-ExecStart=/opt/genlayer-node/bin/genlayernode run --password ${NODE_PASSWORD}
-ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+Environment=DOCKER_HOST=tcp://127.0.0.1:2375
+ExecStart=/opt/genlayer-node/bin/genlayernode run -c /opt/genlayer-node/configs/node/config.yaml
+ExecStartPost=-+/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy >/dev/null 2>&1 || true'
 Restart=always
 RestartSec=10
 
@@ -314,7 +334,12 @@ WantedBy=multi-user.target
 > **Note:** The `ExecStartPost` line automatically restarts the Alloy telemetry container
 > whenever the node starts. This is required because Alloy's bind mount to the log directory
 > becomes stale when symlinks change during upgrades. The `-` prefix means systemd will
-> ignore failures (e.g., if Alloy isn't installed). See `sharp-edges.yaml` -> `alloy-stale-bind-mount`.
+> ignore failures (e.g., if Alloy isn't installed); the `+` runs it as root, because the
+> `genlayer` service user is not in the docker group. See `sharp-edges.yaml` -> `alloy-stale-bind-mount`.
+>
+> No password is on the command line: in validator mode the node reads `GENLAYERNODE_PASSWORD`
+> from `EnvironmentFile`. `DOCKER_HOST` points at the read-only docker-socket-proxy (WebDriver
+> metrics); remove the line if that proxy is not started.
 
 **Commands:**
 ```bash
@@ -381,13 +406,14 @@ docker rm -f genlayer-node-webdriver
 docker compose up -d
 ```
 
-### Database Symlink Error (Fresh Install)
-**Symptom:** "mkdir genlayer.db: file exists" error.
-**Fix:** Remove dangling symlink:
-```bash
-rm /opt/genlayer-node/${VERSION}/data/node/genlayer.db
-```
-Fresh installs don't have a shared database to link to.
+### Database Error: "mkdir data/node/genvm.db: file exists"
+**Symptom:** The node stops at start with `error opening database at "data/node/genvm.db": mkdir ... file exists`.
+**Cause:** `data/node/genvm.db` is a link whose target does not exist from where the node runs —
+typically a pre-v0.6 `genlayer.db` link (the v0.6 node renames `genlayer.db` to `genvm.db` on
+start, link included), seen inside a Docker container where the target is not mounted.
+**Fix:** Use the v0.6 layout: the whole `data/` is the shared link and `data/node/genvm.db` is a
+real directory inside it (`common-procedures.md` -> "Create Directory Structure"). With the node stopped, move the real
+database directory into place instead of linking it.
 
 ### Alloy Not Sending Logs After Upgrade
 **Symptom:** Node is running and healthy, but Grafana shows no logs/metrics. Validator appears offline in monitoring.

@@ -8,7 +8,7 @@ Enable centralized monitoring by pushing metrics and logs to GenLayer Foundation
 ```mermaid
 flowchart TD
     subgraph Prerequisites
-        A[Node Running & Synced<br/>Port 9153 up] --> B[Request Creds<br/>Discord #testnet-asimov]
+        A[Node Running & Synced<br/>Port 9153 up] --> B[Request Creds<br/>GenLayer Foundation team]
         B --> C[Receive 4 credentials<br/>Prom + Loki user/pass]
     end
 
@@ -28,14 +28,8 @@ flowchart TD
 Before enabling monitoring:
 
 1. **Node must be running** and accessible on ops port (default 9153)
-2. **Metrics endpoint enabled** in config.yaml:
-   ```yaml
-   node:
-     ops:
-       port: 9153
-       endpoints:
-         metrics: true
-   ```
+2. **Ops port reachable** (`node.ops.port`, default 9153). In v0.6 the ops server always serves
+   `/metrics`; the `node.ops.endpoints.metrics` switch is compatibility metadata only.
 3. **Verify local metrics available:**
    ```bash
    curl -s http://localhost:9153/metrics | head -20
@@ -44,10 +38,12 @@ Before enabling monitoring:
 
 ## What Ships With the Node Tarball
 
-The node tarball (v0.4.4+) **already includes** everything needed for monitoring:
+The node tarball (v0.6) **already includes** everything needed for monitoring:
 
 - **`alloy-config.river`** — Full Alloy configuration for log collection and metrics forwarding
-- **`docker-compose.yaml`** — Includes the Alloy service under the `monitoring` profile
+- **`docker-compose.yaml`** — Includes the Alloy service (and the read-only `docker-socket-proxy`
+  Alloy uses for container discovery) under the `monitoring` profile
+- **`alloy-healthcheck.sh`** — Alloy container health check
 - **`.env.example`** — Includes all monitoring environment variable placeholders
 
 **You do NOT need to create these files manually.** The `alloy-config.river` symlink is created
@@ -59,9 +55,9 @@ automatically during installation/upgrade as part of the standard symlink setup 
 
 **Credentials must be requested from the GenLayer Foundation team.**
 
-1. Join the GenLayer Discord
-2. Go to `#testnet-asimov` channel
-3. Request monitoring credentials
+1. Contact the GenLayer Foundation team (GenLayer Discord, validator channels)
+2. Request monitoring endpoints and credentials for Testnet Bradbury
+3. See also https://docs.genlayer.com/validators/monitoring
 4. You will receive **4 credential values** (Prometheus and Loki have separate auth):
    - **Prometheus** instance ID and API key (for metrics)
    - **Loki** instance ID and API key (for logs)
@@ -73,13 +69,14 @@ automatically during installation/upgrade as part of the standard symlink setup 
 Edit `.env` on the server to set the monitoring variables:
 
 ```bash
-nano /opt/genlayer-node/.env
+sudo nano /opt/genlayer-node/.env
 ```
 
 **Set these values:**
 
 ```bash
-# Monitoring URLs (usually pre-filled in .env.example)
+# Monitoring URLs — empty in .env.example on purpose (no default endpoint); use the values
+# the Foundation gives you. Alloy stops with "ERROR: not set: ..." if any of the six is empty.
 CENTRAL_MONITORING_URL=https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom/push
 CENTRAL_LOKI_URL=https://logs-prod-042.grafana.net/loki/api/v1/push
 
@@ -94,11 +91,14 @@ CENTRAL_LOKI_PASSWORD=<API key - starts with glc_>
 # Node identification (set these yourself)
 NODE_ID=0xYourValidatorWalletAddress
 VALIDATOR_NAME=your-validator-name
+# Network label for recovery logs and alert routing (leave empty rather than guess)
+NETWORK_NAME=bradbury-phase2
 ```
 
 **Important notes:**
-- `NODE_ID` — Use your validator wallet address (e.g., `0x1451c990fa6Fa23Bc2773266Fa022cBb369cE165`)
-- `VALIDATOR_NAME` — A short identifier for your validator (no spaces, e.g., `edgars-asimov`)
+- `NODE_ID` — Use your validator wallet address (e.g., `0x1451c990fa6Fa23Bc2773266Fa022cBb369cE165`);
+  a full node has none — use a stable unique name (e.g., `fullnode-eu-1`)
+- `VALIDATOR_NAME` — A short identifier for your validator (no spaces, e.g., `my-validator-1`)
 - URLs should NOT have trailing slashes
 - `CENTRAL_MONITORING_USERNAME` and `CENTRAL_LOKI_USERNAME` are typically **different** numeric IDs
 - The password (API key) **may** be the same for both, but verify with your Foundation credentials
@@ -107,7 +107,7 @@ VALIDATOR_NAME=your-validator-name
 ```bash
 NODE_METRICS_ENDPOINT=host.docker.internal:9153
 LOG_FILE_PATTERN=/var/log/genlayer/node*.log
-METRICS_SCRAPE_INTERVAL=15s
+METRICS_SCRAPE_INTERVAL=60s
 METRICS_SCRAPE_TIMEOUT=10s
 ALLOY_SELF_MONITORING_INTERVAL=60s
 ```
@@ -117,26 +117,22 @@ ALLOY_SELF_MONITORING_INTERVAL=60s
 **CRITICAL**: Always test credentials before starting Alloy to avoid spamming error logs.
 
 ```bash
-# Load env vars
-set -a && source /opt/genlayer-node/.env && set +a
+# Reads .env as the service user; credentials go to curl on stdin (-K -), never on a
+# command line (visible in the process list). Prints only HTTP codes.
+sudo -u genlayer bash -c '
+set -a; . /opt/genlayer-node/.env; set +a
 
 # Test Prometheus (metrics) — expect HTTP 400 (auth OK, empty body rejected)
 echo "=== Prometheus ==="
-curl -s -o /dev/null -w "HTTP %{http_code}" \
-  -X POST \
-  -u "${CENTRAL_MONITORING_USERNAME}:${CENTRAL_MONITORING_PASSWORD}" \
-  "${CENTRAL_MONITORING_URL}"
-echo ""
+printf "user = \"%s:%s\"\n" "$CENTRAL_MONITORING_USERNAME" "$CENTRAL_MONITORING_PASSWORD" | \
+  curl -s -K - -o /dev/null -w "HTTP %{http_code}\n" -X POST "$CENTRAL_MONITORING_URL"
 
 # Test Loki (logs) — expect HTTP 204 (auth OK, no content)
 echo "=== Loki ==="
-curl -s -o /dev/null -w "HTTP %{http_code}" \
-  -X POST \
-  -u "${CENTRAL_LOKI_USERNAME}:${CENTRAL_LOKI_PASSWORD}" \
-  "${CENTRAL_LOKI_URL}" \
-  -H "Content-Type: application/json" \
-  --data-raw "{}"
-echo ""
+printf "user = \"%s:%s\"\n" "$CENTRAL_LOKI_USERNAME" "$CENTRAL_LOKI_PASSWORD" | \
+  curl -s -K - -o /dev/null -w "HTTP %{http_code}\n" -X POST "$CENTRAL_LOKI_URL" \
+    -H "Content-Type: application/json" --data-raw "{}"
+'
 ```
 
 **Expected results:**
@@ -299,10 +295,11 @@ CENTRAL_MONITORING_URL=https://prometheus-prod-66.../api/prom/push/
 | `CENTRAL_LOKI_USERNAME` | Yes | Loki instance ID (numeric, **different** from Prometheus) | `9876543` |
 | `CENTRAL_LOKI_PASSWORD` | Yes | Loki API key | `glc_xxxxx...` |
 | `NODE_ID` | Yes | Validator wallet address | `0x1451c990...` |
-| `VALIDATOR_NAME` | Yes | Short validator name (no spaces) | `edgars-asimov` |
+| `VALIDATOR_NAME` | Yes | Short validator name (no spaces) | `my-validator-1` |
+| `NETWORK_NAME` | No | Network label for recovery logs / alert routing | `bradbury-phase2` |
 | `NODE_METRICS_ENDPOINT` | No | Node metrics address | `host.docker.internal:9153` |
 | `LOG_FILE_PATTERN` | No | Log file glob pattern | `/var/log/genlayer/node*.log` |
-| `METRICS_SCRAPE_INTERVAL` | No | How often to scrape metrics | `15s` |
+| `METRICS_SCRAPE_INTERVAL` | No | How often to scrape metrics | `60s` (v0.6 default) |
 | `METRICS_SCRAPE_TIMEOUT` | No | Scrape timeout | `10s` |
 | `ALLOY_SELF_MONITORING_INTERVAL` | No | Alloy self-health check interval | `60s` |
 

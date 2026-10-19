@@ -896,11 +896,11 @@ A comprehensive interactive wizard that takes you from a bare Linux server to a 
 
 \`\`\`
 Step 0   Determine server location (local / SSH / cloud)
-Step 1   Check prerequisites (arch, Node.js, Docker, Python)
-Step 2   New validator or existing? (staking wizard)
-Step 3   Download & setup (tarball, GenVM, symlinks)
-Step 4   Environment config (.env — RPC, LLM key)
-Step 5   Node config (config.yaml — addresses, ports)
+Step 1   Check prerequisites (arch, Docker, Python, cosign) — install missing
+Step 2   Full node, new validator or existing? (staking wizard)
+Step 3   Download & setup (tarball, verify, GenVM, symlinks)
+Step 4   Environment config (.env — RPC key, LLM key)
+Step 5   Node config (config.yaml — network, manifest, addresses, ports)
 Step 6   Operator key (upload / copy / generate)
 Step 7   Start WebDriver (Docker Compose)
 Step 8   Doctor check (verify configuration)
@@ -917,8 +917,8 @@ Step 11  Monitoring setup (optional telemetry)
 | RAM | 16 GB | 32 GB |
 | CPU | 8 cores | 16+ cores |
 | Storage | 128 GB SSD | 256+ GB |
-| GEN tokens | 42,000+ | — |
-| ETH for gas | ~0.1 ETH | — |
+| GEN tokens | Deployed self-stake minimum (validator) | — |
+| GEN for gas | ~10 GEN | — |
 
 ### Three Key Addresses
 
