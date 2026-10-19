@@ -111,8 +111,7 @@ edges:
     description: "Selected wrong network in staking wizard"
     detect: |
       Check the RPC URL, consensusaddress and chainid in config.yaml match the network
-      you selected during wallet creation (Bradbury Phase 2: chain 4221,
-      AddressManager 0x3F71AE080BD6270A91dBcc7960d88797828538E0, CLI --network testnet-bradbury).
+      you selected during wallet creation (values from that network's section in the docs).
     impact: "Validator won't be recognized on the correct network."
     fix: |
       Re-run staking wizard with correct network selection
@@ -253,8 +252,10 @@ edges:
       grep -E "GENLAYERNODE_CONSENSUS_CONSENSUSADDRESS|GENLAYERNODE_CONSENSUS_GENESIS" .env 2>/dev/null
     impact: "Node cannot interact with consensus, or scans from block 0 (very slow) if genesis is wrong/missing."
     fix: |
-      The AddressManager address, chain id and genesis block are PER-DEPLOYMENT. Take them from
-      the official docs for the network you join. Testnet Bradbury (Phase 2):
+      The AddressManager address, chain id and genesis block are PER-DEPLOYMENT — there is no
+      single correct value. Take them from the official docs for the network you join
+      ("Network-Specific Consensus Configuration"); for your own network, from its operator.
+      v0.6+ sets them in configs/node/config.yaml under `consensus:`. Example — Testnet Bradbury:
         consensus:
           consensusaddress: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"
           chainid: "4221"                       # DECIMAL, not hex
@@ -262,7 +263,7 @@ edges:
           genesis: 47930                        # AddressManager deployment block
       v0.6 refuses to start when the manifest's registry/chain do not match these values.
       A missing/wrong `genesis` makes the node auto-scan from block 0. Confirm at runtime:
-      /health reports `network: bradbury-phase2`.
+      /health should report the intended `network`.
     severity: critical
 
   - id: protocol-manifest-missing-or-mismatch
@@ -274,22 +275,24 @@ edges:
       # doctor: "Consensus Deployment (admission)" fails; logs: manifest / admission errors at start
     impact: "The node does not start (deployment admission check). The release package ships NO network files."
     fix: |
-      Download the network's manifest from the official docs to the path manifestpath names:
+      Download the network's manifest from its docs section to the path manifestpath names,
+      e.g. Testnet Bradbury:
         curl -fsSL https://docs.genlayer.com/validators/bradbury.protocol-manifest.json \
           -o /opt/genlayer-node/<version>/configs/node/protocol-manifest.json
-      Expected: chainId 4221, registry 0x3F71AE080BD6270A91dBcc7960d88797828538E0, matching
-      consensus.consensusaddress and consensus.chainid ("4221", decimal). Never hand-write a manifest.
+      Its chainId and registry must match consensus.chainid (decimal) and consensus.consensusaddress
+      (Testnet Bradbury: 4221, 0x3F71AE080BD6270A91dBcc7960d88797828538E0). Never hand-write a manifest.
       Docker: releases from rc.2 mount it via NODE_MANIFEST_PATH (default ./configs/node/protocol-manifest.json).
     severity: critical
 
   - id: conduit-websocket-key-missing
-    description: "Bradbury Phase 2 WebSocket refuses connections without the Conduit API key (HTTP 401)"
+    description: "The network's RPC provider refuses the WebSocket without its API key (HTTP 401) — e.g. Conduit on Testnet Bradbury"
     detect: |
       sudo awk -F= '/^GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=/{print (length($2)>0?"set":"EMPTY")}' /opt/genlayer-node/.env
       # doctor: "GenLayer Chain WebSocket" fails; node exits at start (the WebSocket dial is fatal, in every mode)
     impact: "Full nodes and validators both fail to start. The HTTP RPC answers without a key, which hides the problem."
     fix: |
-      The USER creates a key at https://app.conduit.xyz/rpc-keys and sets it in the node's .env:
+      The USER creates a key with the RPC provider (Testnet Bradbury: https://app.conduit.xyz/rpc-keys)
+      and sets it in the node's .env:
         GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=<key>
       The node sends it as X-AccessKey (header name: rollup.genlayerchainrpckeyheader).
     severity: critical
@@ -583,8 +586,8 @@ edges:
     impact: "Validator cannot participate in consensus."
     fix: |
       Check:
-      1. RPC URL is correct and accessible; the Conduit key is set (WebSocket 401 otherwise)
-      2. consensus.genesis is pinned (47930 on Bradbury Phase 2)
+      1. RPC URL is correct and accessible; the RPC provider key is set if needed (WebSocket 401 otherwise)
+      2. consensus.genesis is pinned (the deployment's AddressManager block; Testnet Bradbury: 47930)
       3. Firewall allows outbound HTTPS/WSS
 
       Check logs for errors.
@@ -822,7 +825,7 @@ edges:
     fix: |
       Pin the deployment's AddressManager deploy block in config.yaml:
         consensus:
-          genesis: 47930            # Bradbury Phase 2 (the AddressManager deployment block)
+          genesis: <deploy-block>   # the AddressManager deployment block for THIS deployment (Testnet Bradbury: 47930)
       Restart. With genesis pinned the node catches up to head in seconds.
     severity: high
 
@@ -901,7 +904,7 @@ edges:
       cd /opt/genlayer-node
       sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'
       # Doctor checks the consensus deployment against consensus.consensusaddress / chainid and
-      # the protocol manifest from config.yaml (no extra flag needed for Bradbury Phase 2).
+      # the protocol manifest from config.yaml (no extra flag needed).
     severity: medium
 
   - id: full-node-mode-vs-validator
@@ -914,12 +917,12 @@ edges:
       validator wallet, operator address, keystore, staking, or gas funding (logs: 'full node
       mode detected, skipping validator setup'). It syncs without an LLM key (replay never calls
       the LLM), but doctor fails and gen_call on LLM contracts fails without one. It DOES need the
-      Conduit RPC key (the WebSocket dial at boot is fatal without it). Running the staking wizard /
+      RPC provider key when the network's provider requires one (the WebSocket dial at boot is fatal without it). Running the staking wizard /
       importing an operator keystore for a full node is wasted effort.
     fix: |
       For a full node: set node.mode: "full", leave validatorWalletAddress/operatorAddress empty,
-      and skip the staking wizard + keystore import entirely. Still configure RPC/WS + the Conduit
-      key, the consensus values + manifest, and (recommended) one LLM provider key.
+      and skip the staking wizard + keystore import entirely. Still configure RPC/WS + the RPC
+      provider key (if needed), the consensus values + manifest, and (recommended) one LLM provider key.
     severity: low
 
   # ============================================================================

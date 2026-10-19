@@ -93,7 +93,7 @@ validations:
     type: command
     command: "command -v genlayer >/dev/null 2>&1"
     expect: "exit 0"
-    message: "GenLayer CLI not installed. Install the exact Bradbury Phase 2 version: npm install -g genlayer@<version from the announcement>"
+    message: "GenLayer CLI not installed. Install the exact version for your network: npm install -g genlayer@<version from the release announcement>"
 
   # ============================================================================
   # DOCKER STATE
@@ -137,7 +137,7 @@ validations:
     type: command
     command: "[ -f configs/node/protocol-manifest.json ]"
     expect: "exit 0"
-    message: "Protocol manifest not found (required since v0.6). Download it: curl -fsSL https://docs.genlayer.com/validators/bradbury.protocol-manifest.json -o configs/node/protocol-manifest.json"
+    message: "Protocol manifest not found (required since v0.6). Download your network's manifest from its docs section to configs/node/protocol-manifest.json (Testnet Bradbury: https://docs.genlayer.com/validators/bradbury.protocol-manifest.json)"
 
   - id: llm-key-configured
     type: command
@@ -209,7 +209,7 @@ validations:
     type: command
     command: "sudo awk -F= '/^GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=/{f=length($2)>0} END{exit !f}' /opt/genlayer-node/.env"
     expect: "exit 0"
-    message: "GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY (Conduit API key) is not set in .env: the WebSocket refuses the connection and the node does not start"
+    message: "GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY (RPC provider API key) is not set in .env: when the provider needs one (Testnet Bradbury: Conduit), the WebSocket refuses the connection and the node does not start"
 
   - id: validator-address-configured
     type: command

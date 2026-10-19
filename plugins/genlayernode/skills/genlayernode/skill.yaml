@@ -28,15 +28,10 @@ owns:
 
 # Default configuration values (from infrastructure)
 defaults:
-  network: testnet-bradbury
-  # Bradbury Phase 2 (Arbitrum Orbit). The Conduit API key has NO default - the user sets
-  # GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY in .env
-  rpc_url: "https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
-  websocket_url: "wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
-  consensus_contract_address: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"
-  consensus_chain_id: "4221"
-  consensus_genesis: 47930
-  protocol_manifest_url: "https://docs.genlayer.com/validators/bradbury.protocol-manifest.json"
+  network: testnet-bradbury   # CLI network alias; the testnet documented today
+  # NOTE: rpc_url, websocket_url, the RPC provider key, consensus address, chain id, genesis and
+  # the protocol manifest are PER-DEPLOYMENT - NO defaults. Take them from the network's section
+  # in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator.
   install_path: "/opt/genlayer-node"
   data_dir: "./data/node"
   node_rpc_port: 9151
@@ -48,7 +43,10 @@ defaults:
 
 # Required user configuration (no defaults)
 required_inputs:
-  - rpc_key: "Conduit API key for the GenLayer Chain RPC/WebSocket (set by the user in .env)"
+  - rpc_url: "GenLayer Chain HTTP RPC URL (from the network's docs)"
+  - websocket_url: "GenLayer Chain WebSocket URL (from the network's docs)"
+  - consensus_values: "consensusaddress, chainid, genesis and the protocol manifest (from the network's docs)"
+  - rpc_key: "RPC provider API key, if the provider needs one (set by the user in .env)"
   - validator_wallet_address: "From staking wizard or existing wallet"
   - operator_address: "From keystore import or generate new"
   - llm_api_key: "From chosen LLM provider"
@@ -270,18 +268,16 @@ inputs_required:
 config_wizard:
   sections:
     - id: rollup
-      name: "Rollup Configuration (Bradbury Phase 2 defaults)"
+      name: "Rollup Configuration (Required - No Defaults)"
       questions:
         - id: genlayerchainrpcurl
           prompt: "GenLayer Chain RPC URL"
           required: true
-          default: "https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
-          validation: "Must be a valid HTTP(S) URL without an API key in it"
+          validation: "Must be a valid HTTP(S) URL - user must provide the network's RPC endpoint (no API key in it)"
         - id: genlayerchainwebsocketurl
           prompt: "GenLayer Chain WebSocket URL"
           required: true
-          default: "wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
-          validation: "Must be a valid WSS URL without an API key in it"
+          validation: "Must be a valid WSS URL - user must provide the network's WebSocket endpoint (no API key in it)"
 
     - id: node_identity
       name: "Node Identity"
@@ -417,7 +413,7 @@ patterns:
   - id: install-genlayer-cli
     description: |
       Install the GenLayer CLI globally via npm.
-    command: 'npm install -g "genlayer@${CLI_VERSION}"  # exact version from the Bradbury Phase 2 announcement'
+    command: 'npm install -g "genlayer@${CLI_VERSION}"  # exact version from the release announcement for your network'
 
   - id: create-validator-wallet
     description: |
@@ -517,14 +513,14 @@ patterns:
       Create symlinks for current version for easy access from /opt/genlayer-node.
     commands:
       - "sudo -u genlayer ln -sfn ../${MINOR}/data /opt/genlayer-node/${VERSION}/data"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/bin /opt/genlayer-node/bin"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/opt /opt/genlayer-node/opt"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/data /opt/genlayer-node/data"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/.env /opt/genlayer-node/.env"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river"
-      - "ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml /opt/genlayer-node/genvm-module-web-docker.yaml"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/bin /opt/genlayer-node/bin"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/opt /opt/genlayer-node/opt"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/data /opt/genlayer-node/data"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/.env /opt/genlayer-node/.env"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml /opt/genlayer-node/genvm-module-web-docker.yaml"
 
   - id: run-genvm-setup
     description: |
@@ -543,14 +539,14 @@ patterns:
       # Node identification
       NODE_ID=${NODE_ID}
       NODE_TYPE=validator
-      NODE_ENV=testnet-bradbury
+      NODE_ENV=${NETWORK}
       NODE_VERSION=${VERSION}
 
       # Keystore password (validator only; the user sets it, Claude leaves it empty)
       GENLAYERNODE_PASSWORD=
       NODE_PASSWORD=
 
-      # Conduit API key for the GenLayer Chain RPC/WebSocket (the user sets it)
+      # RPC provider API key, if the provider needs one (the user sets it)
       GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=
 
       # LLM API Key (only set the one you're using)
@@ -589,14 +585,14 @@ patterns:
       rollup:
         genlayerchainrpcurl: "${RPC_URL}"
         genlayerchainwebsocketurl: "${WEBSOCKET_URL}"
-        provider: "conduit"
+        provider: "${RPC_PROVIDER}"
 
-      # Consensus configuration (AddressManager) - Bradbury Phase 2
+      # Consensus configuration (AddressManager) - per-deployment, from the network's docs
       consensus:
-        consensusaddress: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"
-        chainid: "4221"
+        consensusaddress: "${CONSENSUS_ADDRESS}"
+        chainid: "${CHAIN_ID}"
         manifestpath: "configs/node/protocol-manifest.json"
-        genesis: 47930
+        genesis: ${GENESIS_BLOCK}
 
       # Data directory
       datadir: "./data/node"
@@ -982,7 +978,7 @@ procedure:
       - Validator wallet address: smart contract deployed on-chain
 
       Prerequisites:
-      - genlayer CLI installed (exact Bradbury Phase 2 version: npm install -g "genlayer@${CLI_VERSION}")
+      - genlayer CLI installed (exact version for your network: npm install -g "genlayer@${CLI_VERSION}")
       - Owner account created and unlocked with the deployed self-stake minimum
       - Terminal with TTY for interactive prompts
 
@@ -1101,14 +1097,14 @@ procedure:
       echo "Created symlink: /opt/genlayer-node/${VERSION}/data -> ../${MAJOR_VERSION}/data"
 
       # Setup convenience symlinks pointing to current version
-      ln -sfn /opt/genlayer-node/${VERSION}/bin /opt/genlayer-node/bin
-      ln -sfn /opt/genlayer-node/${VERSION}/opt /opt/genlayer-node/opt
-      ln -sfn /opt/genlayer-node/${VERSION}/data /opt/genlayer-node/data
-      ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs
-      ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml
-      ln -sfn /opt/genlayer-node/${VERSION}/.env /opt/genlayer-node/.env
-      ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river
-      ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml /opt/genlayer-node/genvm-module-web-docker.yaml
+      sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/bin /opt/genlayer-node/bin
+      sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/opt /opt/genlayer-node/opt
+      sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/data /opt/genlayer-node/data
+      sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/configs /opt/genlayer-node/configs
+      sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/docker-compose.yaml /opt/genlayer-node/docker-compose.yaml
+      sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/.env /opt/genlayer-node/.env
+      sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river
+      sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml /opt/genlayer-node/genvm-module-web-docker.yaml
 
       # Verify structure
       echo "Directory structure:"
@@ -1153,8 +1149,8 @@ procedure:
     sub_steps:
       - name: "Rollup URLs (Required - No Defaults)"
         questions:
-          - "GenLayer Chain RPC URL (default: Bradbury Phase 2 Conduit HTTPS URL)"
-          - "GenLayer Chain WebSocket URL (default: Bradbury Phase 2 Conduit WSS URL)"
+          - "GenLayer Chain RPC URL (user must provide the network's HTTP RPC URL)"
+          - "GenLayer Chain WebSocket URL (user must provide the network's WebSocket URL)"
       - name: "Node Identity"
         questions:
           - "Validator Wallet Address"

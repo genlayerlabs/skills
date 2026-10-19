@@ -55,13 +55,15 @@ I'll guide you through the complete validator node installation. Here's what we'
 
 **Step 5: Configure Environment (.env)**
 - Create .env with empty secret values
-- You set the Conduit RPC key manually
+- You set the RPC provider key manually (if your network's provider needs one)
 - Set LLM provider (you'll add API key manually)
 
 **Step 6: Configure Node (config.yaml)**
-- Set Bradbury network values and download the protocol manifest
-- Set node mode, validator wallet address, operator address
+- Set validator wallet address
+- Configure operator address
 - Set network endpoints and ports
+- Set the network's consensus values and download its protocol manifest
+- Set node mode (full or validator)
 
 **Step 7: Set Up Operator Key (validator only)**
 - Import keystore from staking wizard, OR
@@ -216,7 +218,7 @@ Key points:
 When a validator reports `504 Gateway Timeout`, `get chain ID`, `validator is banned`, or `NO_PROVIDER_FOR_PROMPT`, triage before changing configuration:
 
 1. **Classify the symptom.**
-   - WebSocket `401` (doctor: GenLayer Chain WebSocket fails; the node exits at start) means the Conduit key `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY` is empty or wrong in `.env`.
+   - WebSocket `401` (doctor: GenLayer Chain WebSocket fails; the node exits at start) means the RPC provider key `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY` is empty or wrong in `.env` (Testnet Bradbury: Conduit).
    - `dependencies: get chain ID: 504 Gateway Timeout` usually means the configured rollup RPC is unavailable or overloaded. Confirm with `eth_chainId`/`eth_blockNumber` against the configured HTTP RPC and compare with other operators before editing local node files.
    - `/health` with `temporary ban until epoch ...: validator is banned` means the node may be healthy but consensus has temporarily banned the validator. Fix the root cause first, then request unban with the validator wallet address.
    - `NO_PROVIDER_FOR_PROMPT` means GenVM could not find an enabled LLM backend that satisfies the prompt capabilities. Check enabled providers, API keys, JSON/image capability support, and restart the affected GenVM LLM module after config changes.
@@ -247,10 +249,10 @@ Before starting, ensure your setup meets these requirements:
 ### Blockchain Requirements
 - **GEN Tokens**: The deployed self-stake minimum (`genlayer staking epoch-info --network testnet-bradbury`; 42,000 GEN is the protocol default) if creating new validator
 - **GEN for gas**: Small amount of GEN for gas fees on operator account (~10 GEN recommended)
-- **RPC Access**: HTTP and WebSocket URLs for GenLayer Chain (Arbitrum Orbit, chain id 4221) and a Conduit API key (the WebSocket requires it)
+- **RPC Access**: HTTP and WebSocket URLs for GenLayer Chain, and the RPC provider's API key if it needs one (from your network's section in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator)
 
 ### API Keys Required
-- **RPC Provider**: Conduit API key (https://app.conduit.xyz/rpc-keys) — full nodes and validators
+- **RPC Provider**: API key, if your network's RPC provider needs one — full nodes and validators (Testnet Bradbury: Conduit, https://app.conduit.xyz/rpc-keys)
 - **LLM Provider**: API key from one of these providers (a full node syncs without one, but doctor fails):
   - Heurist (recommended for validators)
   - Comput3
@@ -281,7 +283,7 @@ flowchart TD
 
 When specifying a version:
 - **Specific version**: Use exact version like `v0.6.0`
-- **Latest version**: Use the version approved for Bradbury Phase 2 in the release announcement — the most recent listed release may not be approved yet
+- **Latest version**: Use the version approved for your network in the release announcement — the most recent listed release may not be approved yet
 - **No version specified**: Skill will prompt you to choose from the 5 most recent versions
 
 The skill automatically handles:
@@ -331,7 +333,7 @@ Guide validators through complete GenLayer node installation including:
 ### Requires
 - AMD64 Linux server (16GB+ RAM, 8+ cores, 128GB+ SSD)
 - Docker, Python 3.10+ with pip and venv, cosign
-- Conduit API key for the Bradbury RPC/WebSocket
+- RPC provider API key, if your network needs one (Testnet Bradbury: Conduit)
 - Deployed self-stake minimum in GEN (if new validator)
 - LLM API key from supported provider
 - Operator keystore from staking wizard (validator only, or generate new)
@@ -339,12 +341,15 @@ Guide validators through complete GenLayer node installation including:
 ### Default Configuration
 | Setting | Default Value |
 |---------|---------------|
-| RPC URL | `https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/` (Bradbury Phase 2) |
-| WebSocket | `wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/` (needs the Conduit key) |
-| Consensus Address (AddressManager) | `0x3F71AE080BD6270A91dBcc7960d88797828538E0` (Bradbury Phase 2; `consensus.consensusaddress`) |
-| Chain ID | `4221` (`consensus.chainid`, decimal) |
-| Genesis Block | `47930` — AddressManager deploy block (`consensus.genesis`; missing ⇒ scans from block 0) |
-| Protocol Manifest | `configs/node/protocol-manifest.json` from https://docs.genlayer.com/validators/bradbury.protocol-manifest.json |
+| RPC URL | **No default** - user must provide |
+| WebSocket | **No default** - user must provide |
+| Consensus Address (AddressManager) | **Per-deployment — no default** (v0.6+: `consensus.consensusaddress` in config.yaml) |
+| Chain ID | **Per-deployment — no default** (v0.6+: `consensus.chainid`, decimal) |
+| Genesis Block | **Per-deployment** — AddressManager deploy block (v0.6+: `consensus.genesis`; missing ⇒ scans from block 0) |
+| Protocol Manifest | **Per-deployment** (v0.6+: the network's manifest, saved at `configs/node/protocol-manifest.json`) |
+
+Take the per-deployment values from your network's section in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator. The Testnet Bradbury
+values are shown as an example in `install-procedure.md` Phase 5.
 | Install Path | `/opt/genlayer-node` |
 | RPC Port | `9151` |
 | Ops Port | `9153` |
@@ -444,7 +449,7 @@ its pinned GitHub release `.deb`. Node.js is not needed on the server.
 
 - **New**: Run staking wizard (deployed self-stake minimum: `genlayer staking epoch-info --network testnet-bradbury`)
   ```bash
-  npm install -g "genlayer@${CLI_VERSION}"   # exact version from the Bradbury Phase 2 announcement
+  npm install -g "genlayer@${CLI_VERSION}"   # exact version from the release announcement for your network
   genlayer staking wizard --network testnet-bradbury
   ```
   The wizard is **fully interactive** (requires TTY) and guides you through:
@@ -501,6 +506,8 @@ curl -s "https://storage.googleapis.com/storage/v1/b/gh-af/o?prefix=genlayer-nod
 See `install-procedure.md` Phase 2 for the exact commands. In short:
 ```bash
 base=https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}
+# Download to a temp dir the genlayer user can read (home directories are 750 on Ubuntu)
+DL=$(mktemp -d /tmp/genlayer-${VERSION}.XXXX) && chmod 755 "$DL" && cd "$DL"
 # All four files must exist — stop on any 404 (never fall back to an older version)
 curl -fI ${base}/genlayer-node-linux-amd64-${VERSION}.tar.gz      # + _SHA256SUMS, .sigstore.json, install.sh
 wget ${base}/genlayer-node-linux-amd64-${VERSION}.tar.gz ${base}/genlayer-node_${VERSION}_SHA256SUMS \
@@ -548,7 +555,7 @@ sudo chmod 600 /opt/genlayer-node/${VERSION}/.env
 ```
 
 **Key values to configure:**
-1. **RPC key** - The RPC/WebSocket URLs are in config.yaml (step 4). The Conduit API key goes here:
+1. **RPC key** - The RPC/WebSocket URLs are in config.yaml (step 4). The RPC provider's API key, if it needs one (Testnet Bradbury: Conduit), goes here:
    ```bash
    GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=<set by the user>
    ```
@@ -568,7 +575,7 @@ sudo chmod 600 /opt/genlayer-node/${VERSION}/.env
 **After creating .env, instruct user to:**
 1. Connect to the server (SSH / `gcloud compute ssh` / `aws ssm start-session`)
 2. Edit the .env file: `sudo nano /opt/genlayer-node/.env`
-3. Set the Conduit RPC key and the LLM API key for their chosen provider
+3. Set the RPC provider key (if needed) and the LLM API key for their chosen provider
 4. Set the keystore passphrase (validator only)
 5. Save and confirm when done
 
@@ -580,12 +587,12 @@ First ask if user wants to copy existing config or use example:
 - **Use example config (Recommended)**: Edit the artifact's config.yaml in place, then customize via wizard
 - **Copy from previous**: Copy config.yaml from previous installation (keep the new `genvm.root_dir`)
 
-**Network values (Bradbury Phase 2) and protocol manifest** — required since v0.6; the
-commands are in `install-procedure.md` Phase 5:
-- Download `https://docs.genlayer.com/validators/bradbury.protocol-manifest.json` to `configs/node/protocol-manifest.json`
-- `rollup:` RPC/WebSocket URLs (Conduit), `provider: "conduit"`
-- `consensus:` `consensusaddress: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"`, `chainid: "4221"`,
-  `manifestpath: "configs/node/protocol-manifest.json"`, `genesis: 47930`
+**Network values and protocol manifest** — required since v0.6. Take them from
+your network's section in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator. The commands and the Testnet Bradbury
+example are in `install-procedure.md` Phase 5:
+- Download the network's manifest to `configs/node/protocol-manifest.json`
+- `rollup:` RPC/WebSocket URLs and `provider`
+- `consensus:` `consensusaddress`, `chainid` (decimal), `manifestpath: "configs/node/protocol-manifest.json"`, `genesis`
 - `node.mode`: `"full"` or `"validator"`
 
 #### Configuration Wizard (Group-based)
@@ -635,7 +642,7 @@ First ask how user wants to provide the operator key:
    **For local setup:**
    ```bash
    # Copy keystore.json
-   cp ./keystore.json /opt/genlayer-node/${VERSION}/data/node/keystore.json
+   cp ./keystore.json /tmp/keystore.json
 
    # Or copy keystore directory
    cp -r ./keystore/* /opt/genlayer-node/${VERSION}/data/node/keystore/
@@ -644,7 +651,7 @@ First ask how user wants to provide the operator key:
    **For remote SSH server:**
    ```bash
    # Upload keystore.json
-   scp ./keystore.json username@hostname:/opt/genlayer-node/${VERSION}/data/node/keystore.json
+   scp ./keystore.json username@hostname:/tmp/keystore.json
 
    # Or upload keystore directory
    scp -r ./keystore/* username@hostname:/opt/genlayer-node/${VERSION}/data/node/keystore/
@@ -653,7 +660,7 @@ First ask how user wants to provide the operator key:
    **For GCP VM:**
    ```bash
    # Upload keystore.json
-   gcloud compute scp ./keystore.json instance-name:/opt/genlayer-node/${VERSION}/data/node/keystore.json \
+   gcloud compute scp ./keystore.json instance-name:/tmp/keystore.json \
      --project=project-id --zone=zone
 
    # Or upload keystore directory
@@ -664,7 +671,7 @@ First ask how user wants to provide the operator key:
    **For AWS EC2:**
    ```bash
    # Upload keystore.json (assuming SSH access)
-   scp -i ~/.ssh/your-key.pem ./keystore.json ec2-user@instance-ip:/opt/genlayer-node/${VERSION}/data/node/keystore.json
+   scp -i ~/.ssh/your-key.pem ./keystore.json ec2-user@instance-ip:/tmp/keystore.json
 
    # Or upload keystore directory
    scp -i ~/.ssh/your-key.pem -r ./keystore/* ec2-user@instance-ip:/opt/genlayer-node/${VERSION}/data/node/keystore/
@@ -677,9 +684,9 @@ First ask how user wants to provide the operator key:
    ```
 6. For keystore.json: install the encrypted file as-is (no passphrase on any command line):
    ```bash
-   sudo install -m 600 -o genlayer -g genlayer /opt/genlayer-node/${VERSION}/data/node/keystore.json \
+   sudo install -m 600 -o genlayer -g genlayer /tmp/keystore.json \
      /opt/genlayer-node/${VERSION}/data/node/keystore/operator.json
-   sudo shred -u /opt/genlayer-node/${VERSION}/data/node/keystore.json
+   sudo shred -u /tmp/keystore.json
    ```
    Note: the user sets `GENLAYERNODE_PASSWORD` (Docker: `NODE_PASSWORD`) in .env to the export passphrase; doctor verifies it unlocks
 7. For keystore directory: Already in correct location, just verify contents show UTC--* file
@@ -723,7 +730,7 @@ sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'
 ```
 
 **Expected output on success:** all checks ✓ — GenLayer Chain RPC + WebSocket, consensus
-deployment (registry sealed, chain 4221, contracts match the manifest), validator/operator
+deployment (registry sealed, chain id and contracts match the manifest), validator/operator
 wallet (validator mode), GenVM binaries + module config, at least one LLM provider, and
 WebDriver connectivity.
 
@@ -732,7 +739,7 @@ WebDriver connectivity.
   `ln -sfn ${VERSION}/opt /opt/genlayer-node/opt` (v0.6+), then re-run.
 - GenVM Binaries missing entirely: re-run setup.py (see Download & Setup).
 - LLM provider "not set" though `.env` has it: you sourced `.env` without `set -a` (vars not exported).
-- WebSocket fails (401): the Conduit key `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY` is empty or wrong.
+- WebSocket fails (401): the RPC provider key `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY` is empty or wrong.
 - Consensus deployment check fails: the manifest is missing, or `consensusaddress` / `chainid` do not match it.
 - WebDriver not ready: check `docker logs genlayer-node-webdriver`.
 
@@ -797,6 +804,9 @@ sudo chown -R 10001:10001 ./data/      # the container runs as uid 10001
 sudo docker compose --profile node run --rm --entrypoint /app/bin/genlayernode genlayer-node doctor
 sudo docker compose --profile node up -d
 # Add central telemetry (Alloy metrics + logs push): append --profile monitoring
+
+# When switching back to binary/systemd: stop Docker and restore shared-data ownership
+# sudo docker compose --profile node down && sudo chown -R genlayer:genlayer /opt/genlayer-node/data/
 ```
 
 **v0.6+ / pre-release Docker notes:**
@@ -849,7 +859,7 @@ After starting the node, verify it's running and syncing:
 curl -s http://localhost:9153/health | jq
 ```
 
-Expected response:
+Expected response (example: Testnet Bradbury):
 ```json
 {
   "status": "healthy",
@@ -955,8 +965,8 @@ When you use the word "latest", the skill will automatically fetch and install t
 | 1 | Check Prerequisites | Architecture, Docker, Python 3.10+, cosign; install what is missing |
 | 2 | Full Node, New Validator or Existing? | Staking wizard or skip |
 | 3 | Download & Setup | Download tarball, verify (cosign + SHA256), install.sh (extract + GenVM setup), shared data dir, symlinks |
-| 4 | Environment (.env) | Conduit RPC key, LLM key and (validator) password placeholders |
-| 5 | Node Config (config.yaml) | Bradbury network values + protocol manifest, node mode, validator address, operator address, ports |
+| 4 | Environment (.env) | RPC provider key (if needed), LLM key and (validator) password placeholders |
+| 5 | Node Config (config.yaml) | Network values + protocol manifest (from the network's docs), node mode, validator address, operator address, ports |
 | 6 | Operator Key | Upload keystore (method depends on Step 0) or generate new (validator only) |
 | 7 | Start WebDriver | `docker compose up -d`, wait for healthy |
 | 8 | Run Doctor Check | Verify all configuration |
@@ -980,17 +990,17 @@ When you use the word "latest", the skill will automatically fetch and install t
 
 ### config.yaml Rollup URLs (Step 4) - Ask via Wizard
 Use AskUserQuestion with these options (tool requires minimum 2 options):
-- **RPC URL** - Options: ["Use the Bradbury Phase 2 default", "I'll enter my URL"]
-- **WebSocket URL** - Options: ["Use the Bradbury Phase 2 default", "I'll enter my URL"]
+- **RPC URL** - Options: ["Skip for now", "I'll enter my URL"]
+- **WebSocket URL** - Options: ["Skip for now", "I'll enter my URL"]
 
 **IMPORTANT**: The "Other" text field in AskUserQuestion does not work reliably. When user selects "I'll enter my URL", follow up with a **plain text question** asking them to type the URL directly.
 
 Example flow:
 ```
 Step 1: AskUserQuestion
-  Question: "Which GenLayer Chain RPC URL?"
+  Question: "Do you have the GenLayer Chain RPC URL?" (from your network's docs)
   Options:
-    - "Use the Bradbury Phase 2 default" (https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/)
+    - "Skip for now" (will need to configure manually later)
     - "I'll enter my URL"
 
 Step 2: If user selected "I'll enter my URL", ask:
@@ -1005,7 +1015,7 @@ These values are configured in config.yaml during the Node Identity group:
 
 ### Sensitive Values - NEVER Ask for These
 These values must NEVER be collected by Claude. Generate .env with placeholders, then ask user to update manually on the VM:
-- **Conduit RPC Key** - Leave empty: `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=`
+- **RPC Provider Key** - Leave empty: `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=`
 - **LLM API Key** - Leave empty (e.g. `OPENROUTERKEY=`)
 - **Node Password** - Leave empty: `GENLAYERNODE_PASSWORD=` (Docker: `NODE_PASSWORD=`)
 
@@ -1020,7 +1030,7 @@ After generating .env, instruct user to:
 
 ### What Qualifies as a Secret
 - **LLM API Keys**: `HEURISTKEY`, `COMPUT3KEY`, `IOINTELLIGENCEKEY`, and other provider keys
-- **RPC Key**: `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY` (Conduit)
+- **RPC Key**: `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY` (RPC provider, e.g. Conduit)
 - **Passwords**: `GENLAYERNODE_PASSWORD`, `NODE_PASSWORD`, export passphrases
 - **Auth Tokens**: Monitoring credentials, API tokens
 - **Private Keys**: Never displayed at all

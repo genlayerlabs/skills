@@ -56,7 +56,7 @@ automatically during installation/upgrade as part of the standard symlink setup 
 **Credentials must be requested from the GenLayer Foundation team.**
 
 1. Contact the GenLayer Foundation team (GenLayer Discord, validator channels)
-2. Request monitoring endpoints and credentials for Testnet Bradbury
+2. Request monitoring endpoints and credentials for your network
 3. See also https://docs.genlayer.com/validators/monitoring
 4. You will receive **4 credential values** (Prometheus and Loki have separate auth):
    - **Prometheus** instance ID and API key (for metrics)
@@ -92,7 +92,7 @@ CENTRAL_LOKI_PASSWORD=<API key - starts with glc_>
 NODE_ID=0xYourValidatorWalletAddress
 VALIDATOR_NAME=your-validator-name
 # Network label for recovery logs and alert routing (leave empty rather than guess)
-NETWORK_NAME=bradbury-phase2
+NETWORK_NAME=<network name, e.g. bradbury-phase2>
 ```
 
 **Important notes:**
@@ -294,7 +294,7 @@ CENTRAL_MONITORING_URL=https://prometheus-prod-66.../api/prom/push/
 | `CENTRAL_MONITORING_PASSWORD` | Yes | Prometheus API key | `glc_xxxxx...` |
 | `CENTRAL_LOKI_USERNAME` | Yes | Loki instance ID (numeric, **different** from Prometheus) | `9876543` |
 | `CENTRAL_LOKI_PASSWORD` | Yes | Loki API key | `glc_xxxxx...` |
-| `NODE_ID` | Yes | Validator wallet address | `0x1451c990...` |
+| `NODE_ID` | Yes | Validator wallet address (full node: a stable unique name) | `0x1451c990...` |
 | `VALIDATOR_NAME` | Yes | Short validator name (no spaces) | `my-validator-1` |
 | `NETWORK_NAME` | No | Network label for recovery logs / alert routing | `bradbury-phase2` |
 | `NODE_METRICS_ENDPOINT` | No | Node metrics address | `host.docker.internal:9153` |

@@ -5,7 +5,7 @@ Shared commands and procedures used by both install and update workflows.
 ## Download & Extract Node Software
 
 ```bash
-# Set the exact version approved for Bradbury Phase 2 (release announcement).
+# Set the exact version approved for your network (release announcement).
 # Do not take the newest listed version automatically: it may not be approved yet.
 VERSION=v0.6.0
 
@@ -252,7 +252,7 @@ cd /opt/genlayer-node
 sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'
 ```
 
-**Expected output:**
+**Expected output** (example: Testnet Bradbury):
 ```
   ✓ GenLayer Chain RPC: Connected to https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz
   ✓ GenLayer Chain WebSocket: Connected to wss://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz

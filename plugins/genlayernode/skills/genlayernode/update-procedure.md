@@ -61,7 +61,8 @@ All preparation steps happen WHILE the validator is actively running and validat
 ```bash
 # 1. Check current version and note it
 curl -s http://localhost:9153/health | jq '{status, network, node_version}'
-OLD_VERSION=$(readlink /opt/genlayer-node/bin | cut -d/ -f1)    # e.g. v0.6.0
+OLD_VERSION=$(basename "$(dirname "$(readlink -f /opt/genlayer-node/bin)")")   # e.g. v0.6.0
+case "$OLD_VERSION" in v[0-9]*) ;; *) echo "cannot determine OLD_VERSION ('$OLD_VERSION') - stop" >&2; exit 1 ;; esac
 VERSION=v0.6.1                                                  # the approved new version
 INSTALL_ROOT=/opt/genlayer-node; NODE_DIR=${INSTALL_ROOT}/${VERSION}; NODE_USER=genlayer
 MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+')
@@ -97,7 +98,7 @@ sudo -u ${NODE_USER} sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enable
 # Docker only: re-create docker-compose.override.yml in ${NODE_DIR} (SKILL.md -> Docker Compose Deployment).
 
 # 6. Link the shared data directory (genvm.db, ops.db, keystore/ — no copy, no resync)
-test ! -e ${NODE_DIR}/data -o -L ${NODE_DIR}/data || echo "${NODE_DIR}/data is a real directory - stop"
+test ! -e ${NODE_DIR}/data -o -L ${NODE_DIR}/data || { echo "${NODE_DIR}/data is a real directory - stop" >&2; exit 1; }
 sudo -u ${NODE_USER} ln -sfn ../${MINOR}/data ${NODE_DIR}/data
 ls -la ${NODE_DIR}/data/node/
 ```

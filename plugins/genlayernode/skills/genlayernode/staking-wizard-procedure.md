@@ -21,13 +21,13 @@ Reference: https://docs.genlayer.com/validators/setup-guide#understanding-valida
 
 Before running the wizard:
 
-- **genlayer CLI** — the exact version named in the Bradbury Phase 2 announcement
+- **genlayer CLI** — the exact version named in the release announcement for your network
   (`npm install -g "genlayer@${CLI_VERSION}"`). The default npm tag can select an older CLI
-  without the Phase 2 addresses. Node.js 20+ (22 for a fresh install).
+  without your network's addresses. Node.js 20+ (22 for a fresh install).
 - An **owner account** with GEN for the **deployed self-stake minimum** plus gas. Read the
   minimum with `genlayer staking epoch-info --network testnet-bradbury` — 42,000 GEN is only the
   protocol default, not a guaranteed network setting. Delegation does not replace self-stake.
-- The CLI must be configured for the correct **network** (`testnet-bradbury`)
+- The CLI must be configured for the correct **network** (e.g., `testnet-bradbury`)
 - The owner account must be **unlocked**
 - **Back up the owner key** (private key or seed phrase). The wizard exports only the operator
   key; a lost owner key means the stake can never be exited or claimed.
@@ -35,7 +35,7 @@ Before running the wizard:
 ### Verify Prerequisites
 
 ```bash
-# Check CLI is installed (must be the qualified Phase 2 version)
+# Check CLI is installed (must be the version for your network)
 genlayer --version
 
 # List existing accounts
@@ -111,7 +111,7 @@ Using account: My Validator Owner (0x01959d0ed126285cbed368a0d9e7c4eb14d2b77b)
 
 **Prompt**: "Select network"
 
-**Options**: Available networks (excludes "studionet"). Choose `testnet-bradbury`.
+**Options**: Available networks (excludes "studionet"). Choose your network (e.g., `testnet-bradbury`).
 
 **Skipped if**: `--network` flag is provided.
 

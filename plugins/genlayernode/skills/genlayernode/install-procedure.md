@@ -1,8 +1,7 @@
 # GenLayer Validator Node Installation Procedure
 
 ## Goal
-Install a GenLayer validator node (or a full node) from scratch on a Linux server, ready to sync
-and validate on Testnet Bradbury (Phase 2, node v0.6+).
+Install a GenLayer validator node (or a full node) from scratch on a Linux server, ready to sync and validate.
 
 ## Process Overview
 
@@ -83,7 +82,7 @@ sudo useradd --system --create-home --home-dir /var/lib/genlayer --shell /usr/sb
 The staking wizard runs on your **local machine** (not the server) to create wallet keys securely.
 
 ```bash
-# Install GenLayer CLI — the exact version named in the Bradbury Phase 2 announcement
+# Install GenLayer CLI — the exact version named in the release announcement for your network
 npm install -g "genlayer@${CLI_VERSION}"
 
 # Create and unlock owner account
@@ -93,6 +92,7 @@ genlayer account unlock --account "My Validator Owner"
 # Fund the owner account with the deployed self-stake minimum + gas, then run wizard
 genlayer staking epoch-info --network testnet-bradbury   # deployed minimum (42,000 GEN is the protocol default)
 genlayer staking wizard --account "My Validator Owner" --network testnet-bradbury
+# (--network: your network's CLI alias; testnet-bradbury is the testnet documented today)
 ```
 
 Phase 2 registration signs a proof of possession with the operator key: the operator must be an
@@ -129,7 +129,7 @@ All remaining steps run on the **validator server**.
 > **See `common-procedures.md`** for detailed commands.
 
 ```bash
-VERSION=v0.6.0   # the exact version approved for Bradbury Phase 2 (release announcement)
+VERSION=v0.6.0   # the exact version approved for your network (release announcement)
 
 # Download, verify (cosign + SHA256), install with the release install.sh
 # See: common-procedures.md -> "Download & Extract Node Software"
@@ -170,9 +170,10 @@ sudo chmod 600 /opt/genlayer-node/${VERSION}/.env
 
 **The user edits .env to add these values** (`sudo nano /opt/genlayer-node/${VERSION}/.env`):
 ```bash
-# Required: Conduit API key for the GenLayer Chain RPC + WebSocket (https://app.conduit.xyz/rpc-keys).
-# The WebSocket refuses connections without it. The RPC URLs are in config.yaml (Phase 5).
-GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=your-conduit-key
+# API key of your network's RPC provider, if it needs one (Testnet Bradbury: Conduit,
+# https://app.conduit.xyz/rpc-keys — its WebSocket refuses connections without it).
+# The RPC URLs are in config.yaml (Phase 5).
+GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=your-rpc-provider-key
 
 # Required: LLM API key (set ONE based on your provider)
 # HEURISTKEY=your-api-key-here
@@ -218,17 +219,19 @@ sudo -u genlayer sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: t
 ### Phase 5: Node Configuration (Server)
 
 The tarball ships `configs/node/config.yaml` (install.sh already set its `genvm.root_dir`);
-edit it in place. Since v0.6 the node also needs the network's **protocol manifest**:
+edit it in place. The network values are per-deployment: take them from
+your network's section in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator.
+Since v0.6 the node also needs the network's **protocol manifest**. Example — Testnet Bradbury:
 
 ```bash
 sudo -u genlayer curl -fsSL https://docs.genlayer.com/validators/bradbury.protocol-manifest.json \
   -o /opt/genlayer-node/${VERSION}/configs/node/protocol-manifest.json
 python3 -c "import json; m=json.load(open('/opt/genlayer-node/${VERSION}/configs/node/protocol-manifest.json')); print(m['chainId'], m['registry'])"
-# Expected: 4221 0x3F71AE080BD6270A91dBcc7960d88797828538E0
+# Must match consensus.chainid and consensus.consensusaddress (Testnet Bradbury: 4221 0x3F71AE080BD6270A91dBcc7960d88797828538E0)
 ```
 
-**Edit config.yaml to set the Bradbury Phase 2 network values, the mode and validator addresses**
-(replace each key in its section; never add a second `rollup:` or `consensus:`):
+**Edit config.yaml to set the network values, the mode and validator addresses**
+(replace each key in its section; never add a second `rollup:` or `consensus:`). Example — Testnet Bradbury:
 ```yaml
 rollup:
   genlayerchainrpcurl: "https://rpc-genlayer-chain-testnet-cfn8m3xc6l.t.conduit.xyz/"
@@ -260,22 +263,22 @@ node:
 2. Upload the keystore file (from local machine):
    ```bash
    # For GCP:
-   gcloud compute scp ./Operator-keystore.json INSTANCE:/opt/genlayer-node/${VERSION}/data/node/ \
+   gcloud compute scp ./Operator-keystore.json INSTANCE:/tmp/ \
      --project=PROJECT --zone=ZONE
 
    # For SSH:
-   scp ./Operator-keystore.json user@host:/opt/genlayer-node/${VERSION}/data/node/
+   scp ./Operator-keystore.json user@host:/tmp/
 
    # For AWS with SSM only: upload to an S3 bucket the instance role can read, then on the server
-   # aws s3 cp s3://BUCKET/Operator-keystore.json /opt/genlayer-node/${VERSION}/data/node/  (delete the S3 object after)
+   # aws s3 cp s3://BUCKET/Operator-keystore.json /tmp/  (delete the S3 object after)
    ```
 
 3. Install the keystore as-is (on server). It stays encrypted; no password on any command line —
    the user sets `GENLAYERNODE_PASSWORD` in .env to its export passphrase:
    ```bash
    cd /opt/genlayer-node/${VERSION}
-   sudo install -m 600 -o genlayer -g genlayer ./data/node/Operator-keystore.json ./data/node/keystore/operator.json
-   sudo shred -u ./data/node/Operator-keystore.json
+   sudo install -m 600 -o genlayer -g genlayer /tmp/Operator-keystore.json ./data/node/keystore/operator.json
+   sudo shred -u /tmp/Operator-keystore.json
    ```
 
 4. Verify import:
@@ -318,7 +321,7 @@ sudo -u genlayer bash -c 'set -a && . ./.env && set +a && ./bin/genlayernode doc
 ```
 
 All checks should pass before proceeding: GenLayer Chain RPC + WebSocket, the consensus
-deployment against the manifest (registry sealed, chain 4221), GenVM, at least one LLM provider,
+deployment against the manifest (registry sealed, chain id matches), GenVM, at least one LLM provider,
 WebDriver. A full node without an LLM key fails only the LLM check (it still syncs).
 
 ### Phase 9: Start Node Service (Server)
@@ -384,7 +387,7 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 ```
 
 **Sync complete when:**
-- `status` = `"healthy"` and `network` = `"bradbury-phase2"`
+- `status` = `"healthy"` and `network` = the network you joined (Testnet Bradbury: `"bradbury-phase2"`)
 - `genlayer_node_synced` = 1 and `genlayer_node_blocks_behind` = 0
 
 ---
@@ -395,7 +398,7 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 |-------|---------|----------|
 | Service running | `systemctl status genlayer-node` | Active (running) |
 | WebDriver healthy | `docker ps \| grep webdriver` | healthy |
-| RPC connected | `curl localhost:9153/health` | status: healthy, network: bradbury-phase2 |
+| RPC connected | `curl localhost:9153/health` | status: healthy, network: your network |
 | Syncing | `journalctl -u genlayer-node -f` | "Node is synced" logs |
 
 ## Directory Structure After Installation
@@ -434,7 +437,7 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 | WebDriver not starting | `docker rm -f genlayer-node-webdriver && docker compose up -d` |
 | Env vars not loaded | Use `set -a && source .env && set +a` |
 | DB error `mkdir data/node/genvm.db: file exists` | A link inside `data/node` points outside the mount — see sharp-edge `docker-db-symlink` |
-| WebSocket 401 / node exits at start | `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY` empty or wrong (sharp-edge `conduit-websocket-key-missing`) |
+| WebSocket 401 / node exits at start | RPC provider key `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY` empty or wrong (sharp-edge `conduit-websocket-key-missing`) |
 | Node refuses to start: manifest / chain id | Phase 5 (sharp-edge `protocol-manifest-missing-or-mismatch`) |
 
 ## Useful Commands
