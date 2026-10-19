@@ -27,9 +27,9 @@ validations:
 
   - id: nodejs-installed
     type: command
-    command: "node --version 2>/dev/null | grep -E 'v(1[89]|[2-9][0-9])' >/dev/null"
+    command: "node --version 2>/dev/null | grep -E '^v(2[0-9]|[3-9][0-9])' >/dev/null"
     expect: "exit 0"
-    message: "Node.js v18+ is required. Install with: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
+    message: "Node.js v20+ is required on the machine that runs the GenLayer CLI (not on the node server). Install with: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
 
   - id: npm-installed
     type: command
@@ -41,19 +41,19 @@ validations:
     type: command
     command: "command -v docker >/dev/null 2>&1"
     expect: "exit 0"
-    message: "Docker is required. Install with: curl -fsSL https://get.docker.com | sh"
+    message: "Docker is required. Install with: curl -fsSL https://get.docker.com | env -u VERSION sh"
 
   - id: docker-compose-installed
     type: command
-    command: "docker compose version >/dev/null 2>&1"
+    command: "docker compose version --short 2>/dev/null | sed 's/^v//' | awk -F. 'NR==1{ok=($1>2||($1==2&&$2>=24))} END{exit !ok}'"
     expect: "exit 0"
-    message: "Docker Compose is required. Usually included with Docker."
+    message: "Docker Compose v2.24+ is required (the release docker-compose.yaml uses env_file required: false). Usually included with Docker; update the docker-compose-plugin package."
 
   - id: python3-installed
     type: command
-    command: "command -v python3 >/dev/null 2>&1"
+    command: "python3 -c 'import sys; sys.exit(sys.version_info < (3,10))' >/dev/null 2>&1"
     expect: "exit 0"
-    message: "Python 3 is required. Install with: sudo apt install python3"
+    message: "Python 3.10+ is required. Install with: sudo apt install python3 (Ubuntu 22.04+/Debian 12+)"
 
   - id: python3-pip-installed
     type: command
@@ -63,7 +63,7 @@ validations:
 
   - id: python3-venv-installed
     type: command
-    command: "dpkg -l python3-venv >/dev/null 2>&1 || python3 -m venv --help >/dev/null 2>&1"
+    command: "python3 -c 'import venv, ensurepip' >/dev/null 2>&1"
     expect: "exit 0"
     message: "python3-venv is required. Install with: sudo apt install python3-venv"
 
@@ -72,6 +72,12 @@ validations:
     command: "command -v wget >/dev/null 2>&1"
     expect: "exit 0"
     message: "wget is required. Install with: sudo apt install wget"
+
+  - id: cosign-installed
+    type: command
+    command: "command -v cosign >/dev/null 2>&1"
+    expect: "exit 0"
+    message: "cosign is required to verify the release signature. Install with: curl -fsSLo /tmp/cosign.deb https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign_2.4.1_amd64.deb && sudo dpkg -i /tmp/cosign.deb"
 
   - id: jq-installed
     type: command
@@ -87,7 +93,7 @@ validations:
     type: command
     command: "command -v genlayer >/dev/null 2>&1"
     expect: "exit 0"
-    message: "GenLayer CLI not installed. Install with: npm install -g genlayer"
+    message: "GenLayer CLI not installed. Install the exact version for your network: npm install -g genlayer@<version from the release announcement>"
 
   # ============================================================================
   # DOCKER STATE
@@ -123,9 +129,15 @@ validations:
 
   - id: genvm-binaries-exist
     type: command
-    command: "[ -f third_party/genvm/bin/genvm ] && [ -f third_party/genvm/bin/genvm-modules ]"
+    command: R=$(sed -n 's/^ *root_dir:[[:space:]]*//p' configs/node/config.yaml) && [ -f "$R/bin/genvm-modules" ] && ls "$R"/executor/*/bin/genvm >/dev/null 2>&1
     expect: "exit 0"
-    message: "GenVM binaries not found. Run: python3 ./third_party/genvm/bin/setup.py"
+    message: "GenVM binaries not found under genvm.root_dir (v0.6+: opt/genvm/<ver>). Run: python3 \"$R/bin/setup.py\" in the install directory"
+
+  - id: protocol-manifest-present
+    type: command
+    command: "[ -f configs/node/protocol-manifest.json ]"
+    expect: "exit 0"
+    message: "Protocol manifest not found (required since v0.6). Download your network's manifest from its docs section to configs/node/protocol-manifest.json (Testnet Bradbury: https://docs.genlayer.com/validators/bradbury.protocol-manifest.json)"
 
   - id: llm-key-configured
     type: command
@@ -141,7 +153,7 @@ validations:
 
   - id: node-health-ok
     type: command
-    command: "curl -sf http://localhost:9153/health | grep -q 'up'"
+    command: curl -sf http://localhost:9153/health | jq -e '.status == "healthy"' >/dev/null
     expect: "exit 0"
     message: "Node health check failed. Check if node is running."
 
@@ -189,27 +201,31 @@ validations:
 
   - id: rpc-url-configured
     type: command
-    command: "grep -q 'GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL' /opt/genlayer-node/.env 2>/dev/null || grep -q 'GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL' .env 2>/dev/null"
+    command: grep -Eq '^  genlayerchainrpcurl:[[:space:]]*"https://' /opt/genlayer-node/configs/node/config.yaml
     expect: "exit 0"
-    message: "RPC URL not configured in .env file"
+    message: "RPC URL not configured in config.yaml (rollup.genlayerchainrpcurl)"
+
+  - id: rpc-key-configured
+    type: command
+    command: "sudo awk -F= '/^GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=/{f=length($2)>0} END{exit !f}' /opt/genlayer-node/.env"
+    expect: "exit 0"
+    message: "GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY (RPC provider API key) is not set in .env: when the provider needs one (Testnet Bradbury: Conduit), the WebSocket refuses the connection and the node does not start"
 
   - id: validator-address-configured
     type: command
-    command: "grep -q 'GENLAYERNODE_NODE_VALIDATORWALLETADDRESS' /opt/genlayer-node/.env 2>/dev/null || grep -q 'GENLAYERNODE_NODE_VALIDATORWALLETADDRESS' .env 2>/dev/null"
+    command: grep -Eq '^  mode:[[:space:]]*"full"' /opt/genlayer-node/configs/node/config.yaml || grep -Eq '^  validatorWalletAddress:[[:space:]]*"0x[0-9a-fA-F]{40}"' /opt/genlayer-node/configs/node/config.yaml
     expect: "exit 0"
-    message: "Validator address not configured in .env file"
+    message: "Validator address not configured in config.yaml (node.validatorWalletAddress; not needed for a full node)"
 
   - id: rpc-url-reachable
     type: command
-    command: |
-      sh -c '. /opt/genlayer-node/.env 2>/dev/null; [ -n "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] || . ./.env 2>/dev/null; [ -n "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] || exit 1; curl -sf -m 30 -X POST "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" -H "Content-Type: application/json" -d '\''{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'\'' | grep -q "\"result\":\"0x"'
+    command: U=$(sed -n 's/^  genlayerchainrpcurl:[[:space:]]*"\([^"]*\)".*/\1/p' /opt/genlayer-node/configs/node/config.yaml); [ -n "$U" ] || exit 1; curl -sf -m 30 -X POST "$U" -H Content-Type:application/json -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | grep -q '"result":"0x' 
     expect: "exit 0"
     message: "Cannot reach the configured rollup RPC endpoint. Check network connectivity."
 
   - id: configured-rpc-chainid-reachable
     type: command
-    command: |
-      sh -c '. /opt/genlayer-node/.env 2>/dev/null; [ -n "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] || . ./.env 2>/dev/null; [ -n "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" ] || exit 1; curl -sf -m 10 -X POST "$GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCURL" -H "Content-Type: application/json" -d '\''{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'\'' | grep -q "\"result\":\"0x"'
+    command: U=$(sed -n 's/^  genlayerchainrpcurl:[[:space:]]*"\([^"]*\)".*/\1/p' /opt/genlayer-node/configs/node/config.yaml); [ -n "$U" ] || exit 1; curl -sf -m 10 -X POST "$U" -H Content-Type:application/json -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' | grep -q '"result":"0x' 
     expect: "exit 0"
     message: "Configured rollup RPC did not answer eth_chainId. This may be a shared RPC outage; verify before changing node config."
 
@@ -258,16 +274,17 @@ validations:
     message: |
       Systemd service missing ExecStartPost for Alloy restart.
       Add this line after ExecStart in /etc/systemd/system/genlayer-node.service:
-      ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+      ExecStartPost=-+/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy >/dev/null 2>&1 || true'
       Then run: sudo systemctl daemon-reload
 
 # Validations that must pass before installation
 on_stop:
   - architecture-amd64
-  - nodejs-installed
   - docker-installed
   - docker-running
   - python3-installed
+  - python3-venv-installed
+  - cosign-installed
 
 # Validations that are warnings
 on_warn:
@@ -276,7 +293,6 @@ on_warn:
   - jq-installed
   - docker-no-sudo
   - python3-pip-installed
-  - python3-venv-installed
   - systemd-has-alloy-restart
 
 # Post-update validations (run after upgrade)

@@ -5,23 +5,23 @@ version: "1.0.0"
 
 dependencies:
   - name: nodejs
-    description: "Node.js v18+ must be installed"
-    check: "node --version | grep -E 'v(1[89]|[2-9][0-9])'"
+    description: "Node.js v20+ must be installed on the machine that runs the GenLayer CLI (not needed on the node server)"
+    check: "node --version | grep -E 'v(2[0-9]|[3-9][0-9])'"
     install: "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
 
   - name: docker
     description: "Docker must be installed and running"
     check: "docker info"
-    install: "curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER"
+    install: "curl -fsSL https://get.docker.com | env -u VERSION sh && sudo usermod -aG docker $USER"
 
   - name: docker-compose
-    description: "Docker Compose must be available"
-    check: "docker compose version"
+    description: "Docker Compose v2.24+ must be available (release docker-compose.yaml uses env_file required: false)"
+    check: "docker compose version --short | sed 's/^v//' | awk -F. 'NR==1{ok=($1>2||($1==2&&$2>=24))} END{exit !ok}'"
     install: "Usually included with Docker. If missing, install docker-compose-plugin"
 
   - name: python3
-    description: "Python 3 must be installed"
-    check: "python3 --version"
+    description: "Python 3.10+ must be installed"
+    check: "python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))'"
     install: "sudo apt install -y python3"
 
   - name: python3-pip
@@ -31,8 +31,13 @@ dependencies:
 
   - name: python3-venv
     description: "python3-venv must be installed for GenVM setup"
-    check: "python3 -m venv --help"
+    check: "python3 -c 'import venv, ensurepip'"
     install: "sudo apt install -y python3-venv"
+
+  - name: cosign
+    description: "cosign must be installed to verify the release signature"
+    check: "cosign version"
+    install: "curl -fsSLo /tmp/cosign.deb https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign_2.4.1_amd64.deb && sudo dpkg -i /tmp/cosign.deb && rm /tmp/cosign.deb"
 
   - name: wget
     description: "wget must be installed for downloading node binaries"
@@ -57,7 +62,7 @@ dependencies:
   - name: genlayer-cli
     description: "GenLayer CLI is needed for staking wizard and validator management"
     check: "genlayer --version"
-    install: "npm install -g genlayer"
+    install: "npm install -g genlayer@<version from the release announcement>"
     note: "Only required on local machine for staking wizard, not on the validator server"
 
 composition:
