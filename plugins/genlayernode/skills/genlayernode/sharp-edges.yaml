@@ -79,6 +79,18 @@ edges:
       # Log out and back in
     severity: critical
 
+  - id: compose-node-password-empty
+    description: "rc.1 docker-compose.yaml refuses every command while NODE_PASSWORD is empty"
+    detect: |
+      cd /opt/genlayer-node && sudo docker compose config -q
+      # "required variable NODE_PASSWORD is missing a value: NODE_PASSWORD is not set ..."
+    impact: "WebDriver (binary node) and the Docker node do not start; the error also blocks a full node, which has no keystore."
+    fix: |
+      The user sets NODE_PASSWORD in .env (sudo nano /opt/genlayer-node/.env):
+      validator = the operator keystore's export passphrase; full node = any non-empty value.
+      Never put the value on a command line. Fixed in the node after rc.1 (genlayer-node#2271).
+    severity: high
+
   - id: compose-too-old
     description: "Docker Compose is older than v2.24"
     detect: |
@@ -274,7 +286,7 @@ edges:
           genesis: 47930                        # AddressManager deployment block
       v0.6 refuses to start when the manifest's registry/chain do not match these values.
       A missing/wrong `genesis` makes the node auto-scan from block 0. Confirm at runtime:
-      /health should report the intended `network`.
+      doctor "Consensus Deployment (admission)" passes (rc.1 /health reports an empty `network`).
     severity: critical
 
   - id: protocol-manifest-missing-or-mismatch
@@ -292,7 +304,8 @@ edges:
           -o /opt/genlayer-node/<version>/configs/node/protocol-manifest.json
       Its chainId and registry must match consensus.chainid (decimal) and consensus.consensusaddress
       (Testnet Bradbury: 4221, 0x3F71AE080BD6270A91dBcc7960d88797828538E0). Never hand-write a manifest.
-      Docker: releases from rc.2 mount it via NODE_MANIFEST_PATH (default ./configs/node/protocol-manifest.json).
+      Docker: the rc.1 compose file does not mount it — mount it with docker-compose.override.yml
+      (SKILL.md -> Docker Compose Deployment).
     severity: critical
 
   - id: conduit-websocket-key-missing
@@ -670,12 +683,13 @@ edges:
   - id: docker-default-llm-config
     description: "Docker node uses the image's default LLM config, not the one configured on the host"
     detect: |
-      cd /opt/genlayer-node/${VERSION} && sudo docker compose --profile node run --rm --entrypoint /app/bin/genlayernode genlayer-node doctor | grep -A8 'LLM Providers'
+      cd /opt/genlayer-node/${VERSION} && sudo docker compose -p genlayer-node --profile node run --rm --entrypoint /app/bin/genlayernode genlayer-node doctor | grep -A8 'LLM Providers'
       # "0 of 4 enabled backends are usable" with only (anthropic, google, heurist, xai) listed
     impact: "Doctor fails; the node starts degraded and votes Timeout on LLM transactions."
     fix: |
       Mount the host's genvm-module-llm.yaml into the container with docker-compose.override.yml
-      (SKILL.md -> Docker Compose Deployment), or set a key for one of the image defaults.
+      (SKILL.md -> Docker Compose Deployment; rc.1 path /app/opt/genvm/<GENVM_VERSION>/config/),
+      or set a key for one of the image defaults.
     severity: high
 
   - id: docker-data-not-owned-by-10001
