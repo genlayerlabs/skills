@@ -277,7 +277,9 @@ node:
    the user sets `GENLAYERNODE_PASSWORD` in .env to its export passphrase:
    ```bash
    cd /opt/genlayer-node/${VERSION}
-   sudo install -m 600 -o genlayer -g genlayer /tmp/Operator-keystore.json ./data/node/keystore/operator.json
+   # Stop if operator.json exists: the keystore is shared by all v0.6.x versions (never overwrite it)
+   sudo test ! -e ./data/node/keystore/operator.json && \
+   sudo install -m 600 -o genlayer -g genlayer /tmp/Operator-keystore.json ./data/node/keystore/operator.json && \
    sudo shred -u /tmp/Operator-keystore.json
    ```
 

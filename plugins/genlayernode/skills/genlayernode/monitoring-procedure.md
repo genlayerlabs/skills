@@ -76,7 +76,8 @@ sudo nano /opt/genlayer-node/.env
 
 ```bash
 # Monitoring URLs — empty in .env.example on purpose (no default endpoint); use the values
-# the Foundation gives you. Alloy stops with "ERROR: not set: ..." if any of the six is empty.
+# the Foundation gives you (the two URLs below are an example). Alloy stops with
+# "ERROR: not set: ..." if any of the six is empty.
 CENTRAL_MONITORING_URL=https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom/push
 CENTRAL_LOKI_URL=https://logs-prod-042.grafana.net/loki/api/v1/push
 
@@ -333,7 +334,7 @@ log path, and **no new logs are sent to Grafana**.
 
 **Solution:** The systemd service should include `ExecStartPost` to auto-restart Alloy:
 ```ini
-ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+ExecStartPost=-+/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
 ```
 
 If your existing systemd service doesn't have this line, add it:
@@ -342,7 +343,7 @@ If your existing systemd service doesn't have this line, add it:
 sudo nano /etc/systemd/system/genlayer-node.service
 
 # Add after ExecStart line:
-# ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
+# ExecStartPost=-+/bin/sh -c 'sleep 5 && /usr/bin/docker restart genlayer-node-alloy 2>/dev/null || true'
 
 # Reload and restart
 sudo systemctl daemon-reload

@@ -79,6 +79,17 @@ edges:
       # Log out and back in
     severity: critical
 
+  - id: compose-too-old
+    description: "Docker Compose is older than v2.24"
+    detect: |
+      docker compose version --short
+      # Must be 2.24 or higher
+    impact: "The release docker-compose.yaml uses 'env_file: required: false'; older Compose rejects the file, so WebDriver and Docker deployment do not start."
+    fix: |
+      Update the Compose plugin:
+      sudo apt-get update && sudo apt-get install -y docker-compose-plugin
+    severity: high
+
   # ============================================================================
   # WALLET AND STAKING
   # ============================================================================
@@ -805,9 +816,9 @@ edges:
       - Find your validator
       - Update operator address to the new one
 
-      Option 2: Using genlayer CLI (signed by the OWNER; Phase 2 may also need the new
-      operator's proof of possession — check `genlayer staking set-operator --help`)
-      genlayer staking set-operator YOUR_VALIDATOR_WALLET NEW_OPERATOR_ADDRESS --account "Owner Name" --network testnet-bradbury
+      Option 2: Using genlayer CLI (signed by the OWNER; Phase 2 also needs the new operator's
+      proof of possession: --operator-account names its CLI account, CLI v0.40.0-rc.3+)
+      genlayer staking set-operator YOUR_VALIDATOR_WALLET NEW_OPERATOR_ADDRESS --account "Owner Name" --operator-account "Operator Name" --network testnet-bradbury
     severity: critical
 
   - id: consensus-genesis-not-set
@@ -1220,10 +1231,10 @@ edges:
 
       If the operator account was deleted:
         - Create a new operator account
-        - Update the validator to use the new operator (owner signs; Phase 2 may also need the
-          new operator's proof of possession — check `genlayer staking set-operator --help`):
+        - Update the validator to use the new operator (owner signs; Phase 2 also needs the
+          new operator's proof of possession: --operator-account, CLI v0.40.0-rc.3+):
           genlayer staking set-operator 0xVALIDATOR_WALLET 0xNEW_OPERATOR \
-            --account "Owner Name" --network testnet-bradbury
+            --account "Owner Name" --operator-account "New Operator Name" --network testnet-bradbury
         - Fund the new operator address with GEN for gas
     severity: high
 

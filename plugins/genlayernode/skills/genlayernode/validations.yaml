@@ -29,7 +29,7 @@ validations:
     type: command
     command: "node --version 2>/dev/null | grep -E '^v(2[0-9]|[3-9][0-9])' >/dev/null"
     expect: "exit 0"
-    message: "Node.js v20+ is required on the machine that runs the GenLayer CLI (not on the node server). Install with: curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs"
+    message: "Node.js v20+ is required on the machine that runs the GenLayer CLI (not on the node server). Install with: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
 
   - id: npm-installed
     type: command
@@ -41,13 +41,13 @@ validations:
     type: command
     command: "command -v docker >/dev/null 2>&1"
     expect: "exit 0"
-    message: "Docker is required. Install with: curl -fsSL https://get.docker.com | sh"
+    message: "Docker is required. Install with: curl -fsSL https://get.docker.com | env -u VERSION sh"
 
   - id: docker-compose-installed
     type: command
-    command: "docker compose version >/dev/null 2>&1"
+    command: "docker compose version --short 2>/dev/null | sed 's/^v//' | awk -F. 'NR==1{ok=($1>2||($1==2&&$2>=24))} END{exit !ok}'"
     expect: "exit 0"
-    message: "Docker Compose is required. Usually included with Docker."
+    message: "Docker Compose v2.24+ is required (the release docker-compose.yaml uses env_file required: false). Usually included with Docker; update the docker-compose-plugin package."
 
   - id: python3-installed
     type: command

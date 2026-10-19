@@ -432,7 +432,7 @@ genlayer staking validators --network testnet-bradbury
 # - vDeposit (staked amount)
 # - selfStakePendingDeposits (shows activation epoch)
 # - needsPriming status
-# - live status (false until activated)
+# - status `pending` in `genlayer staking validators` until the deposit activates
 ```
 
 **Note on activation**: After staking, your deposit enters a pending state. It activates after a waiting period (typically 2 epochs). The `selfStakePendingDeposits` field shows the `activatesAtEpoch` value.
@@ -521,10 +521,11 @@ genlayer staking epoch-info --network testnet-bradbury
 # List active validators
 genlayer staking active-validators --network testnet-bradbury
 
-# Change operator address later (signed by the owner; Phase 2 may also need the new
-# operator's proof of possession — check `genlayer staking set-operator --help`)
+# Change operator address later (signed by the owner; Phase 2 also needs the new operator's
+# proof of possession: --operator-account names its CLI account, CLI v0.40.0-rc.3+)
 genlayer staking set-operator 0x<VALIDATOR_WALLET_ADDRESS> 0x<NEW_OPERATOR_ADDRESS> \
   --account "My Validator Owner" \
+  --operator-account "My Validator Operator" \
   --network testnet-bradbury
 ```
 

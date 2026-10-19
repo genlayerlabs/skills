@@ -16,11 +16,13 @@ DL=$(mktemp -d /tmp/genlayer-${VERSION}.XXXX) && chmod 755 "$DL" && cd "$DL"
 wget -q ${base}/genlayer-node-linux-amd64-${VERSION}.tar.gz ${base}/genlayer-node_${VERSION}_SHA256SUMS \
         ${base}/genlayer-node_${VERSION}_SHA256SUMS.sigstore.json ${base}/install.sh
 
-# Verify before extracting
+# Verify before extracting (stop on any failure; the tarball must be listed in SHA256SUMS)
 cosign verify-blob --bundle genlayer-node_${VERSION}_SHA256SUMS.sigstore.json \
   --certificate-identity-regexp '^https://github\.com/genlayerlabs/genlayer-node/\.github/workflows/release-package\.yml@' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com genlayer-node_${VERSION}_SHA256SUMS
-sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com genlayer-node_${VERSION}_SHA256SUMS \
+&& grep -q "[ *]genlayer-node-linux-amd64-${VERSION}.tar.gz$" genlayer-node_${VERSION}_SHA256SUMS \
+&& sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing \
+|| { echo "VERIFICATION FAILED - stop, do not install" >&2; rm -f install.sh; false; }   # no install.sh: the install below cannot run
 
 # Create version directory, extract and run the GenVM setup (install.sh), as the service user
 sudo install -d -o genlayer -g genlayer /opt/genlayer-node

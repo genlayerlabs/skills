@@ -485,7 +485,7 @@ patterns:
     notes:
       - "Use the validatorWallet address, NOT the owner address"
       - "Check selfStakePendingDeposits for activation epoch"
-      - "live: false until deposit activates (typically 2 epochs)"
+      - "genlayer staking validators shows status pending until the deposit activates (typically 2 epochs)"
       - "needsPriming may need to be resolved with: genlayer staking validator-prime 0xVALIDATOR_WALLET_ADDRESS --network testnet-bradbury"
 
   - id: list-available-versions
@@ -504,7 +504,8 @@ patterns:
       - "base=https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}"
       - "wget ${base}/genlayer-node-linux-amd64-${VERSION}.tar.gz ${base}/genlayer-node_${VERSION}_SHA256SUMS ${base}/genlayer-node_${VERSION}_SHA256SUMS.sigstore.json ${base}/install.sh"
       - "cosign verify-blob --bundle genlayer-node_${VERSION}_SHA256SUMS.sigstore.json --certificate-identity-regexp '^https://github\\.com/genlayerlabs/genlayer-node/\\.github/workflows/release-package\\.yml@' --certificate-oidc-issuer https://token.actions.githubusercontent.com genlayer-node_${VERSION}_SHA256SUMS"
-      - "sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing"
+      - "grep -q \"[ *]genlayer-node-linux-amd64-${VERSION}.tar.gz$\" genlayer-node_${VERSION}_SHA256SUMS  # stop if the tarball is not listed"
+      - "sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing  # stop on any failure: do not run install.sh"
       - "sudo install -d -o genlayer -g genlayer /opt/genlayer-node"
       - "chmod +x install.sh && sudo -u genlayer -H ./install.sh --install-dir /opt/genlayer-node/${VERSION} --tarball genlayer-node-linux-amd64-${VERSION}.tar.gz"
 
@@ -679,6 +680,7 @@ patterns:
       (Docker: NODE_PASSWORD) in .env to the export passphrase.
     command: |
       sudo install -d -m 700 -o genlayer -g genlayer /opt/genlayer-node/data/node/keystore && \
+      sudo test ! -e /opt/genlayer-node/data/node/keystore/operator.json && \
       sudo install -m 600 -o genlayer -g genlayer "${KEYSTORE_PATH}" /opt/genlayer-node/data/node/keystore/operator.json
 
   - id: copy-operator-key-from-previous
@@ -1183,7 +1185,7 @@ procedure:
     question: "How would you like to configure the operator key?"
     options:
       - answer: "Import from staking wizard export"
-        command: "sudo install -m 600 -o genlayer -g genlayer '${KEYSTORE_PATH}' /opt/genlayer-node/data/node/keystore/operator.json  # passphrase goes in .env as GENLAYERNODE_PASSWORD"
+        command: "sudo test ! -e /opt/genlayer-node/data/node/keystore/operator.json && sudo install -m 600 -o genlayer -g genlayer '${KEYSTORE_PATH}' /opt/genlayer-node/data/node/keystore/operator.json  # stops if a key exists (shared keystore); passphrase goes in .env as GENLAYERNODE_PASSWORD"
       - answer: "Copy from previous installation"
         command: "cp -r ${PREV_KEYSTORE}/* /opt/genlayer-node/data/node/keystore/"
       - answer: "Generate new operator key"

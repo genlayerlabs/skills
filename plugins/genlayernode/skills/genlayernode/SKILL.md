@@ -513,11 +513,13 @@ curl -fI ${base}/genlayer-node-linux-amd64-${VERSION}.tar.gz      # + _SHA256SUM
 wget ${base}/genlayer-node-linux-amd64-${VERSION}.tar.gz ${base}/genlayer-node_${VERSION}_SHA256SUMS \
      ${base}/genlayer-node_${VERSION}_SHA256SUMS.sigstore.json ${base}/install.sh
 
-# Verify before extracting
+# Verify before extracting (stop on any failure; the tarball must be listed in SHA256SUMS)
 cosign verify-blob --bundle genlayer-node_${VERSION}_SHA256SUMS.sigstore.json \
   --certificate-identity-regexp '^https://github\.com/genlayerlabs/genlayer-node/\.github/workflows/release-package\.yml@' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com genlayer-node_${VERSION}_SHA256SUMS
-sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com genlayer-node_${VERSION}_SHA256SUMS \
+&& grep -q "[ *]genlayer-node-linux-amd64-${VERSION}.tar.gz$" genlayer-node_${VERSION}_SHA256SUMS \
+&& sha256sum -c genlayer-node_${VERSION}_SHA256SUMS --ignore-missing \
+|| { echo "VERIFICATION FAILED - stop, do not install" >&2; rm -f install.sh; false; }   # no install.sh: the install below cannot run
 
 # Extract + GenVM setup in the final directory (as the genlayer service user)
 sudo install -d -o genlayer -g genlayer /opt/genlayer-node
@@ -684,8 +686,10 @@ First ask how user wants to provide the operator key:
    ```
 6. For keystore.json: install the encrypted file as-is (no passphrase on any command line):
    ```bash
+   # Stop if operator.json exists: the keystore is shared by all v0.6.x versions (never overwrite it)
+   sudo test ! -e /opt/genlayer-node/${VERSION}/data/node/keystore/operator.json && \
    sudo install -m 600 -o genlayer -g genlayer /tmp/keystore.json \
-     /opt/genlayer-node/${VERSION}/data/node/keystore/operator.json
+     /opt/genlayer-node/${VERSION}/data/node/keystore/operator.json && \
    sudo shred -u /tmp/keystore.json
    ```
    Note: the user sets `GENLAYERNODE_PASSWORD` (Docker: `NODE_PASSWORD`) in .env to the export passphrase; doctor verifies it unlocks
