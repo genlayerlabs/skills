@@ -1,69 +1,361 @@
-# Bradbury monitoring
+# GenLayer Validator Monitoring Setup Procedure
 
-Use the selected release's Compose and `alloy-config.river` files. Obtain the
-monitoring tenant endpoints and credentials from the Foundation's appointed
-monitoring operator. Do not reuse credentials or destinations from an old example.
+## Goal
+Enable centralized monitoring by pushing metrics and logs to GenLayer Foundation's Grafana Cloud using Alloy.
 
-Provision these six values privately in the host's mode-0600 `.env`:
+## Process Overview
 
-- `CENTRAL_MONITORING_URL`, `CENTRAL_MONITORING_USERNAME`, `CENTRAL_MONITORING_PASSWORD`
-- `CENTRAL_LOKI_URL`, `CENTRAL_LOKI_USERNAME`, `CENTRAL_LOKI_PASSWORD`
+```mermaid
+flowchart TD
+    subgraph Prerequisites
+        A[Node Running & Synced<br/>Port 9153 up] --> B[Request Creds<br/>Discord #testnet-bradbury]
+        B --> C[Receive 4 credentials<br/>Prom + Loki user/pass]
+    end
 
-Also configure `NODE_ID`, `VALIDATOR_NAME`, `NETWORK_NAME=bradbury-phase2`,
-`NODE_METRICS_ENDPOINT` and `NODE_LOGS_PATH` for the actual installation. The
-release's Compose monitoring profile requires all six destination/auth values.
-A receiver without authentication still needs the release's documented placeholder
-values; do not invent a working credential for a protected receiver.
+    subgraph Configuration
+        C --> D[Step 2: Configure .env<br/>Set credentials + NODE_ID]
+        D --> E[Step 3: Test Credentials<br/>curl → HTTP 400/204]
+    end
 
-```sh
-docker compose --profile monitoring up -d
-docker compose ps
+    subgraph Deployment
+        E --> F[Step 4: Start Alloy<br/>docker compose --profile monitoring up -d]
+        F --> G[Step 5: Verify<br/>Check logs + Alloy UI]
+    end
 ```
 
-Verify delivery in the intended dashboard and log stream, checking fresh sample
-timestamps, validator labels and the correct network. A running Alloy container
-is insufficient. Inspect sanitized logs if delivery fails; never print `.env` or
-headers. For multiple nodes, use the release's `SCRAPE_TARGETS_JSON` format with
-explicit addresses and labels rather than guessing instance endpoints.
+## Prerequisites
 
-For WebDriver resource metrics on a binary/systemd node, run the release's
-read-only `docker-socket-proxy` and set `DOCKER_HOST=tcp://127.0.0.1:2375` only for
-the node process. Do not export that variable into shells used for Docker
-administration, give the node Docker-group membership, or mount the host socket.
+Before enabling monitoring:
 
-Reference: [monitoring guide](https://docs.genlayer.com/validators/monitoring).
+1. **Node must be running** and accessible on ops port (default 9153)
+2. **Metrics endpoint enabled** in config.yaml:
+   ```yaml
+   node:
+     ops:
+       port: 9153
+       endpoints:
+         metrics: true
+   ```
+3. **Verify local metrics available:**
+   ```bash
+   curl -s http://localhost:9153/metrics | head -20
+   # Should return Prometheus-formatted metrics (genlayer_node_*)
+   ```
 
-## Enable and diagnose delivery
+## What Ships With the Node Tarball
 
-Before starting Alloy, confirm `/metrics` returns Prometheus text and that the
-configured log file exists and grows. Use the validator-wallet address for
-`NODE_ID`; use a stable, distinct `VALIDATOR_NAME` per node. Prometheus and Loki
-usernames may differ. Get both destination/auth pairs from the monitoring operator.
+The node tarball (${VERSION}+) **already includes** everything needed for monitoring:
 
-Start only the intended monitoring service and its dependencies:
+- **`alloy-config.river`** — Full Alloy configuration for log collection and metrics forwarding
+- **`docker-compose.yaml`** — Includes the Alloy service under the `monitoring` profile
+- **`.env.example`** — Includes all monitoring environment variable placeholders
+
+**You do NOT need to create these files manually.** The `alloy-config.river` symlink is created
+automatically during installation/upgrade as part of the standard symlink setup (see `common-procedures.md` -> "Setup Symlinks"). You only need to:
+1. Set credentials in `.env`
+2. Start the monitoring profile
+
+## Step 1: Request Credentials
+
+**Credentials must be requested from the GenLayer Foundation team.**
+
+1. Join the GenLayer Discord
+2. Go to `#testnet-bradbury` channel
+3. Request monitoring credentials
+4. You will receive **4 credential values** (Prometheus and Loki have separate auth):
+   - **Prometheus** instance ID and API key (for metrics)
+   - **Loki** instance ID and API key (for logs)
+
+**IMPORTANT**: Prometheus and Loki use **different usernames** (instance IDs) in Grafana Cloud. They are separate services with separate credentials.
+
+## Step 2: Configure Environment
+
+Edit `.env` on the server to set the monitoring variables:
 
 ```bash
-docker compose --profile monitoring up -d alloy
-docker compose ps alloy
+nano /opt/genlayer-node/.env
 ```
 
-For binary nodes, verify the endpoint as reached from the container; host loopback
-inside Alloy is not the host's loopback. Use the release's host gateway mapping
-and `NODE_METRICS_ENDPOINT`. Check the actual log directory bind mount against the
-node's log configuration. Inspect logs locally for auth failures (401/403), wrong
-receiver paths (404), throttling (429), connection failures and unreadable log
-files. Redact secrets and authenticated URLs before sharing any output. Do not
-validate receiver credentials by printing them or placing them in process arguments.
+**Set these values:**
 
-After a release-directory/symlink switch, recreate Alloy so its bind mounts follow
-the new paths; restarting an old container can retain obsolete mounts:
+```bash
+# Monitoring URLs (usually pre-filled in .env.example)
+CENTRAL_MONITORING_URL=https://<assigned-metrics-host>/api/prom/push
+CENTRAL_LOKI_URL=https://<assigned-logs-host>/loki/api/v1/push
 
+# Prometheus credentials (for metrics)
+CENTRAL_MONITORING_USERNAME=<Prometheus instance ID>
+CENTRAL_MONITORING_PASSWORD=<API key - starts with glc_>
+
+# Loki credentials (for logs)
+CENTRAL_LOKI_USERNAME=<Loki instance ID>
+CENTRAL_LOKI_PASSWORD=<API key - starts with glc_>
+
+# Node identification (set these yourself)
+NODE_ID=0xYourValidatorWalletAddress
+VALIDATOR_NAME=your-validator-name
+```
+
+**Important notes:**
+- `NODE_ID` — Use your validator wallet address (e.g., `0x1451c990fa6Fa23Bc2773266Fa022cBb369cE165`)
+- `VALIDATOR_NAME` — A short identifier for your validator (no spaces, e.g., `edgars-bradbury`)
+- URLs should NOT have trailing slashes
+- `CENTRAL_MONITORING_USERNAME` and `CENTRAL_LOKI_USERNAME` are typically **different** numeric IDs
+- The password (API key) **may** be the same for both, but verify with your Foundation credentials
+
+**Optional settings (defaults are usually fine):**
+```bash
+NODE_METRICS_ENDPOINT=host.docker.internal:9153
+LOG_FILE_PATTERN=/var/log/genlayer/node*.log
+METRICS_SCRAPE_INTERVAL=15s
+METRICS_SCRAPE_TIMEOUT=10s
+ALLOY_SELF_MONITORING_INTERVAL=60s
+```
+
+## Step 3: Test Credentials Before Starting
+
+**CRITICAL**: Always test credentials before starting Alloy to avoid spamming error logs.
+
+```bash
+# Load env vars
+set -a && source /opt/genlayer-node/.env && set +a
+
+# Read credentials from the private environment, not process arguments.
+python3 - <<'PY'
+import base64, os, urllib.request, urllib.error
+for prefix in ('CENTRAL_MONITORING', 'CENTRAL_LOKI'):
+    user, password = os.environ[prefix+'_USERNAME'], os.environ[prefix+'_PASSWORD']
+    token = base64.b64encode((user+':'+password).encode()).decode()
+    req = urllib.request.Request(os.environ[prefix+'_URL'], data=b'{}',
+        headers={'Authorization': 'Basic '+token, 'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            print(prefix, response.status)
+    except urllib.error.HTTPError as error:
+        print(prefix, error.code)
+    except Exception:
+        print(prefix, 'connection failed')
+PY
+```
+
+**Expected results:**
+| Endpoint | HTTP Code | Meaning |
+|----------|-----------|---------|
+| Prometheus | **400** | Auth succeeded, empty body rejected (expected) |
+| Loki | **204** | Auth succeeded, no content (expected) |
+| Either | **401** | Auth failed — wrong username or password |
+| Either | **403** | Forbidden — API key lacks required scope |
+
+Resolve 401/403, connection and endpoint errors before enabling delivery. A 400
+response only shows payload rejection and is not proof that authenticated ingestion
+works; require fresh metrics and log samples at the receiver after startup.
+
+## Step 4: Start Alloy
+
+> **Note:** The `alloy-config.river` symlink is created automatically during installation/upgrade
+> as part of the standard symlink setup (see `common-procedures.md` -> "Setup Symlinks").
+> The file ships with every node tarball — you do NOT need to create or copy it manually.
+> The docker-compose.yaml mounts `./alloy-config.river` from the working directory (`/opt/genlayer-node/`),
+> which resolves through the symlink to the current version's config.
+
+```bash
+cd /opt/genlayer-node
+docker compose --profile monitoring up -d
+```
+
+**First run will pull the Alloy image** (`grafana/alloy:v1.12.0`, ~150MB).
+
+Verify Alloy is running:
+```bash
+docker ps | grep alloy
+```
+
+Expected:
+```
+genlayer-node-alloy  grafana/alloy:v1.12.0  ... Up ... 0.0.0.0:12345->12345/tcp
+```
+
+## Step 5: Verification
+
+### 5.1 Check Alloy Logs (Most Important)
+
+```bash
+# Check for any errors (should be empty)
+docker logs genlayer-node-alloy 2>&1 | grep -i "error\|401\|403"
+
+# Check Prometheus status — look for "Done replaying WAL"
+docker logs genlayer-node-alloy 2>&1 | grep "Done replaying WAL"
+
+# Check Loki status — look for "tail routine: started"
+docker logs genlayer-node-alloy 2>&1 | grep "tail routine: started"
+```
+
+**Healthy output (no errors):**
+```
+Done replaying WAL ... duration=12.8s
+tail routine: started ... path=/var/log/genlayer/node.log
+```
+
+**Unhealthy output (401 spam):**
+```
+error="server returned HTTP status 401 Unauthorized"
+```
+If you see 401 errors, stop Alloy, fix credentials, test with curl, then restart.
+
+### 5.2 Check Alloy UI
+
+Via SSH tunnel:
+```bash
+# For GCP:
+gcloud compute ssh INSTANCE --zone=ZONE --project=PROJECT -- -L 12345:localhost:12345
+
+# For SSH:
+ssh -L 12345:localhost:12345 user@your-server
+```
+
+Then open `http://localhost:12345` in your browser. The targets page should show `genlayer_node` target as **UP**.
+
+### 5.3 Verify Local Metrics
+
+```bash
+curl -s http://localhost:9153/metrics | grep genlayer_node | head -10
+```
+
+### 5.4 Check Foundation Dashboard
+
+Once metrics are flowing, your validator should appear on the GenLayer Foundation dashboard:
+
+**Dashboard URL:** https://genlayerfoundation.grafana.net/public-dashboards/66a372d856ea44e78cf9ac21a344f792
+
+Search for your validator using:
+- `instance="0xYourValidatorWallet"`
+- `validator_name="your-validator-name"`
+
+## Troubleshooting
+
+### Authentication Errors (401/403)
+**Symptom:** Alloy logs show `server returned HTTP status 401 Unauthorized` spam.
+```bash
+docker logs genlayer-node-alloy 2>&1 | grep -c "401"
+```
+
+**Root causes:**
+1. Wrong username or password in `.env`
+2. Prometheus and Loki credentials mixed up (they use **different** instance IDs)
+3. API key lacks required scope (`metrics:write` for Prometheus, `logs:write` for Loki)
+
+**Fix:**
+1. Stop Alloy: `docker compose --profile monitoring down`
+2. Fix credentials in `.env`
+3. Test with curl (Step 3 above)
+4. Restart: `docker compose --profile monitoring up -d`
+
+### Alloy Config File Not Found
+**Symptom:** Alloy container fails to start.
+```bash
+docker logs genlayer-node-alloy 2>&1 | head -10
+```
+
+**Fix:** The `alloy-config.river` symlink should already exist from the install/upgrade symlink setup (see `common-procedures.md` -> "Setup Symlinks"). If missing, recreate it:
+```bash
+ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river
+```
+
+### No Data Being Pushed (No Errors Either)
+**Symptom:** No errors in logs but no data on dashboard.
+```bash
+# Check if Alloy can reach the node metrics endpoint
+docker exec genlayer-node-alloy wget -qO- http://host.docker.internal:9153/metrics | head -5
+```
+
+**Fix:** Ensure node is running, `extra_hosts` is in docker-compose.yaml, and `NODE_METRICS_ENDPOINT` is `host.docker.internal:9153` (not `localhost`).
+
+### Connection Refused to Node Metrics
+**Symptom:** Alloy logs show connection refused errors.
+
+**Fix:** Check that:
+- Node is running on port 9153: `curl http://localhost:9153/metrics`
+- `extra_hosts` is configured in docker-compose.yaml (maps `host.docker.internal` to the host)
+- The `NODE_METRICS_ENDPOINT` env var uses `host.docker.internal:9153` (Alloy runs inside Docker, so `localhost` won't reach the host node)
+
+### URL Format
+**Fix:** Ensure URLs in `.env` match this format (no trailing slashes):
+```bash
+# Correct
+CENTRAL_MONITORING_URL=https://<assigned-metrics-host>/api/prom/push
+CENTRAL_LOKI_URL=https://<assigned-logs-host>/loki/api/v1/push
+
+# Wrong (trailing slash)
+CENTRAL_MONITORING_URL=https://prometheus-prod-66.../api/prom/push/
+```
+
+## Environment Variables Reference
+
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `CENTRAL_MONITORING_URL` | Yes | Prometheus remote write URL | `https://prometheus-prod-66-...grafana.net/api/prom/push` |
+| `CENTRAL_LOKI_URL` | Yes | Loki log push URL | `https://<assigned-logs-host>/loki/api/v1/push` |
+| `CENTRAL_MONITORING_USERNAME` | Yes | Prometheus instance ID (numeric) | `1234567` |
+| `CENTRAL_MONITORING_PASSWORD` | Yes | Prometheus API key | `glc_xxxxx...` |
+| `CENTRAL_LOKI_USERNAME` | Yes | Loki instance ID (numeric, **different** from Prometheus) | `9876543` |
+| `CENTRAL_LOKI_PASSWORD` | Yes | Loki API key | `glc_xxxxx...` |
+| `NODE_ID` | Yes | Validator wallet address | `0x1451c990...` |
+| `VALIDATOR_NAME` | Yes | Short validator name (no spaces) | `edgars-bradbury` |
+| `NODE_METRICS_ENDPOINT` | No | Node metrics address | `host.docker.internal:9153` |
+| `LOG_FILE_PATTERN` | No | Log file glob pattern | `/var/log/genlayer/node*.log` |
+| `METRICS_SCRAPE_INTERVAL` | No | How often to scrape metrics | `15s` |
+| `METRICS_SCRAPE_TIMEOUT` | No | Scrape timeout | `10s` |
+| `ALLOY_SELF_MONITORING_INTERVAL` | No | Alloy self-health check interval | `60s` |
+
+## Stopping / Restarting Monitoring
+
+```bash
+# Stop Alloy only (node keeps running)
+docker compose --profile monitoring down
+
+# Restart Alloy
+docker compose --profile monitoring up -d
+
+# View Alloy logs
+docker logs -f genlayer-node-alloy
+
+# WARNING: 'docker compose down' without --profile stops ALL containers including WebDriver
+# Always use --profile monitoring to only affect Alloy
+```
+
+## Important: Alloy Must Restart When Node Restarts
+
+**CRITICAL**: When the genlayer-node service restarts (during upgrades or otherwise), Alloy's
+bind mount to the log directory becomes stale. The container continues reading from the old
+log path, and **no new logs are sent to Grafana**.
+
+**Symptoms of stale bind mount:**
+- Node is running and healthy (`curl localhost:9153/health` returns OK)
+- But Grafana shows no logs/metrics for this validator
+- Validator appears offline in monitoring dashboards
+- May lead to heartbeat failures and validator banning
+
+**Solution:** The systemd service should include `ExecStartPost` to auto-restart Alloy:
+```ini
+ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker compose --profile monitoring up -d --no-deps --force-recreate alloy 2>/dev/null || true'
+```
+
+If your existing systemd service doesn't have this line, add it:
+```bash
+# Edit the service file
+sudo nano /etc/systemd/system/genlayer-node.service
+
+# Add after ExecStart line:
+# ExecStartPost=-/bin/sh -c 'sleep 5 && /usr/bin/docker compose --profile monitoring up -d --no-deps --force-recreate alloy 2>/dev/null || true'
+
+# Reload and restart
+sudo systemctl daemon-reload
+sudo systemctl restart genlayer-node
+```
+
+**Manual fix (if Alloy is already stale):**
 ```bash
 docker compose --profile monitoring up -d --no-deps --force-recreate alloy
 ```
 
-Verify new sample/log timestamps in the receiver. If they do not advance, inspect
-mount sources, permissions, labels and receiver errors. Do not erase Alloy's WAL
-or positions as a first response. Preserve its data across ordinary restarts.
-For multiple nodes, configure distinct targets/labels and verify each one, rather
-than accepting one successful sample as proof that every node is monitored.
+See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for detailed explanation.
