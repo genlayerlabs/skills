@@ -305,16 +305,6 @@ cd /opt/genlayer-node && sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set 
 ```
 Then confirm the push counters increase (Step 5.3b).
 
-### Network Label Empty on Bradbury Phase 2 (node v0.6.0-rc.1)
-**Symptom:** data arrives (the push counters increase) but a dashboard filtered on
-`network="bradbury-phase2"` shows nothing for your node.
-
-The node derives its `network` label from the consensus address and, in v0.6.0-rc.1, knows only
-`asimov-phase5` and `bradbury-phase1`: on Bradbury Phase 2 it emits `network=""` on its logs and on
-`genlayer_node_info`. Setting `NETWORK_NAME=bradbury-phase2` in `.env` does **not** fix this — it
-only sets a docker label used for recovery logs and alert routing. Query by `instance` until a
-node release fixes it, and report it to the GenLayer team.
-
 ### Changed NODE_ID or VALIDATOR_NAME
 `NODE_ID` / `VALIDATOR_NAME` feed the Loki and Prometheus `instance` label. Changing either starts
 a new series: saved queries and dashboards on the old name go blank while the data lives under the

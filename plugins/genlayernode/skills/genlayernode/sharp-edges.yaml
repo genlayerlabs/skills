@@ -1126,21 +1126,6 @@ edges:
       at http://<alloy-container-ip>:12345/metrics; *_dropped*/*_failed* totals stay 0.
     severity: critical
 
-  - id: node-network-label-empty-bradbury-phase2
-    description: "Node v0.6.0-rc.1 emits network=\"\" on Bradbury Phase 2 (logs and genlayer_node_info)"
-    detect: |
-      curl -s http://localhost:9153/metrics | grep '^genlayer_node_info'   # network="" on Phase 2
-    impact: |
-      The node derives the label from the consensus address and knows only asimov-phase5 and
-      bradbury-phase1. Dashboards filtered on network="bradbury-phase2" show nothing although data
-      arrives. NETWORK_NAME=bradbury-phase2 in .env only sets a docker label for recovery logs and
-      alert routing; it does not change this label.
-    fix: |
-      Node bug: nothing to fix locally. Query by instance (NODE_ID) and report it to the GenLayer
-      team; check whether your release has fixed it. Do not rename NODE_ID / VALIDATOR_NAME to work
-      around it: that changes the instance label and blanks saved queries.
-    severity: medium
-
   - id: high-downtime-update
     description: "Stopping old node before preparing new version causes 3-4 minute downtime"
     detect: |

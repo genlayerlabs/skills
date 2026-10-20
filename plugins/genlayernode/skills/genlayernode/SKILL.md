@@ -237,12 +237,6 @@ Observed on a live v0.5.14 -> v0.6.0-rc.1 validator upgrade (Bradbury Phase 2, c
 whether your release still has them before applying a workaround.
 
 **Node**
-- **`network` label empty on Bradbury Phase 2 (v0.6.0-rc.1).** The node derives the label from
-  the consensus address and knows only `asimov-phase5` and `bradbury-phase1`, so it emits
-  `network=""` on logs and `genlayer_node_info`. Dashboards filtered on
-  `network="bradbury-phase2"` show nothing although data arrives. `NETWORK_NAME=bradbury-phase2` in
-  `.env` does not fix it (it only sets a docker label for recovery logs / alert routing). Query by
-  `instance`; `monitoring-procedure.md` -> "Network Label Empty on Bradbury Phase 2".
 - **Renaming changes the `instance` label.** Changing `NODE_ID` / `VALIDATOR_NAME` starts new Loki
   and Prometheus series; saved queries on the old name go blank.
 - **Alloy does not survive a v0.5 -> v0.6 fresh install.** The old container exits (0) and the
