@@ -135,10 +135,9 @@ sudo docker restart genlayer-node-alloy 2>/dev/null || true
 # Total downtime: 10-15 seconds (Alloy restart is async)
 ```
 
-**Docker deployment:** from the new version directory,
-`sudo docker compose -p genlayer-node --profile node up -d`. The rc.1 compose file has no fixed
-project name: `-p genlayer-node` keeps the same project, so this recreates the existing containers
-from the new directory (without it the container names conflict).
+**Docker deployment:** from the new version directory, `sudo docker compose --profile node up -d`.
+The release compose file names its project `genlayer-node`, so this recreates the existing
+containers from the new directory.
 
 > **IMPORTANT**: The Alloy restart is critical! Without it, the telemetry container
 > continues reading from the old log path (stale bind mount) and your validator

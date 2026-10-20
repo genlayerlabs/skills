@@ -545,8 +545,6 @@ patterns:
 
       # Keystore password (validator only; the user sets it, Claude leaves it empty)
       GENLAYERNODE_PASSWORD=
-      # rc.1 compose refuses every docker compose command (also the WebDriver) while this is
-      # empty: validator = the export passphrase; full node = any non-empty value (user sets it)
       NODE_PASSWORD=
 
       # RPC provider API key, if the provider needs one (the user sets it)
@@ -640,7 +638,7 @@ patterns:
 
       # GenVM configuration
       genvm:
-        root_dir: ./opt/genvm/v0.6.0-rc10   # keep the value install.sh wrote (rc.1)
+        root_dir: ./opt/genvm/current   # keep the value install.sh wrote
         start_manager: true
         manager_url: http://127.0.0.1:3999
         permits:
@@ -771,7 +769,7 @@ patterns:
     description: |
       Start node using Docker Compose method.
     commands:
-      - "cd /opt/genlayer-node/${VERSION} && sudo chown -R 10001:10001 ./data/ && sudo docker compose -p genlayer-node --profile node up -d"
+      - "cd /opt/genlayer-node/${VERSION} && sudo chown -R 10001:10001 ./data/ && sudo docker compose --profile node up -d"
 
   - id: verify-node-running
     description: |

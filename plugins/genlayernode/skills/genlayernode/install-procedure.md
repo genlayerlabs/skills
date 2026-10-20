@@ -186,11 +186,6 @@ GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=your-rpc-provider-key
 # Binary (systemd) reads GENLAYERNODE_PASSWORD (add the line); Docker reads NODE_PASSWORD.
 GENLAYERNODE_PASSWORD=your-export-passphrase
 
-# Required by the rc.1 docker-compose.yaml for EVERY docker compose command (also the
-# WebDriver in Phase 7): it refuses to run while NODE_PASSWORD is empty.
-# Validator: the same export passphrase. Full node: any non-empty value (no keystore is unlocked).
-NODE_PASSWORD=your-export-passphrase
-
 # Docker only: the exact version, never latest
 NODE_VERSION=v0.6.0
 ```
@@ -394,8 +389,7 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 ```
 
 **Sync complete when:**
-- `status` = `"healthy"` (rc.1 reports an empty `network` label; the network is confirmed by doctor's
-  "Consensus Deployment (admission)" check)
+- `status` = `"healthy"` and `network` = the network you joined (Testnet Bradbury: `"bradbury-phase2"`)
 - `genlayer_node_synced` = 1 and `genlayer_node_blocks_behind` = 0
 
 ---
