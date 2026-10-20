@@ -95,6 +95,11 @@ grep -q 'genvm-llm-greybox.lua' ${OLD_CFG}/genvm-module-llm.yaml && \
   sudo -u ${NODE_USER} sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' ${NEW_CFG}/genvm-module-llm.yaml
 # enable the same providers as before (<provider> from the common-procedures.md mapping):
 sudo -u ${NODE_USER} sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' ${NEW_CFG}/genvm-module-llm.yaml
+# Custom backends are NOT carried over: the release template only has the stock providers, so a
+# backend you added yourself (e.g. an `unhardcoded:` block) silently disappears. Diff the backend
+# names and copy any missing block from ${OLD_CFG}/genvm-module-llm.yaml into the new file:
+diff <(grep -E '^  [a-z0-9_-]+:' ${OLD_CFG}/genvm-module-llm.yaml) \
+     <(grep -E '^  [a-z0-9_-]+:' ${NEW_CFG}/genvm-module-llm.yaml)
 # Docker only: re-create docker-compose.override.yml in ${NODE_DIR} (SKILL.md -> Docker Compose Deployment).
 
 # 6. Link the shared data directory (genvm.db, ops.db, keystore/ — no copy, no resync)
@@ -117,6 +122,11 @@ sudo systemctl stop genlayer-node
 # 2. Update symlinks (very fast - <1 second)
 # See: common-procedures.md -> "Setup Symlinks"
 cd /opt/genlayer-node
+# A real DIRECTORY at a link name (docker creates one when a bind-mount source such as
+# alloy-healthcheck.sh is missing) makes ln -sfn put the link INSIDE it: remove it first
+for p in alloy-healthcheck.sh alloy-config.river genvm-module-web-docker.yaml; do
+  [ -d $p ] && [ ! -L $p ] && sudo rmdir $p
+done
 for p in bin opt configs data docker-compose.yaml alloy-config.river alloy-healthcheck.sh genvm-module-web-docker.yaml .env; do
   sudo -u genlayer ln -sfn ${VERSION}/$p $p
 done
@@ -174,6 +184,10 @@ sudo docker logs genlayer-node-alloy 2>&1 | tail -3
 > **WARNING**: If the host and container timestamps don't match, run:
 > `docker restart genlayer-node-alloy`
 > See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for details.
+>
+> If Alloy is `Exited`, or its logs show `error writing positions file ... no such file or
+> directory` / `error tailing WAL`, a restart is not enough: recreate it (`monitoring-procedure.md`
+> -> "Alloy Exited or Not Pushing After an Upgrade"), then confirm its push counters increase.
 
 ## For Major Version Updates (e.g., v0.6.x -> v0.7.x)
 
@@ -190,6 +204,22 @@ The principle remains: **Prepare everything first, then quick switch.**
 Phase 2 is a new chain (Arbitrum Orbit, chain id 4221) with new contracts and a new validator
 registration. Do a fresh install (`install-procedure.md`) in a new directory, with a fresh data
 directory; stop and disable the old node first.
+
+What the fresh install does NOT clean up or carry over (seen on a live v0.5.14 -> v0.6.0-rc.1
+upgrade):
+- **Stale `third_party` root link.** v0.6 has no `third_party/`; the `/opt/genlayer-node/third_party`
+  link still points at the v0.5 directory. Remove it: `[ -L third_party ] && sudo rm third_party`.
+- **Stray `alloy-healthcheck.sh` directory.** If Alloy was ever started while the file was missing,
+  docker created a directory with that name and the symlink loop links inside it. The loop in
+  Phase 2 removes it first (sharp-edge `bind-mount-source-became-directory`).
+- **Custom LLM backends.** Build `genvm-module-llm.yaml` from the new release template, then copy
+  over any backend block you added to the v0.5 file (the diff in Phase 1 step 5, with `OLD_CFG`
+  pointing at the v0.5 GenVM config directory).
+- **The Alloy container.** The old container exits and `docker restart` (systemd `ExecStartPost`)
+  cannot bring it back on the new layout: recreate it (sharp-edge
+  `alloy-container-stale-after-fresh-install`).
+- **The service user.** If the v0.5 node ran as an admin user, migrate to `genlayer` now
+  (`install-procedure.md` -> "Migrating an existing install to the genlayer user").
 
 ## Downtime Comparison
 
@@ -217,6 +247,9 @@ sudo systemctl stop genlayer-node
 
 # 2. Switch symlinks back to old version
 cd /opt/genlayer-node
+for p in alloy-healthcheck.sh alloy-config.river genvm-module-web-docker.yaml; do
+  [ -d $p ] && [ ! -L $p ] && sudo rmdir $p   # stray directory, see Phase 2
+done
 for p in bin opt configs data docker-compose.yaml alloy-config.river alloy-healthcheck.sh genvm-module-web-docker.yaml .env; do
   sudo -u genlayer ln -sfn ${OLD_VERSION}/$p $p
 done

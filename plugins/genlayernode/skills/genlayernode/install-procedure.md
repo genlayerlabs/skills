@@ -98,6 +98,10 @@ genlayer staking wizard --account "My Validator Owner" --network testnet-bradbur
 Phase 2 registration signs a proof of possession with the operator key: the operator must be an
 account the CLI holds (create it in the wizard). An operator address alone fails.
 
+Without the wizard, register with the command that matches the funding source: own wallet →
+`genlayer staking validator-join`; vesting contract → `genlayer vesting validator create`, signed
+by the vesting beneficiary (`staking-wizard-procedure.md` -> "Alternative: Individual CLI Commands").
+
 **Save these outputs from the wizard:**
 | Item | Example | Used For |
 |------|---------|----------|
@@ -428,6 +432,33 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 ├── alloy-config.river -> v0.6.0/alloy-config.river  # Ships with tarball
 └── genvm-module-web-docker.yaml -> v0.6.0/genvm-module-web-docker.yaml
 ```
+
+## Migrating an existing install to the genlayer user
+
+This guide assumes the node runs as the `genlayer` system user (not in the docker group). An older
+install that ran as an admin/login user (files owned by it, `User=<admin>` in the unit) can be
+moved over — do it at an upgrade, while the node is stopped anyway. Binary/systemd deployment
+only: a Docker node's data stays owned by uid 10001.
+
+```bash
+sudo systemctl stop genlayer-node
+# 1. Service user (same command as Prerequisites; skip if it exists)
+id genlayer >/dev/null 2>&1 || \
+  sudo useradd --system --create-home --home-dir /var/lib/genlayer --shell /usr/sbin/nologin genlayer
+# 2. Ownership of the whole tree (version dirs and the shared <minor>/data)
+sudo chown -R genlayer:genlayer /opt/genlayer-node
+# 3. Secrets: .env readable only by genlayer, keystore private
+sudo chown genlayer:genlayer /opt/genlayer-node/${VERSION}/.env
+sudo chmod 600 /opt/genlayer-node/${VERSION}/.env
+sudo chmod 700 /opt/genlayer-node/${VERSION}/data/node/keystore
+# 4. Unit runs as genlayer (Phase 9 unit: User=, Group=, EnvironmentFile=, DOCKER_HOST, ExecStartPost)
+sudo sed -i -e 's/^User=.*/User=genlayer/' -e 's/^Group=.*/Group=genlayer/' /etc/systemd/system/genlayer-node.service
+grep -E '^(User|Group)=' /etc/systemd/system/genlayer-node.service   # both must say genlayer (add Group= if missing)
+sudo systemctl daemon-reload && sudo systemctl start genlayer-node
+```
+
+Do not add `genlayer` to the docker group (sharp-edge `node-user-in-docker-group`). Docker
+commands keep running with `sudo` from your admin account.
 
 ## Common Issues
 

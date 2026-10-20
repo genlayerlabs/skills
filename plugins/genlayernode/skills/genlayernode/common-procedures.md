@@ -201,9 +201,16 @@ Symlinks provide a stable path (`/opt/genlayer-node/bin`) that points to the cur
 
 ```bash
 cd /opt/genlayer-node
+# A real DIRECTORY at a link name (docker creates one when a bind-mount source such as
+# alloy-healthcheck.sh is missing) makes ln -sfn put the link INSIDE it: remove it first
+for p in alloy-healthcheck.sh alloy-config.river genvm-module-web-docker.yaml; do
+  [ -d $p ] && [ ! -L $p ] && sudo rmdir $p
+done
 for p in bin opt configs data docker-compose.yaml alloy-config.river alloy-healthcheck.sh genvm-module-web-docker.yaml .env; do
   sudo -u genlayer ln -sfn ${VERSION}/$p $p
 done
+# v0.5 -> v0.6: v0.6 has no third_party/; drop the stale root link to the old version
+[ -L third_party ] && sudo rm third_party
 # 'opt' makes the config's relative genvm.root_dir (./opt/genvm/...) resolve from /opt/genlayer-node
 ```
 

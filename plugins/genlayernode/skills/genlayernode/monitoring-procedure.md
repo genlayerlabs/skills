@@ -217,6 +217,23 @@ Then open `http://localhost:12345` in your browser. The targets page should show
 curl -s http://localhost:9153/metrics | grep genlayer_node | head -10
 ```
 
+### 5.3b Verify Alloy Is Actually Pushing
+
+A running Alloy with no errors can still push nothing. Read its own counters twice, a minute apart:
+
+```bash
+ALLOY_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' genlayer-node-alloy | awk '{print $1}')
+curl -s http://${ALLOY_IP}:12345/metrics | \
+  grep -E '^(loki_write_(sent_entries|dropped_entries)_total|prometheus_remote_storage_samples_(total|failed_total|dropped_total))'
+```
+
+- `loki_write_sent_entries_total` and `prometheus_remote_storage_samples_total` must **increase**
+  between the two reads.
+- `loki_write_dropped_entries_total`, `prometheus_remote_storage_samples_failed_total` and
+  `prometheus_remote_storage_samples_dropped_total` must stay **0**.
+
+If the sent counters are flat, see "Alloy Exited or Not Pushing After an Upgrade" below.
+
 ### 5.4 Check Foundation Dashboard
 
 Once metrics are flowing, your validator should appear on the GenLayer Foundation dashboard:
@@ -265,6 +282,43 @@ docker exec genlayer-node-alloy wget -qO- http://host.docker.internal:9153/metri
 ```
 
 **Fix:** Ensure node is running, `extra_hosts` is in docker-compose.yaml, and `NODE_METRICS_ENDPOINT` is `host.docker.internal:9153` (not `localhost`).
+
+### Alloy Exited or Not Pushing After an Upgrade
+**Symptoms (any of):**
+- After a v0.5 -> v0.6 fresh install, `docker ps -a` shows `genlayer-node-alloy` as `Exited (0)`;
+  the systemd `ExecStartPost` `docker restart` does not bring it back on the new layout, and
+  telemetry is silently down.
+- Alloy logs `error writing positions file ... no such file or directory` or `error tailing WAL`:
+  its storage directory (`/var/lib/alloy/data` inside the container) is gone, and it pushes
+  nothing.
+
+```bash
+sudo docker ps -a --filter name=genlayer-node-alloy --format '{{.Status}}'
+sudo docker logs --tail 50 genlayer-node-alloy 2>&1 | grep -E 'positions file|tailing WAL'
+```
+
+**Fix:** recreate the container from the current version's compose file, as root, on the **real**
+Docker socket. The read-only docker-socket-proxy answers image and create calls with 403, so
+unset `DOCKER_HOST` if it points at the proxy:
+```bash
+cd /opt/genlayer-node && sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set +a; docker compose --profile monitoring up -d --force-recreate alloy'
+```
+Then confirm the push counters increase (Step 5.3b).
+
+### Network Label Empty on Bradbury Phase 2 (node v0.6.0-rc.1)
+**Symptom:** data arrives (the push counters increase) but a dashboard filtered on
+`network="bradbury-phase2"` shows nothing for your node.
+
+The node derives its `network` label from the consensus address and, in v0.6.0-rc.1, knows only
+`asimov-phase5` and `bradbury-phase1`: on Bradbury Phase 2 it emits `network=""` on its logs and on
+`genlayer_node_info`. Setting `NETWORK_NAME=bradbury-phase2` in `.env` does **not** fix this — it
+only sets a docker label used for recovery logs and alert routing. Query by `instance` until a
+node release fixes it, and report it to the GenLayer team.
+
+### Changed NODE_ID or VALIDATOR_NAME
+`NODE_ID` / `VALIDATOR_NAME` feed the Loki and Prometheus `instance` label. Changing either starts
+a new series: saved queries and dashboards on the old name go blank while the data lives under the
+new one. Keep them stable, or update saved queries.
 
 ### Connection Refused to Node Metrics
 **Symptom:** Alloy logs show connection refused errors.
@@ -354,5 +408,9 @@ sudo systemctl restart genlayer-node
 ```bash
 docker restart genlayer-node-alloy
 ```
+
+`docker restart` reuses the existing container. If that container is `Exited` after a fresh
+install, or its storage directory is gone, a restart cannot fix it: recreate it (see "Alloy Exited
+or Not Pushing After an Upgrade").
 
 See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for detailed explanation.

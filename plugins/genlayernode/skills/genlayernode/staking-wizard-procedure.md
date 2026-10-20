@@ -498,6 +498,17 @@ genlayer staking set-identity 0x<VALIDATOR_WALLET_ADDRESS> \
   --network testnet-bradbury
 ```
 
+**Step 4 depends on where the self-stake comes from** (the wizard's Step 3, Funding Source):
+
+| Self-stake from | Command | Signed by |
+|-----------------|---------|-----------|
+| The owner's own wallet (non-vesting) | `genlayer staking validator-join` (above) | the owner account |
+| A vesting contract | `genlayer vesting validator create` | the vesting contract's **beneficiary** |
+
+Check the flags with `--help` of the qualified CLI version. For the vesting path, confirm the
+account you sign with is the vesting contract's beneficiary **before** running it: the CLI only
+reports a beneficiary mismatch after the signing prompt.
+
 **Note**: Steps 1-3 require interactive password prompts. Step 4 (`validator-join`) is non-interactive if all flags are provided. However, `account create`, `account unlock`, and `account export` always require interactive password input.
 
 ## Useful Post-Wizard Commands

@@ -513,6 +513,7 @@ patterns:
     description: |
       Create symlinks for current version for easy access from /opt/genlayer-node.
     commands:
+      - "cd /opt/genlayer-node && for p in alloy-healthcheck.sh alloy-config.river genvm-module-web-docker.yaml; do [ -d $p ] && [ ! -L $p ] && sudo rmdir $p; done  # stray dir docker made for a missing bind-mount source; ln -sfn would link inside it"
       - "sudo -u genlayer ln -sfn ../${MINOR}/data /opt/genlayer-node/${VERSION}/data"
       - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/bin /opt/genlayer-node/bin"
       - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/opt /opt/genlayer-node/opt"
@@ -522,6 +523,8 @@ patterns:
       - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/.env /opt/genlayer-node/.env"
       - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/alloy-config.river /opt/genlayer-node/alloy-config.river"
       - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/genvm-module-web-docker.yaml /opt/genlayer-node/genvm-module-web-docker.yaml"
+      - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/alloy-healthcheck.sh /opt/genlayer-node/alloy-healthcheck.sh"
+      - "[ -L /opt/genlayer-node/third_party ] && sudo rm /opt/genlayer-node/third_party  # stale v0.5 link; v0.6 has no third_party/"
 
   - id: run-genvm-setup
     description: |
@@ -814,6 +817,20 @@ patterns:
       # Check bind mount is fresh (timestamps should match)
       echo "Host:" && ls -la /opt/genlayer-node/data/node/logs/node.log | awk '{print $6,$7,$8}'
       echo "Container:" && docker exec genlayer-node-alloy ls -la /var/log/genlayer/node.log | awk '{print $6,$7,$8}'
+
+  - id: recreate-alloy-telemetry
+    description: |
+      Recreate the Alloy container from the current compose file. Needed when `docker restart`
+      cannot help: the container is Exited after a v0.5 -> v0.6 fresh install, or its logs show
+      `error writing positions file ... no such file or directory` / `error tailing WAL`
+      (storage dir /var/lib/alloy/data gone). Runs as root on the real docker socket: the
+      read-only docker-socket-proxy returns 403 for image and create calls.
+    command: "cd /opt/genlayer-node && sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set +a; docker compose --profile monitoring up -d --force-recreate alloy'"
+    verify: |
+      # loki_write_sent_entries_total and prometheus_remote_storage_samples_total must increase;
+      # *_dropped* / *_failed* totals stay 0
+      IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' genlayer-node-alloy | awk '{print $1}')
+      curl -s http://${IP}:12345/metrics | grep -E '^(loki_write_|prometheus_remote_storage_samples_)'
 
   - id: triage-validator-health
     description: |

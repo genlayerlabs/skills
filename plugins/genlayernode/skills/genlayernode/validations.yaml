@@ -267,6 +267,35 @@ validations:
     expect: "exit 0"
     message: "Alloy has authentication or other errors. Check: docker logs genlayer-node-alloy"
 
+  - id: alloy-pushing
+    type: command
+    command: |
+      # Alloy's own push counters must increase over a minute (a running Alloy can push nothing)
+      IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' genlayer-node-alloy | awk '{print $1}')
+      c() { curl -s http://${IP}:12345/metrics | awk -v m="$1" '$1 ~ "^"m {s+=$2} END {print s+0}'; }
+      L1=$(c loki_write_sent_entries_total); P1=$(c prometheus_remote_storage_samples_total)
+      sleep 70
+      L2=$(c loki_write_sent_entries_total); P2=$(c prometheus_remote_storage_samples_total)
+      awk -v a=$L1 -v b=$L2 -v c=$P1 -v d=$P2 'BEGIN { exit !(b > a && d > c) }'
+    expect: "exit 0"
+    message: |
+      Alloy is not pushing logs and/or metrics. If it is Exited, or logs 'error writing positions
+      file' / 'error tailing WAL', recreate it (a restart is not enough):
+      cd /opt/genlayer-node && sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set +a; docker compose --profile monitoring up -d --force-recreate alloy'
+      See sharp-edges.yaml -> alloy-container-stale-after-fresh-install
+
+  - id: no-stray-link-directories
+    type: command
+    command: |
+      cd /opt/genlayer-node && for p in alloy-healthcheck.sh alloy-config.river genvm-module-web-docker.yaml; do
+        [ -d $p ] && [ ! -L $p ] && exit 1
+      done; exit 0
+    expect: "exit 0"
+    message: |
+      A real directory sits where a version symlink belongs (docker created it for a missing
+      bind-mount source). Remove it with sudo rmdir, then re-run the symlink loop.
+      See sharp-edges.yaml -> bind-mount-source-became-directory
+
   - id: systemd-has-alloy-restart
     type: command
     command: "grep -q 'genlayer-node-alloy' /etc/systemd/system/genlayer-node.service 2>/dev/null"
@@ -301,3 +330,5 @@ post_update:
   - alloy-container-running
   - alloy-bind-mount-fresh
   - alloy-logs-no-errors
+  - alloy-pushing
+  - no-stray-link-directories

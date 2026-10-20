@@ -205,6 +205,11 @@ sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' \
 **Symptom if not enabled:** Node fails to start with "module_failed_to_start" error
 (v0.6: the node starts degraded and doctor reports no usable LLM provider).
 
+**Custom backends:** step 1 overwrites the file with the release template, which has only the
+stock providers. A backend you added yourself (e.g. an `unhardcoded:` block) is dropped silently
+on every upgrade: copy it over from the old version's `genvm-module-llm.yaml`
+(`update-procedure.md` Phase 1 step 5 diffs the two).
+
 ### Updating Greybox on a Running Node
 To update the Lua script or LLM YAML without a full redeploy, see
 `common-procedures.md` -> "Update Greybox Config on Running Node".
@@ -225,6 +230,30 @@ When a validator reports `504 Gateway Timeout`, `get chain ID`, `validator is ba
 2. **Do not rotate endpoints blindly.** Shared RPC incidents can affect multiple operators at once; switching URLs without an official replacement can make recovery harder.
 3. **Collect safe diagnostics only.** Share sanitized health output, node/genvm versions, network, and validator address when requesting operator help. Never paste API keys, passwords, private keys, or full `.env` contents.
 4. **Use `doctor` before restart when possible.** Run `cd /opt/genlayer-node && sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'` to catch provider/config issues before putting the service back into rotation.
+
+### Known Issues
+
+Observed on a live v0.5.14 -> v0.6.0-rc.1 validator upgrade (Bradbury Phase 2, chain 4221). Check
+whether your release still has them before applying a workaround.
+
+**Node**
+- **`network` label empty on Bradbury Phase 2 (v0.6.0-rc.1).** The node derives the label from
+  the consensus address and knows only `asimov-phase5` and `bradbury-phase1`, so it emits
+  `network=""` on logs and `genlayer_node_info`. Dashboards filtered on
+  `network="bradbury-phase2"` show nothing although data arrives. `NETWORK_NAME=bradbury-phase2` in
+  `.env` does not fix it (it only sets a docker label for recovery logs / alert routing). Query by
+  `instance`; `monitoring-procedure.md` -> "Network Label Empty on Bradbury Phase 2".
+- **Renaming changes the `instance` label.** Changing `NODE_ID` / `VALIDATOR_NAME` starts new Loki
+  and Prometheus series; saved queries on the old name go blank.
+- **Alloy does not survive a v0.5 -> v0.6 fresh install.** The old container exits (0) and the
+  unit's `ExecStartPost` `docker restart` cannot recover it: telemetry is silently down until you
+  recreate it (sharp-edge `alloy-container-stale-after-fresh-install`).
+
+**GenLayer CLI**
+- `--wallet browser` opens the default browser automatically; there is no `--no-open` flag. On a
+  headless or shared machine, be ready for it.
+- `genlayer vesting validator create` reports a beneficiary / vesting-contract mismatch only
+  **after** the signing prompt. Confirm the signing account is the vesting beneficiary first.
 
 ---
 
@@ -532,9 +561,15 @@ MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+')
 sudo -u genlayer mkdir -p /opt/genlayer-node/${MINOR}/data/node/keystore /opt/genlayer-node/${MINOR}/data/node/logs
 sudo -u genlayer ln -sfn ../${MINOR}/data /opt/genlayer-node/${VERSION}/data
 cd /opt/genlayer-node
+# A real DIRECTORY at a link name (docker creates one when a bind-mount source such as
+# alloy-healthcheck.sh is missing) makes ln -sfn put the link INSIDE it: remove it first
+for p in alloy-healthcheck.sh alloy-config.river genvm-module-web-docker.yaml; do
+  [ -d $p ] && [ ! -L $p ] && sudo rmdir $p
+done
 for p in bin opt configs data docker-compose.yaml alloy-config.river alloy-healthcheck.sh genvm-module-web-docker.yaml .env; do
   sudo -u genlayer ln -sfn ${VERSION}/$p $p
 done
+[ -L third_party ] && sudo rm third_party   # stale v0.5 link (v0.6 has no third_party/)
 # v0.6+: genvm lives under opt/genvm/<ver> — the `opt` link is REQUIRED, else `./opt/genvm/...` won't resolve
 ```
 
@@ -902,6 +937,7 @@ docker logs -f genlayer-node
 - Enable telemetry push to GenLayer Foundation's Grafana Cloud using Alloy
 - Requires monitoring credentials (request from the GenLayer Foundation team)
 - Collects Prometheus metrics and node logs
+- Verify it pushes: Alloy's own counters must increase (`monitoring-procedure.md` Step 5.3b)
 - See `monitoring-procedure.md` for complete setup
 - Reference: https://docs.genlayer.com/validators/monitoring
 

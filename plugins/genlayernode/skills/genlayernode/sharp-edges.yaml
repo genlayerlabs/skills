@@ -1067,6 +1067,80 @@ edges:
       qualified CLI (staking-wizard-procedure.md).
     severity: high
 
+  - id: bind-mount-source-became-directory
+    description: "A DIRECTORY sits where a link should be (e.g. /opt/genlayer-node/alloy-healthcheck.sh), so the symlink loop links inside it"
+    detect: |
+      cd /opt/genlayer-node
+      for p in alloy-healthcheck.sh alloy-config.river genvm-module-web-docker.yaml; do
+        [ -d $p ] && [ ! -L $p ] && echo "$p is a real directory"
+      done
+    impact: |
+      Docker creates an empty directory at a bind-mount source that does not exist (Alloy started
+      before the file was linked). `ln -sfn <ver>/alloy-healthcheck.sh alloy-healthcheck.sh` then
+      creates the link INSIDE that directory: the root path never points at the new version and
+      the Alloy health check mounts a directory.
+    fix: |
+      Remove the empty directory before linking (the Setup Symlinks loop does this):
+        cd /opt/genlayer-node && sudo rmdir alloy-healthcheck.sh
+      then re-run the symlink loop and recreate Alloy (alloy-container-stale-after-fresh-install).
+    severity: high
+
+  - id: v05-third-party-stale-link
+    description: "After v0.5 -> v0.6, /opt/genlayer-node/third_party still points at the v0.5 directory"
+    detect: |
+      readlink /opt/genlayer-node/third_party   # any output on a v0.6 node = stale
+    impact: "v0.6 has no third_party/ (genvm is under opt/genvm/). The link keeps old GenVM paths reachable and misleads troubleshooting and scripts."
+    fix: |
+      cd /opt/genlayer-node && [ -L third_party ] && sudo rm third_party
+    severity: medium
+
+  - id: custom-llm-backends-dropped
+    description: "Upgrade rebuilds genvm-module-llm.yaml from the release template and silently drops custom backends"
+    detect: |
+      # OLD_CFG / NEW_CFG as in update-procedure.md Phase 1 step 5
+      diff <(grep -E '^  [a-z0-9_-]+:' ${OLD_CFG}/genvm-module-llm.yaml) \
+           <(grep -E '^  [a-z0-9_-]+:' ${NEW_CFG}/genvm-module-llm.yaml)
+      # a backend present only in the old file (e.g. unhardcoded:) is gone
+    impact: "A validator whose only working backend was a custom one comes up with no usable LLM provider (doctor fails; LLM transactions time out)."
+    fix: |
+      Copy the missing backend block from the old version's genvm-module-llm.yaml into the new one,
+      keeping its enabled: true, then run doctor.
+    severity: high
+
+  - id: alloy-container-stale-after-fresh-install
+    description: "After a v0.5 -> v0.6 fresh install the old Alloy container is exited, or pushes nothing, and docker restart cannot fix it"
+    detect: |
+      sudo docker ps -a --filter name=genlayer-node-alloy --format '{{.Status}}'   # Exited (0) = down
+      sudo docker logs --tail 50 genlayer-node-alloy 2>&1 | grep -E 'positions file|tailing WAL'
+      # Push counters flat (monitoring-procedure.md Step 5.3b)
+    impact: |
+      Telemetry is silently down: the node is healthy but appears offline to monitoring. The
+      systemd ExecStartPost `docker restart` restarts the OLD container definition, so it does not
+      help. `error writing positions file ... no such file or directory` / `error tailing WAL` mean
+      Alloy's storage dir (/var/lib/alloy/data) is gone: it runs but pushes nothing.
+    fix: |
+      Recreate Alloy from the current compose file, as root, on the REAL docker socket (the
+      read-only docker-socket-proxy returns 403 for image and create calls):
+        cd /opt/genlayer-node && sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set +a; docker compose --profile monitoring up -d --force-recreate alloy'
+      Verify: loki_write_sent_entries_total and prometheus_remote_storage_samples_total increase
+      at http://<alloy-container-ip>:12345/metrics; *_dropped*/*_failed* totals stay 0.
+    severity: critical
+
+  - id: node-network-label-empty-bradbury-phase2
+    description: "Node v0.6.0-rc.1 emits network=\"\" on Bradbury Phase 2 (logs and genlayer_node_info)"
+    detect: |
+      curl -s http://localhost:9153/metrics | grep '^genlayer_node_info'   # network="" on Phase 2
+    impact: |
+      The node derives the label from the consensus address and knows only asimov-phase5 and
+      bradbury-phase1. Dashboards filtered on network="bradbury-phase2" show nothing although data
+      arrives. NETWORK_NAME=bradbury-phase2 in .env only sets a docker label for recovery logs and
+      alert routing; it does not change this label.
+    fix: |
+      Node bug: nothing to fix locally. Query by instance (NODE_ID) and report it to the GenLayer
+      team; check whether your release has fixed it. Do not rename NODE_ID / VALIDATOR_NAME to work
+      around it: that changes the instance label and blanks saved queries.
+    severity: medium
+
   - id: high-downtime-update
     description: "Stopping old node before preparing new version causes 3-4 minute downtime"
     detect: |
