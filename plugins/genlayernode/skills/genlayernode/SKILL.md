@@ -571,9 +571,6 @@ sudo chmod 600 /opt/genlayer-node/${VERSION}/.env
 
 3. **Node Password** (validator only) - the operator keystore's export passphrase:
    `GENLAYERNODE_PASSWORD=` (binary) or `NODE_PASSWORD=` (Docker)
-   - rc.1: the compose file refuses EVERY `docker compose` command (also the WebDriver of a
-     binary node) while `NODE_PASSWORD` is empty. Validator: the same passphrase; full node: any
-     non-empty value (no keystore is unlocked)
 
 4. **Docker only** - `NODE_VERSION=${VERSION}` (exact, never `latest`)
 
@@ -808,42 +805,36 @@ journalctl -u genlayer-node -f
 ```bash
 cd /opt/genlayer-node/${VERSION}
 sudo chown -R 10001:10001 ./data/      # the container runs as uid 10001
-# -p genlayer-node: same project as the WebDriver started from /opt/genlayer-node (step 6);
-# the rc.1 compose file has no fixed name, so without it the container names conflict
-sudo docker compose -p genlayer-node --profile node run --rm --entrypoint /app/bin/genlayernode genlayer-node doctor
-sudo docker compose -p genlayer-node --profile node up -d
+sudo docker compose --profile node run --rm --entrypoint /app/bin/genlayernode genlayer-node doctor
+sudo docker compose --profile node up -d
 # Add central telemetry (Alloy metrics + logs push): append --profile monitoring
 
 # When switching back to binary/systemd: stop Docker and restore shared-data ownership
-# sudo docker compose -p genlayer-node --profile node down && sudo chown -R genlayer:genlayer /opt/genlayer-node/data/
+# sudo docker compose --profile node down && sudo chown -R genlayer:genlayer /opt/genlayer-node/data/
 ```
 
 **v0.6+ / pre-release Docker notes:**
 - Run `docker compose` **from the version directory** (e.g. `/opt/genlayer-node/<version>`)
-  so relative bind mounts (`./configs`, `./data`, `./genvm-module-*.yaml`) resolve, with
-  `-p genlayer-node` (rc.1 compose has no fixed project name).
+  so relative bind mounts (`./configs`, `./data`, `./genvm-module-*.yaml`) resolve.
 - **Full node**: set `node.mode: "full"` in config.yaml — no wallet/operator/keystore/staking
   needed (logs: "full node mode detected, skipping validator setup").
 - **Custom image (e.g. ECR)**: override the node service `image:` (edit the compose or add a
   `docker-compose.override.yml`). If the instance role lacks ECR permissions, authenticate
   Docker with an admin token:
   `aws ecr get-login-password --profile <p> --region <r> | docker login --username AWS --password-stdin <acct>.dkr.ecr.<r>.amazonaws.com`
-- **rc.1 Docker mounts**: the rc.1 compose file mounts only `config.yaml`, `data/` and the web
-  module. Set `GENVM_VERSION` in `.env` (the web-module mount path uses it), and mount the
-  protocol manifest (else the node refuses to start) and your `genvm-module-llm.yaml` (built from
-  the release's `genvm-modules-llm-release.yaml`; else the image's default LLM config is used).
-  Compose loads an override file automatically:
+- **LLM in Docker**: mount a `genvm-module-llm.yaml` (built from the release's
+  `genvm-modules-llm-release.yaml`) onto `/app/opt/genvm/current/config/genvm-module-llm.yaml`
+  so your provider is enabled. Releases before rc.2 have no `current` link: mount onto
+  `/app/opt/genvm/<ver>/config/genvm-module-llm.yaml` and set `GENVM_VERSION` in `.env`.
+  Without it the image's default LLM config is used. Compose loads an override file automatically:
   ```bash
   cd /opt/genlayer-node/${VERSION}
-  GENVM_REL=$(sed -n 's/^ *root_dir: *\.\///p' configs/node/config.yaml)   # e.g. opt/genvm/v0.6.0-rc10
-  GENVM_VERSION=$(basename "$GENVM_REL")
-  sudo grep -q '^GENVM_VERSION=' .env || echo "GENVM_VERSION=${GENVM_VERSION}" | sudo tee -a .env >/dev/null
+  GENVM_REL=$(sed -n 's/^ *root_dir: *\.\///p' configs/node/config.yaml)   # e.g. opt/genvm/current
   sudo -u genlayer tee docker-compose.override.yml >/dev/null <<EOF
   services:
     genlayer-node:
       volumes:
-        - ./configs/node/protocol-manifest.json:/app/configs/node/protocol-manifest.json:ro
-        - ./${GENVM_REL}/config/genvm-module-llm.yaml:/app/opt/genvm/${GENVM_VERSION}/config/genvm-module-llm.yaml:ro
+        - ./${GENVM_REL}/config/genvm-module-llm.yaml:/app/opt/genvm/current/config/genvm-module-llm.yaml:ro
   EOF
   ```
 - **Possible crash-loop — symptom-driven, not version-gated**: IF the boot GenVM self-test
@@ -872,13 +863,12 @@ After starting the node, verify it's running and syncing:
 curl -s http://localhost:9153/health | jq
 ```
 
-Expected response (example: Testnet Bradbury, rc.1 — the `network` label is empty in rc.1):
+Expected response (example: Testnet Bradbury):
 ```json
 {
   "status": "healthy",
-  "network": "",
-  "node_version": "v0.6.0-rc.1",
-  "protocol_version": "v0.6-rc-1",
+  "network": "bradbury-phase2",
+  "node_version": "v0.6.0",
   "genvm_version": "v0.6.0-rc10"
 }
 ```
@@ -1031,8 +1021,7 @@ These values are configured in config.yaml during the Node Identity group:
 These values must NEVER be collected by Claude. Generate .env with placeholders, then ask user to update manually on the VM:
 - **RPC Provider Key** - Leave empty: `GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=`
 - **LLM API Key** - Leave empty (e.g. `OPENROUTERKEY=`)
-- **Node Password** - Leave empty: `GENLAYERNODE_PASSWORD=` (Docker: `NODE_PASSWORD=`);
-  the user sets `NODE_PASSWORD` (rc.1 compose needs it non-empty — full node: any value)
+- **Node Password** - Leave empty: `GENLAYERNODE_PASSWORD=` (Docker: `NODE_PASSWORD=`)
 
 After generating .env, instruct user to:
 1. SSH to the VM

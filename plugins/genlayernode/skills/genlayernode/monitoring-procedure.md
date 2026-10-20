@@ -92,6 +92,8 @@ CENTRAL_LOKI_PASSWORD=<API key - starts with glc_>
 # Node identification (set these yourself)
 NODE_ID=0xYourValidatorWalletAddress
 VALIDATOR_NAME=your-validator-name
+# Network label for recovery logs and alert routing, e.g. bradbury-phase2 (leave empty rather than guess)
+NETWORK_NAME=
 ```
 
 **Important notes:**
@@ -106,7 +108,7 @@ VALIDATOR_NAME=your-validator-name
 ```bash
 NODE_METRICS_ENDPOINT=host.docker.internal:9153
 LOG_FILE_PATTERN=/var/log/genlayer/node*.log
-METRICS_SCRAPE_INTERVAL=15s
+METRICS_SCRAPE_INTERVAL=60s
 METRICS_SCRAPE_TIMEOUT=10s
 ALLOY_SELF_MONITORING_INTERVAL=60s
 ```
@@ -295,9 +297,10 @@ CENTRAL_MONITORING_URL=https://prometheus-prod-66.../api/prom/push/
 | `CENTRAL_LOKI_PASSWORD` | Yes | Loki API key | `glc_xxxxx...` |
 | `NODE_ID` | Yes | Validator wallet address (full node: a stable unique name) | `0x1451c990...` |
 | `VALIDATOR_NAME` | Yes | Short validator name (no spaces) | `my-validator-1` |
+| `NETWORK_NAME` | No | Network label for recovery logs / alert routing | `bradbury-phase2` |
 | `NODE_METRICS_ENDPOINT` | No | Node metrics address | `host.docker.internal:9153` |
 | `LOG_FILE_PATTERN` | No | Log file glob pattern | `/var/log/genlayer/node*.log` |
-| `METRICS_SCRAPE_INTERVAL` | No | How often to scrape metrics | `15s` |
+| `METRICS_SCRAPE_INTERVAL` | No | How often to scrape metrics | `60s` (v0.6 default) |
 | `METRICS_SCRAPE_TIMEOUT` | No | Scrape timeout | `10s` |
 | `ALLOY_SELF_MONITORING_INTERVAL` | No | Alloy self-health check interval | `60s` |
 

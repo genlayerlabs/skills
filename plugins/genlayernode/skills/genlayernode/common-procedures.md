@@ -262,7 +262,7 @@ sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'
   ✓ Consensus Deployment (admission):
     ✓ registry 0x3F71AE080BD6270A91dBcc7960d88797828538E0 is sealed
     ✓ chain 4221, 97 contracts match the trusted manifest
-  ✓ GenVM Binaries: Found at ./opt/genvm/v0.6.0-rc10
+  ✓ GenVM Binaries: Found at ./opt/genvm/current
   ✓ LLM Providers: 1 of 6 enabled backends usable
   ✓ WebDriver: Successfully rendered test page at http://127.0.0.1:4444
 All configuration checks passed!
