@@ -92,8 +92,8 @@ CENTRAL_LOKI_PASSWORD=<API key - starts with glc_>
 # Node identification (set these yourself)
 NODE_ID=0xYourValidatorWalletAddress
 VALIDATOR_NAME=your-validator-name
-# Network label for recovery logs and alert routing (leave empty rather than guess)
-NETWORK_NAME=<network name, e.g. bradbury-phase2>
+# Network label for recovery logs and alert routing, e.g. bradbury-phase2 (leave empty rather than guess)
+NETWORK_NAME=
 ```
 
 **Important notes:**
