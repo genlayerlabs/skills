@@ -90,16 +90,24 @@ sudo -u ${NODE_USER} cp -p ${INSTALL_ROOT}/${OLD_VERSION}/.env ${NODE_DIR}/.env
 #    See install-procedure.md Phase 4 / common-procedures.md -> "LLM Strategy Selection".
 OLD_CFG=$(cd ${INSTALL_ROOT}/${OLD_VERSION} && readlink -f "$(sed -n 's/^ *root_dir: *//p' configs/node/config.yaml)")/config
 NEW_CFG=$(cd ${NODE_DIR} && readlink -f "${NEW_ROOT}")/config
-sudo -u ${NODE_USER} cp ${NEW_CFG}/genvm-modules-llm-release.yaml ${NEW_CFG}/genvm-module-llm.yaml
-grep -q 'genvm-llm-greybox.lua' ${OLD_CFG}/genvm-module-llm.yaml && \
-  sudo -u ${NODE_USER} sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' ${NEW_CFG}/genvm-module-llm.yaml
-# enable the same providers as before (<provider> from the common-procedures.md mapping):
-sudo -u ${NODE_USER} sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' ${NEW_CFG}/genvm-module-llm.yaml
-# Custom backends are NOT carried over: the release template only has the stock providers, so a
-# backend you added yourself (e.g. an `unhardcoded:` block) silently disappears. Diff the backend
-# names and copy any missing block from ${OLD_CFG}/genvm-module-llm.yaml into the new file:
-diff <(grep -E '^  [a-z0-9_-]+:' ${OLD_CFG}/genvm-module-llm.yaml) \
-     <(grep -E '^  [a-z0-9_-]+:' ${NEW_CFG}/genvm-module-llm.yaml)
+# Same GenVM in both releases (e.g. v0.6.0-rc.1 -> rc.2 both ship v0.6.0-rc10; the new config's
+# ./opt/genvm/current resolves to it): the file schema is unchanged, so copy the current file
+# whole: that keeps the strategy, the enabled providers and any custom backend. Rebuild from the
+# release template only when the GenVM version changes.
+if [ "$(basename "$(dirname "${OLD_CFG}")")" = "$(basename "$(dirname "${NEW_CFG}")")" ]; then
+  sudo -u ${NODE_USER} cp ${OLD_CFG}/genvm-module-llm.yaml ${NEW_CFG}/genvm-module-llm.yaml
+else
+  sudo -u ${NODE_USER} cp ${NEW_CFG}/genvm-modules-llm-release.yaml ${NEW_CFG}/genvm-module-llm.yaml
+  grep -q 'genvm-llm-greybox.lua' ${OLD_CFG}/genvm-module-llm.yaml && \
+    sudo -u ${NODE_USER} sed -i 's/genvm-llm-default\.lua/genvm-llm-greybox.lua/' ${NEW_CFG}/genvm-module-llm.yaml
+  # enable the same providers as before (<provider> from the common-procedures.md mapping):
+  sudo -u ${NODE_USER} sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' ${NEW_CFG}/genvm-module-llm.yaml
+  # Custom backends are NOT carried over: the release template only has the stock providers, so a
+  # backend you added yourself (e.g. an `unhardcoded:` block) silently disappears. Diff the backend
+  # names and copy any missing block from ${OLD_CFG}/genvm-module-llm.yaml into the new file:
+  diff <(grep -E '^  [a-z0-9_-]+:' ${OLD_CFG}/genvm-module-llm.yaml) \
+       <(grep -E '^  [a-z0-9_-]+:' ${NEW_CFG}/genvm-module-llm.yaml)
+fi
 # Docker only: re-create docker-compose.override.yml in ${NODE_DIR} (SKILL.md -> Docker Compose Deployment).
 
 # 6. Link the shared data directory (genvm.db, ops.db, keystore/ — no copy, no resync)
@@ -134,22 +142,23 @@ done
 # 3. Start new version immediately
 sudo systemctl start genlayer-node
 
-# 4. Refresh Alloy telemetry bind mount (CRITICAL for monitoring)
-# See: sharp-edges.yaml -> "alloy-stale-bind-mount"
-# The Alloy container's bind mount becomes stale when symlinks change.
-# Without this restart, Alloy stops sending logs to Grafana.
-# (The systemd unit's ExecStartPost also does this.)
-sleep 5  # Wait for node to initialize
-sudo docker restart genlayer-node-alloy 2>/dev/null || true
+# 4. Recreate the side containers from the NEW compose file (CRITICAL for monitoring)
+# See: sharp-edges.yaml -> "alloy-stale-bind-mount", "alloy-container-stale-after-fresh-install"
+# The Alloy bind mounts go stale when symlinks change, and a release can change the side
+# containers themselves (rc.2 moved docker-socket-proxy from 0.3.0 to v0.5.0 and added health
+# checks). `docker restart` (also the systemd ExecStartPost) keeps the OLD container definition
+# and image, so recreate them, as root on the real socket (the proxy 403s create calls):
+sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set +a; docker compose --profile monitoring up -d --force-recreate webdriver-container docker-socket-proxy alloy'
+# Then confirm Alloy pushes (monitoring-procedure.md Step 5.3b)
 
-# Total downtime: 10-15 seconds (Alloy restart is async)
+# Total downtime: 10-15 seconds (measured: 12 s for v0.6.0-rc.1 -> rc.2, binary install)
 ```
 
 **Docker deployment:** from the new version directory, `sudo docker compose --profile node up -d`.
 The release compose file names its project `genlayer-node`, so this recreates the existing
 containers from the new directory.
 
-> **IMPORTANT**: The Alloy restart is critical! Without it, the telemetry container
+> **IMPORTANT**: Recreating Alloy is critical! Without it, the telemetry container
 > continues reading from the old log path (stale bind mount) and your validator
 > will appear offline to monitoring systems, potentially leading to penalties.
 > See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for details.
@@ -181,8 +190,8 @@ sudo docker exec genlayer-node-alloy ls -la /var/log/genlayer/node.log 2>/dev/nu
 sudo docker logs genlayer-node-alloy 2>&1 | tail -3
 ```
 
-> **WARNING**: If the host and container timestamps don't match, run:
-> `docker restart genlayer-node-alloy`
+> **WARNING**: If the host and container timestamps don't match, recreate Alloy (from `/opt/genlayer-node`):
+> `sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set +a; docker compose --profile monitoring up -d --force-recreate alloy'`
 > See `sharp-edges.yaml` -> `alloy-stale-bind-mount` for details.
 >
 > If Alloy is `Exited`, or its logs show `error writing positions file ... no such file or
@@ -259,7 +268,7 @@ sudo systemctl start genlayer-node
 
 # 4. Refresh Alloy telemetry (same reason as upgrade)
 sleep 5
-sudo docker restart genlayer-node-alloy 2>/dev/null || true
+sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set +a; docker compose --profile monitoring up -d --force-recreate webdriver-container docker-socket-proxy alloy'
 
 # Total rollback time: 10-15 seconds
 ```

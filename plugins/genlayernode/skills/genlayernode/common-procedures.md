@@ -216,7 +216,9 @@ done
 
 > **Note:** `alloy-config.river` ships with the node tarball. It must be symlinked like all other
 > version-specific files so docker-compose can find it at the root level. After switching symlinks
-> during an upgrade, restart Alloy to pick up the new config: `docker restart genlayer-node-alloy`
+> during an upgrade, recreate Alloy from the new compose file to pick up the new config (`docker restart`
+> keeps the old container definition), as root from `/opt/genlayer-node`:
+> `sudo bash -c 'unset DOCKER_HOST; set -a; . ./.env; set +a; docker compose --profile monitoring up -d --force-recreate alloy'`
 
 **After symlinks, you can use:**
 - `/opt/genlayer-node/bin/genlayernode` instead of `/opt/genlayer-node/v0.6.0/bin/genlayernode`
