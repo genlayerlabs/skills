@@ -159,7 +159,7 @@ cd /opt/genlayer-node
 docker compose --profile monitoring up -d
 ```
 
-**First run will pull the Alloy image** (`grafana/alloy:v1.12.0`, ~150MB).
+**First run will pull the Alloy image** (`grafana/alloy:v1.20.1`, ~210MB download).
 
 Verify Alloy is running:
 ```bash
@@ -168,7 +168,7 @@ docker ps | grep alloy
 
 Expected:
 ```
-genlayer-node-alloy  grafana/alloy:v1.12.0  ... Up ... 0.0.0.0:12345->12345/tcp
+genlayer-node-alloy  grafana/alloy:v1.20.1  ... Up ... 0.0.0.0:12345->12345/tcp
 ```
 
 ## Step 5: Verification
