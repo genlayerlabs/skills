@@ -577,6 +577,32 @@ const skills = {
 
 The core skill for building GenLayer intelligent contracts — Python classes that run on GenVM with built-in AI capabilities.
 
+### StudioNext v0.3.0 (Explicit Target)
+
+When a request says \`StudioNext\`, \`Studio Next\`, \`GenLayer StudioNext\`, \`GenLayer Studio Next\`, or \`v0.3.0\`, use StudioNext rules and do not mix them with legacy examples. If no runtime is named and the distinction affects correctness, ask which target is required.
+
+\`\`\`python
+# v0.3.0
+# { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
+
+import genlayer as gl
+from genlayer.types import *
+
+class MyContract(gl.contract.Contract):
+    owner: Address
+
+    def __init__(self):
+        self.owner = gl.message.sender_address
+
+    @gl.public.view
+    def get_owner(self) -> str:
+        return self.owner.as_hex
+\`\`\`
+
+For multiple dependencies, use \`Seq\` with an exact hash for every dependency, including \`py-lib-genlayer-embeddings:0bmbm3cyfwxsyh454z53vxqjf47wz2q7smcqp1q4g4a6k2kidnyk\` when that documented embedding package is required. StudioNext uses \`@gl.storage.allow\`, \`gl.storage.TreeMap[K, V]\`, \`DynArray\`, and \`u256\`/\`i256\` for persistent state; \`@gl.public.write.payable\` and \`gl.message.value\` for payable calls; and \`self.balance\` for contract balance. Use \`Address(...)\` and \`.as_hex\`, plus \`gl.message.sender_address\` for the caller. Embeddings require \`import genlayer_embeddings as gle\`, an explicit distance metric, and pinned embedding dependency metadata.
+
+Before returning StudioNext code, reject \`from genlayer import *\`, \`gl.Contract\`, \`gl.message.sender_account\`, \`@allow_storage\`, \`:latest\`, and \`:test\` unless they appear only in an explicitly labeled legacy explanation. Run \`genvm-lint check\` and applicable tests when available.
+
 ### Critical: Pin the Runner Version
 
 All GenLayer networks reject \`py-genlayer:test\`, \`py-genlayer:latest\`, and unversioned runner aliases. Every generated contract must start with a pinned runner dependency header:
@@ -606,7 +632,7 @@ Before returning any contract code, verify:
 - **Cross-Contract Calls** — Synchronous reads, async writes with \`emit()\`, factory patterns
 - **Error Classification** — \`[EXPECTED]\`, \`[EXTERNAL]\`, \`[TRANSIENT]\`, \`[LLM_ERROR]\` each with distinct validator behavior
 
-### Contract Skeleton
+### Legacy Contract Skeleton — Do Not Use for StudioNext
 
 \`\`\`python
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }

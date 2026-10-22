@@ -38,6 +38,128 @@ Before returning any contract code, verify:
 
 Always lint with `genvm-lint check` after writing or modifying a contract.
 
+## StudioNext v0.3.0 (Explicit Target)
+
+Use this section whenever the user says `StudioNext`, `Studio Next`,
+`GenLayer StudioNext`, `GenLayer Studio Next`, `v0.3.0`, or equivalent wording
+for the new runtime. StudioNext rules take precedence over legacy examples in
+this document. Do not mix the two dialects. If the user does not name a target
+and the distinction affects correctness, ask which runtime they need.
+
+### Header and dependencies
+
+StudioNext contracts require the version line directly above dependency metadata:
+
+```python
+# v0.3.0
+# { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
+```
+
+Pin every dependency with an exact hash. For more than one dependency, use
+`Seq`; never use `:latest`, `:test`, an unpinned dependency, or an old header
+format:
+
+```python
+# v0.3.0
+# { "Seq": [
+#   { "Depends": "py-lib-genlayer-embeddings:0bmbm3cyfwxsyh454z53vxqjf47wz2q7smcqp1q4g4a6k2kidnyk" },
+#   { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
+# ] }
+```
+
+Resolve library hashes from authoritative GenLayer documentation or repository
+information. Do not invent a replacement hash.
+
+### Canonical StudioNext skeleton
+
+```python
+# v0.3.0
+# { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
+
+import genlayer as gl
+from genlayer.types import *
+
+class MyContract(gl.contract.Contract):
+    owner: Address
+
+    def __init__(self):
+        self.owner = gl.message.sender_address
+
+    @gl.public.view
+    def get_owner(self) -> str:
+        return self.owner.as_hex
+```
+
+StudioNext uses `gl.contract.Contract`, not `gl.Contract`; the legacy
+`from genlayer import *` import is not valid guidance for this target.
+
+### StudioNext storage and value APIs
+
+- Use `@gl.storage.allow` for storage-enabled dataclasses, and prefer
+  `gl.storage.TreeMap[K, V]` (or explicitly import `TreeMap` from
+  `genlayer.storage`). Use `DynArray` for persistent arrays.
+- Use `u256` or `i256` for persistent integer fields. This does not prohibit
+  every local Python `int`; it distinguishes runtime computation from storage.
+- Use `@gl.public.write.payable` for payable methods, `gl.message.value` for
+  value sent with the current call, and `self.balance` for contract balance.
+- Construct addresses with `Address(account_address_str)`, use `.as_hex` for a
+  string/hex representation, and use `gl.message.sender_address` for the caller.
+
+```python
+@gl.storage.allow
+@dataclass
+class Deposit:
+    amount: u256
+
+class Vault(gl.contract.Contract):
+    deposits: gl.storage.TreeMap[Address, Deposit]
+
+    @gl.public.write.payable
+    def deposit(self) -> None:
+        amount = gl.message.value
+        self.deposits[gl.message.sender_address] = Deposit(amount=amount)
+```
+
+### StudioNext embeddings
+
+Use `import genlayer_embeddings as gle` and specify a distance metric in every
+vector store declaration. Keep the embedding dependency pinned in the `Seq`
+header. Follow the installed/current embeddings documentation for the exact
+`VecDB` generic ordering; the following illustrates the required pattern:
+
+```python
+import typing
+import numpy as np
+import genlayer_embeddings as gle
+
+vectors: gle.VecDB[
+    np.float32,
+    typing.Literal[384],
+    ValueType,
+    gle.EuclideanDistance,
+]
+```
+
+### StudioNext validation checklist
+
+Before returning StudioNext code, verify:
+
+- `# v0.3.0` is immediately above dependency metadata; all dependencies are
+  pinned; no `:latest` or `:test` appears.
+- Imports are `import genlayer as gl` and `from genlayer.types import *`.
+- The contract inherits from `gl.contract.Contract`.
+- Persistent storage uses `@gl.storage.allow`, `gl.storage.TreeMap` or an
+  explicit storage import, `DynArray`, and `u256`/`i256` where applicable.
+- Messaging uses `gl.message.sender_address` and `gl.message.value`; balance
+  uses `self.balance`; payable methods use `@gl.public.write.payable`.
+- Address construction uses `Address(...)` and string/hex output uses `.as_hex`.
+- Embeddings use `genlayer_embeddings as gle`, an explicit distance metric, and
+  pinned embedding dependency metadata.
+- Output does not contain `from genlayer import *`, `gl.Contract`,
+  `gl.message.sender_account`, or `@allow_storage` unless the user explicitly
+  requested a clearly labeled legacy example.
+- Run `genvm-lint check` and applicable repository tests when available.
+
 ## When to Use GenLayer
 
 Before writing code, decide whether the feature actually needs GenLayer consensus. Recent builder feedback shows many projects start by treating GenLayer as a generic AI backend; push them toward a clear on-chain consensus role.
@@ -64,7 +186,7 @@ For every contract, write down the boundary before implementation:
 
 If the boundary is unclear, create a one-page architecture note before coding: user action -> evidence source -> nondeterministic call -> equivalence principle -> state update -> user-visible settlement.
 
-## Contract Skeleton
+## Legacy Contract Skeleton — Do Not Use for StudioNext
 
 ```python
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
@@ -279,6 +401,11 @@ if user_balance < amount:
 ```
 
 ## Storage Rules
+
+The storage examples in this section describe the existing guidance for other
+supported runtimes. For a StudioNext target, the `StudioNext v0.3.0` section above takes
+precedence: use `@gl.storage.allow`, `gl.storage.TreeMap`, and `u256`/`i256` for
+persistent integer fields.
 
 ### Types — use GenLayer types, not Python builtins
 
