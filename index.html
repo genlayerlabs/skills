@@ -586,7 +586,7 @@ All GenLayer networks reject \`py-genlayer:test\`, \`py-genlayer:latest\`, and u
 # { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 \`\`\`
 
-That is the GenVM v0.6 runner Bradbury and Studio Next ship. Pins are per network, and the runner also fixes the API: studionet (\`studio.genlayer.com\`) still runs GenVM v0.2.16 and needs the pre-v0.6 \`1jb45aa8…\` pin with \`from genlayer import *\`. A pin the network does not ship fails every deploy with \`runner malformed\`. On Studio networks, \`gen_getContractSchemaForCode\` dry-runs a contract to check its pin without sending a transaction.
+That is the GenVM v0.6 runner Bradbury and Studio Dev (\`studio-next.genlayer.com\`) ship. Pins are per network, and the runner also fixes the API: studionet (\`studio.genlayer.com\`) still runs GenVM v0.2.16 and needs the pre-v0.6 \`1jb45aa8…\` pin with \`from genlayer import *\`. A pin the network does not ship fails every deploy with \`runner malformed\`. On Studio networks, \`gen_getContractSchemaForCode\` dry-runs a contract to check its pin without sending a transaction.
 
 \`test\` and \`latest\` are local-development aliases for GenLayer runtime developers. They may work only in a specially configured local Studio environment with a GenLayer developer environment variable, but they do not work on GenLayer networks and must not appear in generated user contracts.
 

@@ -32,7 +32,7 @@ contract must use. No pin works everywhere today (verified 2026-11-05):
 | Network | GenVM | Runner pin | API |
 |---|---|---|---|
 | Testnet Bradbury | v0.6.0-rc10 | `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` | v0.6 |
-| Studio Next (`studio-next.genlayer.com`) | v0.6 | `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` | v0.6 |
+| Studio Dev (CLI `studio-dev`, `studio-dev.genlayer.com`; browser alias `studio-next.genlayer.com`) | v0.6 | `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` | v0.6 |
 | Studio (`studio.genlayer.com`, studionet) | v0.2.16 | `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6` | pre-v0.6 |
 
 Default to the v0.6 pin and API. Use the pre-v0.6 pin and API (see the
@@ -45,13 +45,13 @@ then ends `FINISHED_WITH_ERROR` with `invalid_contract runner malformed`.
 Neither the networks nor the tools expose a "current runner" lookup, so check
 the pin before deploying:
 
-- **Studio and Studio Next: dry-run the contract.** `gen_getContractSchemaForCode`
+- **Studio and Studio Dev: dry-run the contract.** `gen_getContractSchemaForCode`
   runs the contract in that network's GenVM without sending a transaction. If
   it returns a schema, the pin and API are right; if it returns `execution
   failed`, they are not:
 
   ```bash
-  curl -s https://studio-next.genlayer.com/api -H 'content-type: application/json' \
+  curl -s https://studio-dev.genlayer.com/api -H 'content-type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"gen_getContractSchemaForCode\",\"params\":[\"$(xxd -p contract.py | tr -d '\n')\"]}"
   ```
 
@@ -63,6 +63,8 @@ the pin before deploying:
   with a test deploy.
 - **Never copy a pin from older docs, tutorials, or generated code** without
   checking it against the target network. Pins go stale with every GenVM release.
+  The public docs' contract examples (docs.genlayer.com, as of 2026-11-05) use
+  the studionet pin and pre-v0.6 API, so they fail on Bradbury and Studio Dev.
 
 ### Diagnosing a failed deploy
 
@@ -188,7 +190,7 @@ runner version hash that the target network ships. All GenLayer networks reject
 `test`, `latest`, and unversioned runner aliases in generated contracts.
 
 The hashes below are the GenVM v0.6.0-rc10 runners (Bradbury, node
-v0.6.0-rc.3; the single-file pin is also verified on Studio Next). For any other
+v0.6.0-rc.3; the single-file pin is also verified on Studio Dev). For any other
 network, check them with **Finding the right pin for a network** above.
 
 ### Single-file Python contracts
