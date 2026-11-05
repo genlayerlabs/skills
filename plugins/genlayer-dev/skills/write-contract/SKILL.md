@@ -21,8 +21,44 @@ unversioned runner aliases. Every generated contract MUST start with a pinned
 runner dependency header.
 
 ```python
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.3.0
+# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 ```
+
+This is the runner shipped with GenVM v0.6 (node v0.6.0-rc.3, GenVM
+v0.6.0-rc10), which Bradbury runs. The pin must name a runner **the target
+network's GenVM actually ships**. Pins are per network, not universal. The
+pre-v0.6 runner `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6`
+is rejected on Bradbury: every deploy reaches consensus but ends
+`FINISHED_WITH_ERROR` with `invalid_contract runner malformed`.
+
+### Finding the right pin for a network
+
+- **Ask the node.** A runner hash is the directory plus the file name of the
+  zip under the node's GenVM: `opt/genvm/current/runners/py-genlayer/ba/bwp9t…zip`
+  → `py-genlayer:babwp9t…`. The same directory lists `py-genlayer-multi`,
+  `py-lib-genlayer-embeddings`, and the other runners.
+- **Copy from contracts known to deploy on that network**, such as the GenLayer
+  Studio examples (`examples/contracts/` in `genlayerlabs/genlayer-studio`) for
+  Studio. Studio may ship a different GenVM than testnet, so check before reusing
+  a pin across networks.
+- **Never copy a pin from older docs, tutorials, or generated code** without
+  checking it against the target network. Pins go stale with every GenVM release.
+
+### Diagnosing a failed deploy
+
+A `FINISHED_WITH_ERROR` receipt does not include the error. The GenLayer RPC
+returns it:
+
+```bash
+curl -s https://rpc-bradbury.genlayer.com -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"gen_dbg_traceTransaction","params":[{"txID":"0x<tx hash>","round":0}]}'
+```
+
+Read `return_data` (calldata-encoded error text), `stderr`, and `genvm_log`.
+`runner malformed` means a stale or unknown runner pin. `NameError: name 'gl'
+is not defined` means the contract uses the pre-v0.6 `from genlayer import *`
+import.
 
 `test` and `latest` are local-development aliases for GenLayer runtime
 developers. They may work only in a specially configured local Studio
@@ -31,10 +67,11 @@ on GenLayer networks and must not appear in generated user contracts.
 
 Before returning any contract code, verify:
 
-- The first line is a pinned `Depends` runner version hash.
+- The header carries a pinned `Depends` runner version hash that the target network ships.
 - There is no `py-genlayer:test`.
 - There is no `py-genlayer:latest`.
 - There is no unversioned `py-genlayer`.
+- The contract uses the v0.6 API (`import genlayer as gl`, `gl.contract.Contract`). See **GenVM v0.6 API** below.
 
 Always lint with `genvm-lint check` after writing or modifying a contract.
 
@@ -67,18 +104,30 @@ If the boundary is unclear, create a one-page architecture note before coding: u
 ## Contract Skeleton
 
 ```python
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.3.0
+# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 
-from genlayer import *
+from dataclasses import dataclass
 
-class MyContract(gl.Contract):
+import genlayer as gl
+from genlayer.types import *                      # u256, Address, ...
+from genlayer.storage import DynArray, TreeMap
+
+
+@gl.storage.allow
+@dataclass
+class Item:
+    value: str
+
+
+class MyContract(gl.contract.Contract):
     # Storage fields — typed, persisted on-chain
     owner: Address
     items: TreeMap[str, Item]
     item_order: DynArray[str]
 
     def __init__(self, param: str):
-        self.owner = gl.message.sender_account
+        self.owner = gl.message.sender_address
 
     @gl.public.view
     def get_item(self, item_id: str) -> dict:
@@ -86,30 +135,56 @@ class MyContract(gl.Contract):
 
     @gl.public.write
     def set_item(self, item_id: str, value: str) -> None:
-        if gl.message.sender_account != self.owner:
-            raise gl.UserError("Only owner")
+        if gl.message.sender_address != self.owner:
+            raise gl.vm.UserError("[EXPECTED] Only owner")
         self.items[item_id] = Item(value=value)
         self.item_order.append(item_id)
 ```
 
+## GenVM v0.6 API
+
+GenVM v0.6 changed the import style and moved most names into submodules. Code
+written for the old runner fails on v0.6 networks, and code written for v0.6
+fails on the old runner. Do not mix the two.
+
+| Pre-v0.6 (`1jb45…` runner) | v0.6 (`babwp9…` runner) |
+|---|---|
+| `from genlayer import *` | `import genlayer as gl` + `from genlayer.types import *` |
+| `class C(gl.Contract)` | `class C(gl.contract.Contract)` |
+| `TreeMap`, `DynArray` from the star import | `from genlayer.storage import DynArray, TreeMap` |
+| `@allow_storage` | `@gl.storage.allow` (+ `from dataclasses import dataclass`) |
+| `gl.message.sender_account` | `gl.message.sender_address` |
+| `gl.UserError` | `gl.vm.UserError` (payload in `.data`) |
+| `gl.vm.run_nondet_unsafe(leader, validator)` | `gl.vm.run_nondet(leader, validator)` |
+| `gl.exec_prompt(...)` / `gl.get_webpage(...)` | `gl.nondet.exec_prompt(...)` / `gl.nondet.web.render(url, mode="text")` |
+| `gl.get_contract_at(addr)` | `gl.contract.get_at(addr)` |
+| `gl.deploy_contract(...)` | `gl.contract.deploy(...)` |
+| `emit(on="accepted")` | `emit(on="decided")` or `emit(on="finalized")` (default) |
+
 ## Runner Dependencies
 
-The first line of a contract declares the GenVM Python runner. Always pin a
-specific runner version hash. All GenLayer networks reject `test`, `latest`, and
-unversioned runner aliases in generated contracts.
+The contract header declares the GenVM Python runner. Always pin a specific
+runner version hash that the target network ships. All GenLayer networks reject
+`test`, `latest`, and unversioned runner aliases in generated contracts.
+
+The hashes below are the GenVM v0.6.0-rc10 runners (Bradbury, node
+v0.6.0-rc.3). For any other network, check them with **Finding the right pin
+for a network** above.
 
 ### Single-file Python contracts
 
 ```python
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.3.0
+# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 ```
 
 ### Multi-file Python contract packages
 
 Use `py-genlayer-multi` when the contract is packaged across multiple files.
+It maps the package's `contract/` directory to `/contract/`.
 
 ```python
-# { "Depends": "py-genlayer-multi:06zyvrlivjga0d5jlpdbprksc0pa6jmllxvp8s20hq1l512vh5yk" }
+# { "Depends": "py-genlayer-multi:2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130" }
 ```
 
 ### Contracts using embeddings or semantic search
@@ -120,8 +195,8 @@ block.
 ```python
 # {
 #   "Seq": [
-#     { "Depends": "py-lib-genlayer-embeddings:0bmbm3cyfwxsyh454z53vxqjf47wz2q7smcqp1q4g4a6k2kidnyk" },
-#     { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+#     { "Depends": "py-lib-genlayer-embeddings:hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg" },
+#     { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 #   ]
 # }
 ```
@@ -139,7 +214,7 @@ Can validators reproduce the exact same normalized output?
 │         canonicalized (e.g., JSON with sort_keys=True).
 │         Examples: blockchain RPC, stable REST APIs.
 │
-└── NO  → Write a custom validator function (run_nondet_unsafe)
+└── NO  → Write a custom validator function (gl.vm.run_nondet)
           Default: produce independent evidence. Usually rerun the same task
           and compare decision fields, derived status, scores, or other stable
           outputs with explicit tolerances. Only skip the second answer when the
@@ -206,8 +281,13 @@ def score_content(self, content: str) -> dict:
 
         return True
 
-    return gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+    return gl.vm.run_nondet(leader_fn, validator_fn)
 ```
+
+`gl.vm.run_nondet` treats an exception raised inside `validator_fn` as a
+disagreement. Use `gl.vm.run_nondet_default` when you need to catch and inspect
+errors from `validator_fn`. It runs `validator_fn` in a sandbox and compares
+leader/validator errors with `compare_user_errors` / `compare_vm_errors`.
 
 ### Convenience Wrappers
 
@@ -218,8 +298,8 @@ Prefer `prompt_comparative` unless you can explain why independently doing the t
 ```python
 def resolve(self) -> str:
     def analyze():
-        page = gl.get_webpage(url, mode="text")
-        return gl.exec_prompt(f"Analyze: {page}\nReturn JSON with outcome and reasoning.")
+        page = gl.nondet.web.render(url, mode="text")
+        return gl.nondet.exec_prompt(f"Analyze: {page}\nReturn JSON with outcome and reasoning.")
 
     return gl.eq_principle.prompt_comparative(
         analyze,
@@ -241,13 +321,22 @@ ERROR_LLM       = "[LLM_ERROR]"  # LLM misbehavior — always disagree, force ro
 ### Canonical error handler for validators
 
 ```python
+def _error_text(err) -> str:
+    # gl.vm.UserError carries its payload in `.data`; gl.vm.VMError in `.message`.
+    if isinstance(err, gl.vm.UserError):
+        return err.data if isinstance(err.data, str) else str(err.data)
+    if isinstance(err, gl.vm.VMError):
+        return err.message
+    return ''
+
+
 def _handle_leader_error(leaders_res, leader_fn) -> bool:
-    leader_msg = leaders_res.message if hasattr(leaders_res, 'message') else ''
+    leader_msg = _error_text(leaders_res)
     try:
         leader_fn()
         return False  # Leader errored, validator succeeded — disagree
     except gl.vm.UserError as e:
-        validator_msg = e.message if hasattr(e, 'message') else str(e)
+        validator_msg = _error_text(e)
         # Deterministic errors: must match exactly
         if validator_msg.startswith(ERROR_EXPECTED) or validator_msg.startswith(ERROR_EXTERNAL):
             return validator_msg == leader_msg
@@ -284,8 +373,8 @@ if user_balance < amount:
 
 | Python | GenLayer | Notes |
 |--------|----------|-------|
-| `dict` | `TreeMap[K, V]` | O(log n) lookup, persisted |
-| `list` | `DynArray[T]` | Dynamic array, persisted |
+| `dict` | `TreeMap[K, V]` | O(log n) lookup, persisted. `from genlayer.storage import TreeMap` |
+| `list` | `DynArray[T]` | Dynamic array, persisted. `from genlayer.storage import DynArray` |
 | `int` | `u256` / `i256` | Sized integers for on-chain math |
 | `float` | use with care | See float guidance below |
 | `enum` | `str` | Store `.value`, not the enum itself |
@@ -299,7 +388,9 @@ if user_balance < amount:
 ### Dataclasses for complex state
 
 ```python
-@allow_storage
+from dataclasses import dataclass
+
+@gl.storage.allow
 @dataclass
 class Item:
     name: str
@@ -314,7 +405,7 @@ class Item:
 - **Storage fields are class-level type annotations** — NOT assignments in `__init__`. The type annotation declares the storage slot; `__init__` only sets initial values.
 
 ```python
-class MyContract(gl.Contract):
+class MyContract(gl.contract.Contract):
     owner: Address            # ← storage field (class-level annotation)
     items: DynArray[str]      # ← storage field
     count: u256               # ← storage field
@@ -442,18 +533,18 @@ When to use: any contract where rules are specified in natural language and incl
 ### Read from another contract (synchronous)
 
 ```python
-other = gl.get_contract_at(Address(other_address))
+other = gl.contract.get_at(Address(other_address))
 value = other.view().get_data()
 ```
 
 ### Write to another contract (asynchronous)
 
 ```python
-other = gl.get_contract_at(Address(other_address))
-other.emit(on="accepted").process_data(payload)  # Non-blocking
+other = gl.contract.get_at(Address(other_address))
+other.emit(on="finalized").process_data(payload)  # Non-blocking
 ```
 
-`emit()` queues the call — it executes after current transaction. Use `on="accepted"` (fast) or `on="finalized"` (safe).
+`emit()` queues the call — it executes after current transaction. Use `on="decided"` (fast) or `on="finalized"` (safe, the default).
 
 **Warning:** If the current transaction is appealed after `emit()`, the emitted call still happens but the balance may already be decremented.
 
@@ -465,15 +556,17 @@ def __init__(self, num_workers: int):
         worker_code = f.read()
 
     for i in range(num_workers):
-        addr = gl.deploy_contract(
+        addr = gl.contract.deploy(
             code=worker_code.encode("utf-8"),
             args=[i, gl.message.contract_address],
             salt_nonce=i + 1,
-            on="accepted",
+            on="finalized",
         )
         self.worker_addresses.append(addr)
 ```
 
+`gl.contract.deploy` returns the address only when `salt_nonce` is non-zero; with
+`salt_nonce=0` the address is non-deterministic and it returns `None`.
 Workers are immutable after deployment. Code changes require redeploying the factory.
 
 ### Cross-chain RPC verification
@@ -538,6 +631,8 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 | Don't | Do Instead | Why |
 |-------|-----------|-----|
 | `py-genlayer:test`, `py-genlayer:latest`, or unversioned `py-genlayer` | Pin the documented runner version hash | All GenLayer networks reject runner aliases and unpinned dependencies |
+| Copy a runner pin from old docs or another network | Check the pin against the target network's runners | A runner the network's GenVM does not ship fails every deploy with `runner malformed` |
+| Pre-v0.6 API (`from genlayer import *`, `gl.Contract`) on a v0.6 network | `import genlayer as gl`, `gl.contract.Contract` | The v0.6 runner does not export the old names, so the contract fails to load |
 | `strict_eq()` for LLM calls | Custom validator function | LLM outputs are non-deterministic — strict_eq always fails consensus |
 | Store `list` or `dict` | `DynArray[T]` or `TreeMap[K, V]` | Python builtins aren't persistable |
 | Use native `float` for money | Atto-scale `u256` (value * 10^18) | Standard across blockchains for cross-chain interop |

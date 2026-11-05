@@ -582,8 +582,11 @@ The core skill for building GenLayer intelligent contracts — Python classes th
 All GenLayer networks reject \`py-genlayer:test\`, \`py-genlayer:latest\`, and unversioned runner aliases. Every generated contract must start with a pinned runner dependency header:
 
 \`\`\`python
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.3.0
+# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 \`\`\`
+
+That is the GenVM v0.6 runner Bradbury ships. Pins are per network: the pre-v0.6 \`1jb45aa8…\` runner fails every Bradbury deploy with \`runner malformed\`. Take the pin from the runners the target network's node ships, and use the v0.6 API (\`import genlayer as gl\`, \`gl.contract.Contract\`).
 
 \`test\` and \`latest\` are local-development aliases for GenLayer runtime developers. They may work only in a specially configured local Studio environment with a GenLayer developer environment variable, but they do not work on GenLayer networks and must not appear in generated user contracts.
 
@@ -609,17 +612,19 @@ Before returning any contract code, verify:
 ### Contract Skeleton
 
 \`\`\`python
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.3.0
+# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
+from genlayer.storage import TreeMap
 
-@gl.contract
-class MyContract:
+class MyContract(gl.contract.Contract):
     owner: Address
-    items: TreeMap[str, Item]
+    items: TreeMap[str, str]
 
     def __init__(self):
-        self.owner = gl.message.sender_account
+        self.owner = gl.message.sender_address
 
     @gl.public.view
     def get_item(self, item_id: str) -> dict:
@@ -627,8 +632,9 @@ class MyContract:
 
     @gl.public.write
     def set_item(self, item_id: str, value: str):
-        if gl.message.sender_account != self.owner:
-            raise gl.UserError("Only owner")
+        if gl.message.sender_address != self.owner:
+            raise gl.vm.UserError("Only owner")
+        self.items[item_id] = value
 \`\`\`
 
 ### Runner Dependencies
@@ -637,9 +643,9 @@ Always pin a specific runner version hash in the contract's first line. All GenL
 
 | Contract Type | Dependency |
 |---------------|------------|
-| Single-file Python | \`py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6\` |
-| Multi-file Python package | \`py-genlayer-multi:06zyvrlivjga0d5jlpdbprksc0pa6jmllxvp8s20hq1l512vh5yk\` |
-| Embeddings / semantic search | Add \`py-lib-genlayer-embeddings:0bmbm3cyfwxsyh454z53vxqjf47wz2q7smcqp1q4g4a6k2kidnyk\` before \`py-genlayer\` in a \`Seq\` block |
+| Single-file Python | \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\` |
+| Multi-file Python package | \`py-genlayer-multi:2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130\` |
+| Embeddings / semantic search | Add \`py-lib-genlayer-embeddings:hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg\` before \`py-genlayer\` in a \`Seq\` block |
 
 ### Anti-Patterns
 
