@@ -25,23 +25,42 @@ runner dependency header.
 # { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 ```
 
-This is the runner shipped with GenVM v0.6 (node v0.6.0-rc.3, GenVM
-v0.6.0-rc10), which Bradbury runs. The pin must name a runner **the target
-network's GenVM actually ships**. Pins are per network, not universal. The
-pre-v0.6 runner `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6`
-is rejected on Bradbury: every deploy reaches consensus but ends
-`FINISHED_WITH_ERROR` with `invalid_contract runner malformed`.
+The pin must name a runner **the target network's GenVM actually ships**.
+Pins are per network, not universal, and the runner also fixes which API the
+contract must use. No pin works everywhere today (verified 2026-11-05):
+
+| Network | GenVM | Runner pin | API |
+|---|---|---|---|
+| Testnet Bradbury | v0.6.0-rc10 | `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` | v0.6 |
+| Studio Next (`studio-next.genlayer.com`) | v0.6 | `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` | v0.6 |
+| Studio (`studio.genlayer.com`, studionet) | v0.2.16 | `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6` | pre-v0.6 |
+
+Default to the v0.6 pin and API. Use the pre-v0.6 pin and API (see the
+migration table in **GenVM v0.6 API**) only when the user targets studionet.
+A pin the network does not ship fails every deploy: the tx reaches consensus,
+then ends `FINISHED_WITH_ERROR` with `invalid_contract runner malformed`.
 
 ### Finding the right pin for a network
 
-- **Ask the node.** A runner hash is the directory plus the file name of the
-  zip under the node's GenVM: `opt/genvm/current/runners/py-genlayer/ba/bwp9t…zip`
-  → `py-genlayer:babwp9t…`. The same directory lists `py-genlayer-multi`,
-  `py-lib-genlayer-embeddings`, and the other runners.
-- **Copy from contracts known to deploy on that network**, such as the GenLayer
-  Studio examples (`examples/contracts/` in `genlayerlabs/genlayer-studio`) for
-  Studio. Studio may ship a different GenVM than testnet, so check before reusing
-  a pin across networks.
+Neither the networks nor the tools expose a "current runner" lookup, so check
+the pin before deploying:
+
+- **Studio and Studio Next: dry-run the contract.** `gen_getContractSchemaForCode`
+  runs the contract in that network's GenVM without sending a transaction. If
+  it returns a schema, the pin and API are right; if it returns `execution
+  failed`, they are not:
+
+  ```bash
+  curl -s https://studio-next.genlayer.com/api -H 'content-type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"gen_getContractSchemaForCode\",\"params\":[\"$(xxd -p contract.py | tr -d '\n')\"]}"
+  ```
+
+- **Testnet: ask the node.** Testnet RPCs have no dry-run method. A runner
+  hash is the directory plus the file name of the zip under the node's GenVM:
+  `opt/genvm/current/runners/py-genlayer/ba/bwp9t…zip` → `py-genlayer:babwp9t…`.
+  The same directory lists `py-genlayer-multi`, `py-lib-genlayer-embeddings`,
+  and the other runners. Without node access, use the table above and confirm
+  with a test deploy.
 - **Never copy a pin from older docs, tutorials, or generated code** without
   checking it against the target network. Pins go stale with every GenVM release.
 
@@ -145,7 +164,8 @@ class MyContract(gl.contract.Contract):
 
 GenVM v0.6 changed the import style and moved most names into submodules. Code
 written for the old runner fails on v0.6 networks, and code written for v0.6
-fails on the old runner. Do not mix the two.
+fails on the old runner. Do not mix the two. The examples in this skill use
+the v0.6 API; for studionet, translate them with the left column.
 
 | Pre-v0.6 (`1jb45…` runner) | v0.6 (`babwp9…` runner) |
 |---|---|
@@ -168,8 +188,8 @@ runner version hash that the target network ships. All GenLayer networks reject
 `test`, `latest`, and unversioned runner aliases in generated contracts.
 
 The hashes below are the GenVM v0.6.0-rc10 runners (Bradbury, node
-v0.6.0-rc.3). For any other network, check them with **Finding the right pin
-for a network** above.
+v0.6.0-rc.3; the single-file pin is also verified on Studio Next). For any other
+network, check them with **Finding the right pin for a network** above.
 
 ### Single-file Python contracts
 
