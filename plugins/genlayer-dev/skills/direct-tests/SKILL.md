@@ -131,6 +131,39 @@ direct_vm.deal(direct_alice, 1000000000000000000)
 direct_vm.warp("2024-06-01T12:00:00Z")
 ```
 
+## Replaying the Validator
+
+A direct call runs only the leader side. For contracts that use `gl.vm.run_nondet` (including helpers built on it), `genlayer-test` (0.24.0) captures the validator function so you can replay it with different mocks:
+
+```python
+def test_validator_rejects_different_data(direct_vm, direct_deploy, direct_alice):
+    contract = direct_deploy("contracts/my_contract.py")
+    direct_vm.sender = direct_alice
+
+    direct_vm.mock_web(r".*api\.example\.com.*", {"status": 200, "body": '{"price": 42.5}'})
+    contract.update_price("ETH/USD")  # leader runs, validator is captured
+
+    # Swap mocks so the validator sees different external data, then replay
+    direct_vm.clear_mocks()
+    direct_vm.mock_web(r".*api\.example\.com.*", {"status": 200, "body": '{"price": 99}'})
+    assert direct_vm.run_validator() is False
+
+    # Optional overrides
+    direct_vm.run_validator(leader_result={"price": 42.5})   # replace the leader's return value
+    direct_vm.run_validator(leader_error=Exception("boom"))  # simulate a leader error
+    direct_vm.run_validator(index=0)                         # pick an earlier run_nondet call
+```
+
+- Returns the validator's `bool`. Raises `RuntimeError` if no `run_nondet` call was captured.
+- `direct_vm.clear_validators()` drops captured validators.
+
+## SDK Loading Order
+
+`direct_deploy` sets up the SDK before the contract is imported: it installs the WASI mock, adds the `genlayer` SDK to `sys.path` (version from the contract's runner header, or `sdk_version=`), then loads the contract. So:
+
+- Do not `import genlayer` / `from genlayer import ...` at module top level of a test file; do it inside the test after `direct_deploy(...)`.
+- Load contracts with `direct_deploy`, not a bare import of the contract file.
+
 ## Test Organization
 
 ```
@@ -194,4 +227,5 @@ def mock_price_api(direct_vm, pair: str, price: float):
 
 - Always `direct_vm.sender = ...` before calling write methods
 - Use `--json` flag on `genvm-lint check` before writing tests to understand the contract's interface
-- Direct mode runs leader function only — validator logic is not exercised. Use integration tests for full consensus validation.
+- By default a direct call runs the leader function only — validator logic is not exercised. To replay it explicitly, use `direct_vm.run_validator()` (see "Replaying the Validator"). Use integration tests for full consensus validation.
+- Import `genlayer` inside the test (or a fixture) only after `direct_deploy(...)` has run. In a clean pytest process the SDK is not on `sys.path` until then; a module-level `import genlayer` in a test file fails at collection time.
