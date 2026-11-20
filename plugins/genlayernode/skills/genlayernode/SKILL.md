@@ -692,7 +692,7 @@ First ask how user wants to provide the operator key:
      /opt/genlayer-node/${VERSION}/data/node/keystore/operator.json && \
    sudo shred -u /tmp/keystore.json
    ```
-   Note: the user sets `GENLAYERNODE_PASSWORD` (Docker: `NODE_PASSWORD`) in .env to the export passphrase; doctor verifies it unlocks
+   Note: the user sets `GENLAYERNODE_PASSWORD` (Docker: `NODE_PASSWORD`) in .env to the export passphrase; doctor does not check it; the node unlocks the keystore when it starts
 7. For keystore directory: Already in correct location, just verify contents show UTC--* file
 
 **Note**: The keystore lives in the shared data directory (`/opt/genlayer-node/v0.6/data/node/keystore/`, reached through the version's `data` link).
