@@ -11,8 +11,9 @@ allowed-tools:
   - Write
 hooks:
   Stop:
-    - type: command
-      command: "task claude:validate-skill -- --skill docs-refresh"
+    - hooks:
+        - type: command
+          command: "task claude:validate-skill -- --skill docs-refresh"
 ---
 
 # Docs Refresh

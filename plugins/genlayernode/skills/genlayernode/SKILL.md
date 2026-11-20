@@ -10,8 +10,9 @@ allowed-tools:
   - AskUserQuestion
 hooks:
   Stop:
-    - type: command
-      command: "task claude:validate-skill -- --skill genlayernode"
+    - hooks:
+        - type: command
+          command: "${CLAUDE_PLUGIN_ROOT}/skills/genlayernode/scripts/validate.sh"
 ---
 
 # GenLayer Validator Setup

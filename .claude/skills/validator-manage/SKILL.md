@@ -5,8 +5,9 @@ user-invocable: true
 allowed-tools: [Bash, Read, Grep, Glob, AskUserQuestion]
 hooks:
   Stop:
-    - type: command
-      command: "task claude:validate-skill -- --skill validator-manage"
+    - hooks:
+        - type: command
+          command: "task claude:validate-skill -- --skill validator-manage"
 ---
 
 # Validator Manage

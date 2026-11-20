@@ -148,7 +148,7 @@ parse_skillmd_frontmatter() {
 
     if has_yq; then
         FM_NAME=$(echo "$frontmatter" | yq '.name // ""' 2>/dev/null || echo "")
-        FM_HOOKS_STOP=$(echo "$frontmatter" | yq '.hooks.Stop[].command // ""' 2>/dev/null || echo "")
+        FM_HOOKS_STOP=$(echo "$frontmatter" | yq '.hooks.Stop[].hooks[].command // ""' 2>/dev/null || echo "")
     else
         # Basic parsing
         FM_NAME=$(echo "$frontmatter" | grep -E '^name:' | sed 's/^name:[[:space:]]*//' | sed 's/^"//;s/"$//')
@@ -355,6 +355,21 @@ parse_collaboration_yaml() {
 # CHECK FUNCTIONS
 # ============================================================================
 
+# Expected Stop hook command for a skill. A skill shipped in a plugin (real path
+# under plugins/) cannot rely on this repo's Taskfile once installed, so it calls
+# its own plugin-relative runner instead.
+expected_stop_command() {
+    local skill_dir="$1"
+    local skill real
+    skill=$(basename "$skill_dir")
+    real=$(cd "$skill_dir" && pwd -P)
+    if [[ "$real" == */plugins/*/skills/"$skill" ]]; then
+        echo "\${CLAUDE_PLUGIN_ROOT}/skills/$skill/scripts/validate.sh"
+    else
+        echo "task claude:validate-skill -- --skill $skill"
+    fi
+}
+
 # Check Stop hook discipline
 check_stop_hook_discipline() {
     local skill_dir="$1"
@@ -376,7 +391,8 @@ check_stop_hook_discipline() {
         return 0
     fi
 
-    local expected="task claude:validate-skill -- --skill $skill"
+    local expected
+    expected=$(expected_stop_command "$skill_dir")
     if [[ "$FM_HOOKS_STOP" != *"$expected"* ]]; then
         ERRORS+=("$skill: Stop hook must call '$expected' (validations.yaml exists)")
     fi

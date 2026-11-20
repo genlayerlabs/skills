@@ -5,8 +5,9 @@ user-invocable: true
 allowed-tools: [Read, Grep, Glob, AskUserQuestion, mcp__linear-server__create_issue, mcp__linear-server__update_issue, mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_cycles, mcp__linear-server__list_teams, mcp__linear-server__list_projects, mcp__linear-server__list_issue_labels, mcp__linear-server__list_issue_statuses]
 hooks:
   Stop:
-    - type: command
-      command: "task claude:validate-skill -- --skill linear"
+    - hooks:
+        - type: command
+          command: "task claude:validate-skill -- --skill linear"
 ---
 
 # Linear

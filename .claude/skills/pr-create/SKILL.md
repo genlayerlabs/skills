@@ -5,8 +5,9 @@ user-invocable: true
 allowed-tools: [Bash, Read, Grep, Glob]
 hooks:
   Stop:
-    - type: command
-      command: "task claude:validate-skill -- --skill pr-create"
+    - hooks:
+        - type: command
+          command: "task claude:validate-skill -- --skill pr-create"
 ---
 
 # PR Create
