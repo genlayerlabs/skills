@@ -107,8 +107,10 @@ parse_arguments() {
     done
 }
 
+# Replace the generated header timestamp (line 4, "> Last updated: YYYY-MM-DD HH:MM")
+# with a placeholder. Anything else on that line is left alone and will differ.
 normalize_timestamp() {
-    sed "0,/^> Last updated: .*/s//> Last updated: <timestamp>/" "$1"
+    sed '4s/^> Last updated: [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}$/> Last updated: <timestamp>/' "$1"
 }
 
 check_skills_reference() {
@@ -133,10 +135,15 @@ check_skills_reference() {
     # Compare with existing
     if [[ -f "$REFERENCE_FILE" ]]; then
         if [[ -f "$temp_reference" ]]; then
-            # Normalize only the generated header timestamp (first matching line); it changes every minute.
-            if ! diff -q \
-                <(normalize_timestamp "$REFERENCE_FILE") \
-                <(normalize_timestamp "$temp_reference") >/dev/null 2>&1; then
+            # Normalize only the generated header timestamp; it changes every minute.
+            local norm_existing="$temp_dir/existing.normalized"
+            local norm_fresh="$temp_dir/fresh.normalized"
+            if ! normalize_timestamp "$REFERENCE_FILE" > "$norm_existing" \
+                || ! normalize_timestamp "$temp_reference" > "$norm_fresh"; then
+                log_error "Failed to normalize docs/skills/REFERENCE.md for comparison"
+                return 1
+            fi
+            if ! diff -q "$norm_existing" "$norm_fresh" >/dev/null 2>&1; then
                 log_error "docs/skills/REFERENCE.md is out of sync"
                 echo "Run 'task docs:refresh' to update"
                 return 1
