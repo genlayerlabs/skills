@@ -8,7 +8,7 @@ allowed-tools:
 
 # GenLayer CLI
 
-The `genlayer` CLI manages contract deployment, interaction, transaction inspection, and network configuration. Works with GenLayer Studio (local), studio.genlayer.com, and Testnet Bradbury.
+The `genlayer` CLI manages contract deployment, interaction, transaction inspection, and network configuration. Works with GenLayer Studio (local), stable StudioNet at studio.genlayer.com, Studio Dev at studio-dev.genlayer.com, and public testnets such as Bradbury.
 
 ## Setup
 
@@ -21,13 +21,20 @@ npm install -g genlayer
 ```bash
 genlayer network set                    # Interactive selector
 genlayer network set testnet-bradbury   # Direct
+genlayer network set studio-dev         # Studio Dev release-candidate stack
 genlayer network info                   # Show current network config
 genlayer network list                   # List all networks
 ```
 
-Networks: `localnet`, `studionet`, `testnet-asimov`, `testnet-bradbury`
+Networks: `localnet`, `studionet`, `studio-dev`, `testnet-asimov`, `testnet-bradbury`
+
+Use `studionet` for stable Studio (`studio.genlayer.com`, chain ID `61999`). Use `studio-dev` only with the matching release-candidate CLI/SDK for the Studio Dev preview (`studio-dev.genlayer.com`, chain ID `61997`). Do **not** point or relabel `studionet` at the Studio Dev RPC: the chain ID, consensus contracts, and deployment state must move together.
+
+If `genlayer network list` does not show `studio-dev`, the installed CLI is older than the Studio Dev release-candidate stack. Upgrade to the matching RC CLI instead of using `--rpc` or reusing `studionet`.
 
 **Note**: `studionet` is gasless — no tokens are required to deploy or interact with contracts. A 0 GEN balance is expected and does not prevent any operations.
+
+**Note**: `studio-dev` has a built-in faucet in the Studio Dev web app. Use it for preview-stack GEN; the public testnet faucet below is for Bradbury/Asimov and may require a separate anti-abuse eligibility check.
 
 **Note**: `studionet` is rate-limited per IP — **60 req/min, 1000 req/hr, 10000 req/day**. Limits aren't permanent — batching many `deploy`/`write` calls trips `-32429` / HTTP 429 and further requests are rejected until the window resets (next minute / hour / day cycle). `-32028` signals the pending-queue cap — **up to 32 in-flight txs per sender**; a separate cap also applies per contract. Throttle batch scripts, wait for receipts between submissions, or use `localnet` for heavy batches.
 
@@ -72,9 +79,14 @@ echo "mypassword" | genlayer deploy --contract contracts/my_contract.py --args "
 
 New accounts start with 0 GEN. Funding requirements depend on the network:
 
-**StudioNet is gasless** — accounts with 0 GEN can deploy and interact with contracts without any funding. A zero balance on StudioNet is expected and normal. Skip funding entirely when using StudioNet.
+| Network | Funding path |
+| --- | --- |
+| `localnet` | Built-in local funding; no public faucet needed |
+| `studionet` | Gasless; a 0 GEN balance is expected and normal |
+| `studio-dev` | Use the built-in faucet in [Studio Dev](https://studio-dev.genlayer.com/) with matching RC tooling |
+| `testnet-bradbury`, `testnet-asimov` | Use the public testnet faucet before deploying or writing |
 
-For **testnets** (Bradbury, Asimov), fund the account before deploying or writing.
+For stable **StudioNet**, skip funding entirely. For **Studio Dev**, open the Studio Dev web app and use its built-in faucet; do not use mainnet ETH assumptions or the Bradbury/Asimov faucet to diagnose Studio Dev funding. For **public testnets** (Bradbury, Asimov), fund the account before deploying or writing.
 
 **Faucet**: [https://testnet-faucet.genlayer.foundation/](https://testnet-faucet.genlayer.foundation/)
 
@@ -82,7 +94,7 @@ For **testnets** (Bradbury, Asimov), fund the account before deploying or writin
 2. Go to the faucet URL, paste the address, and claim 100 GEN (once per 24 hours)
 3. Verify: `genlayer account` should show the updated balance
 
-The faucet uses Cloudflare Turnstile and cannot be automated from CLI -- the user must claim manually in a browser. Works for both Testnet Bradbury and Testnet Asimov.
+The public testnet faucet uses Cloudflare Turnstile and cannot be automated from CLI -- the user must claim manually in a browser. It works for Testnet Bradbury and Testnet Asimov; use the Studio web apps for StudioNet/Studio Dev faucet or gasless flows.
 
 ## Contract Deployment
 
