@@ -159,7 +159,7 @@ def test_validator_rejects_different_data(direct_vm, direct_deploy, direct_alice
 
 ## SDK Loading Order
 
-`direct_deploy` sets up the SDK before the contract is imported: it installs the WASI mock, adds the `genlayer` SDK to `sys.path` (version from the contract's runner header, or `sdk_version=`), then loads the contract. So:
+`direct_deploy` sets up the SDK before the contract is imported: it installs the WASI mock, adds the `genlayer` SDK to `sys.path` (the GenVM release comes from `sdk_version=`; when omitted, the loader uses a cached release or resolves the latest one; the contract header only supplies the runner hash within that release archive), then loads the contract. So:
 
 - Do not `import genlayer` / `from genlayer import ...` at module top level of a test file; do it inside the test after `direct_deploy(...)`.
 - Load contracts with `direct_deploy`, not a bare import of the contract file.

@@ -746,7 +746,7 @@ def test_set_and_get(direct_vm, direct_deploy, direct_alice):
 
 ### Important
 
-By default a direct call runs the **leader function only**. To replay the validator with different mocks, call `direct_vm.run_validator()` after a method that uses `gl.vm.run_nondet` (options: `leader_result=`, `leader_error=`, `index=`). `direct_deploy` loads the SDK before the contract is imported, so import `genlayer` inside the test after deploying, not at module top level. Use integration tests for full consensus validation.`
+By default a direct call runs the **leader function only**. To replay the validator with different mocks, call \`direct_vm.run_validator()\` after a method that uses \`gl.vm.run_nondet\` (options: \`leader_result=\`, \`leader_error=\`, \`index=\`). \`direct_deploy\` loads the SDK before the contract is imported, so import \`genlayer\` inside the test after deploying, not at module top level. Use integration tests for full consensus validation.`
         },
         {
             id: 'integration-tests',
