@@ -129,7 +129,10 @@ check_skills_reference() {
     # Compare with existing
     if [[ -f "$REFERENCE_FILE" ]]; then
         if [[ -f "$temp_reference" ]]; then
-            if ! diff -q "$REFERENCE_FILE" "$temp_reference" >/dev/null 2>&1; then
+            # The "Last updated" line changes every minute; ignore it.
+            if ! diff -q \
+                <(grep -v '^> Last updated: ' "$REFERENCE_FILE") \
+                <(grep -v '^> Last updated: ' "$temp_reference") >/dev/null 2>&1; then
                 log_error "docs/skills/REFERENCE.md is out of sync"
                 echo "Run 'task docs:refresh' to update"
                 return 1
