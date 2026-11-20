@@ -240,6 +240,13 @@ parse_validations_yaml() {
             [[ -z "$trimmed" ]] && continue
             [[ "$trimmed" =~ ^# ]] && continue
 
+            # A different top-level key ends the validations and on_stop sections
+            if [[ "$line" =~ ^[A-Za-z_]+: && "$trimmed" != "validations:" && "$trimmed" != "on_stop:" ]]; then
+                in_validations=false
+                in_on_stop=false
+                continue
+            fi
+
             if [[ "$trimmed" == "validations:" ]]; then
                 in_validations=true
                 in_on_stop=false

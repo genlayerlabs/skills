@@ -17,7 +17,7 @@ validations:
   - id: accounts-exist
     name: Account list is not empty
     type: command
-    command: "out=$(genlayer account list) && [ -n \"$out\" ] && ! printf '%s' \"$out\" | grep -qi 'no accounts'"
+    command: "set -o pipefail; genlayer account list | grep -vi 'no accounts' | grep . >/dev/null"
     expect: "exit 0"
     message: "No usable accounts. Create or import one with: genlayer account create"
 
@@ -31,7 +31,7 @@ validations:
   - id: validators-visible
     name: Validator list is not empty
     type: command
-    command: "out=$(genlayer staking validators) && [ -n \"$out\" ] && ! printf '%s' \"$out\" | grep -qi 'no validators'"
+    command: "set -o pipefail; genlayer staking validators | grep -vi 'no validators' | grep . >/dev/null"
     expect: "exit 0"
     message: "No validators listed on the active network (or the command failed). Join validators, then verify with: genlayer staking validators"
 
