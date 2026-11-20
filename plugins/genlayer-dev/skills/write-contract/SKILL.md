@@ -465,14 +465,16 @@ def __init__(self, num_workers: int):
         worker_code = f.read()
 
     for i in range(num_workers):
-        addr = gl.deploy_contract(
+        addr = gl.contract.deploy(
             code=worker_code.encode("utf-8"),
             args=[i, gl.message.contract_address],
-            salt_nonce=i + 1,
-            on="accepted",
+            salted=gl.contract.Salted(i + 1),
+            on="decided",
         )
         self.worker_addresses.append(addr)
 ```
+
+`gl.contract.deploy(code=, args=, kwargs=, salted=int | gl.contract.Salted | None, value=, on="decided" | "finalized")` — `gl.deploy_contract` and the `salt_nonce=` keyword no longer exist (`TypeError: deploy() got an unexpected keyword argument 'salt_nonce'`). Only `salted=gl.contract.Salted(n)` makes `deploy()` return the child's address; a plain `int` salt deploys at a fixed address but returns `None`. To predict the child address, call `gl.contract.Salted(n).resolve()`: it calls `predictGhostAddress(n, gl.message.contract_address)` on the settlement-chain factory at `gl.message.create2["deployer"]`, so the result depends on the salt and the deploying contract address. `Salted.resolve_hardcoded()` computes the same locally from a hardcoded formula, which can go stale if governance changes the factory's derivation; prefer `resolve()`. `on="accepted"` is not a valid value for `deploy()`.
 
 Workers are immutable after deployment. Code changes require redeploying the factory.
 
