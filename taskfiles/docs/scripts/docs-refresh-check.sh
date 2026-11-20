@@ -108,9 +108,12 @@ parse_arguments() {
 }
 
 # Replace the generated header timestamp (line 4, "> Last updated: YYYY-MM-DD HH:MM")
-# with a placeholder. Anything else on that line is left alone and will differ.
+# with a placeholder; it is an error if line 4 is not in that format.
 normalize_timestamp() {
-    sed '4s/^> Last updated: [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}$/> Last updated: <timestamp>/' "$1"
+    local ts_re='^> Last updated: [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}$'
+    # Fail unless the header carries a real timestamp (a literal placeholder is rejected).
+    sed -n 4p "$1" | grep -q "$ts_re" || return 1
+    sed "4s/$ts_re/> Last updated: <timestamp>/" "$1"
 }
 
 check_skills_reference() {
