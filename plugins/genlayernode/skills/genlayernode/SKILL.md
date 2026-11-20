@@ -100,8 +100,8 @@ Always show a brief description of what will happen:
 ## Step 4: Download & Extract Node Software
 
 This step will:
-1. Download the GenLayer node v0.4.4 tarball (~XX MB)
-2. Create directory /opt/genlayer-node/v0.4.4/
+1. Download the approved GenLayer node release (for example, v0.6.0-rc.3)
+2. Create directory /opt/genlayer-node/${VERSION}/
 3. Extract binary, configs, and GenVM files
 4. Set up symlinks for easy access
 5. Run GenVM setup to download dependencies (~2 min)
@@ -947,7 +947,7 @@ I want to set up a validator node
 
 **With specific version:**
 ```
-Install validator node version v0.4.4
+Install validator node version v0.6.0-rc.3
 ```
 
 **With latest version:**
