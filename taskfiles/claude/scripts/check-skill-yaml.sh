@@ -364,7 +364,7 @@ expected_stop_command() {
     skill=$(basename "$skill_dir")
     real=$(cd "$skill_dir" && pwd -P)
     if [[ "$real" == */plugins/*/skills/"$skill" ]]; then
-        echo "\${CLAUDE_PLUGIN_ROOT}/skills/$skill/scripts/validate.sh"
+        echo "\"\${CLAUDE_PLUGIN_ROOT}/skills/$skill/scripts/validate.sh\""
     else
         echo "task claude:validate-skill -- --skill $skill"
     fi

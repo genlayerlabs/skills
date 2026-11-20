@@ -27,7 +27,8 @@ done
 [[ -f "$FILE" ]] || { echo "validations.yaml not found next to the skill: $FILE" >&2; exit 2; }
 
 # Emit one TSV line per validation: id <TAB> command <TAB> message
-# (only single-line scalar values, as used in validations.yaml)
+# Newlines inside multiline (block scalar `|`) values are encoded as \001 and
+# decoded again by lookup().
 parse_validations() {
     awk '
     function val(s) {
@@ -38,13 +39,34 @@ parse_validations() {
         }
         return s
     }
-    function flush() { if (id != "") printf "%s\t%s\t%s\n", id, cmd, msg; id = cmd = msg = "" }
+    function flush() {
+        if (id != "") printf "%s\t%s\t%s\n", id, cmd, msg
+        id = cmd = msg = ""
+    }
+    function store(v) { if (key == "command") cmd = v; else msg = v }
+    function endblock() { store(blk); blk = ""; inblk = 0 }
+    {
+        if (inblk) {
+            if ($0 ~ /^[ \t]*$/) { blk = blk (blk == "" ? "" : "\001"); next }
+            match($0, /^[ \t]*/)
+            if (bind == 0) bind = RLENGTH
+            if (RLENGTH >= bind && bind > 0) {
+                blk = blk (blk == "" ? "" : "\001") substr($0, bind + 1)
+                next
+            }
+            endblock()
+        }
+    }
     /^validations:/ { inv = 1; next }
     /^[A-Za-z_]+:/ { flush(); inv = 0 }
     inv && /^[ \t]*- id:/ { flush(); id = val($0); next }
-    inv && /^[ \t]+command:/ { cmd = val($0); next }
-    inv && /^[ \t]+message:/ { msg = val($0); next }
-    END { flush() }
+    inv && /^[ \t]+(command|message):/ {
+        key = $0; sub(/^[ \t]+/, "", key); sub(/:.*/, "", key)
+        v = val($0)
+        if (v ~ /^[|>][-+]?$/) { inblk = 1; bind = 0; blk = ""; next }
+        store(v); next
+    }
+    END { if (inblk) endblock(); flush() }
     ' "$FILE"
 }
 
@@ -60,7 +82,7 @@ parse_on_stop() {
 TSV="$(parse_validations)"
 
 lookup() { # $1=id $2=field number (2=command, 3=message)
-    printf '%s\n' "$TSV" | awk -F'\t' -v id="$1" -v f="$2" '$1 == id { print $f; exit }'
+    printf '%s\n' "$TSV" | awk -F'\t' -v id="$1" -v f="$2" '$1 == id { print $f; exit }' | tr '\001' '\n'
 }
 
 if [[ "$MODE" == "all" ]]; then
