@@ -8,6 +8,10 @@ allowed-tools:
   - Edit
   - WebFetch
   - AskUserQuestion
+hooks:
+  Stop:
+    - type: command
+      command: "task claude:validate-skill -- --skill genlayernode"
 ---
 
 # GenLayer Validator Setup

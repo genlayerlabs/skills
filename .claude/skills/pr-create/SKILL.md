@@ -1,6 +1,6 @@
 ---
 name: pr-create
-description: Creates GitHub pull requests with properly formatted titles that pass the check-pr-title CI validation. Use when creating PRs, submitting changes for review, or when user says /pr, /pr-create, or asks to create a pull request.
+description: Creates GitHub pull requests with titles that pass the check-pr-title CI validation. Use when creating PRs, submitting changes for review, or on /pr or /pr-create.
 user-invocable: true
 allowed-tools: [Bash, Read, Grep, Glob]
 hooks:

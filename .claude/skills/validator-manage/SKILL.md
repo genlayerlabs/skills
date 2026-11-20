@@ -3,6 +3,10 @@ name: validator-manage
 description: Manage GenLayer validators across testnets using the genlayer CLI. Join, fund, set identity, list, and organize validators per network and owner.
 user-invocable: true
 allowed-tools: [Bash, Read, Grep, Glob, AskUserQuestion]
+hooks:
+  Stop:
+    - type: command
+      command: "task claude:validate-skill -- --skill validator-manage"
 ---
 
 # Validator Manage
