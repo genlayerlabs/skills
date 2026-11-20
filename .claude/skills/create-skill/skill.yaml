@@ -95,8 +95,9 @@ patterns:
     example: |
       hooks:
         Stop:
-          - type: command
-            command: "task claude:validate-skill -- --skill my-validator"
+          - hooks:
+              - type: command
+                command: "task claude:validate-skill -- --skill my-validator"
 
   - id: command-only-validations-v1
     description: |

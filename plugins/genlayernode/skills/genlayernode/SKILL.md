@@ -8,6 +8,11 @@ allowed-tools:
   - Edit
   - WebFetch
   - AskUserQuestion
+hooks:
+  Stop:
+    - hooks:
+        - type: command
+          command: '"${CLAUDE_PLUGIN_ROOT}/skills/genlayernode/scripts/validate.sh"'
 ---
 
 # GenLayer Validator Setup

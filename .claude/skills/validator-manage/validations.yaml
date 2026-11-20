@@ -1,44 +1,52 @@
+# Flat layout read by taskfiles/claude/scripts/validate-skill.sh:
+# a `validations` list with ids, and a top-level `on_stop` list of ids.
+#
+# Not automated (they need a real operator name / validator address):
+#   - operators-funded:  genlayer account show --account '<operator-name>'
+#                        -> balance matches the funded amount
+#   - identity-set:      genlayer staking validator-info <validator-address>
+#                        -> identity.moniker is present and correct
 validations:
-  prerequisites:
-    - id: cli-installed
-      description: "genlayer CLI is installed"
-      command: "genlayer --version"
-      expected: "version number output"
-      on_stop: true
+  - id: cli-installed
+    name: genlayer CLI is installed
+    type: command
+    command: "genlayer --version"
+    expect: "exit 0"
+    message: "genlayer CLI not found. Install it with: npm install -g genlayer"
 
-    - id: accounts-exist
-      description: "At least one owner account exists"
-      command: "genlayer account list"
-      expected: "Account list with at least one entry"
-      on_stop: true
+  - id: accounts-exist
+    name: Account list is not empty
+    type: command
+    command: "set -o pipefail; genlayer account list | grep -vi 'no accounts' | grep . >/dev/null"
+    expect: "exit 0"
+    message: "No usable accounts. Create or import one with: genlayer account create"
 
-    - id: correct-network
-      description: "Active network matches target"
-      command: "genlayer network list"
-      expected: "Target network has * marker"
-      on_stop: true
+  - id: correct-network
+    name: A network is active (marked with *)
+    type: command
+    command: "genlayer network list | grep -q '[*]'"
+    expect: "exit 0"
+    message: "No active network. Select the target with: genlayer network set"
 
-  post_join:
-    - id: validators-visible
-      description: "Newly joined validators appear in validator set"
-      command: "genlayer staking validators"
-      expected: "All joined validators listed with correct stake"
-      on_stop: true
+  - id: validators-visible
+    name: Validator list is not empty
+    type: command
+    command: "set -o pipefail; genlayer staking validators | grep -vi 'no validators' | grep . >/dev/null"
+    expect: "exit 0"
+    message: "No validators listed on the active network (or the command failed). Join validators, then verify with: genlayer staking validators"
 
-    - id: operators-funded
-      description: "Operator accounts have expected balance"
-      command: "genlayer account show --account '<operator-name>'"
-      expected: "Balance matches funded amount"
-      on_warn: true
+  - id: memory-updated
+    name: validators.md exists and is not empty
+    type: command
+    command: "[ -s validators.md ]"
+    expect: "exit 0"
+    message: "validators.md is missing or empty. Record new validators and operators there."
 
-    - id: identity-set
-      description: "Validator monikers are set on-chain"
-      command: "genlayer staking validator-info <validator-address>"
-      expected: "identity.moniker field is present and correct"
-      on_warn: true
+on_stop:
+  - cli-installed
+  - accounts-exist
+  - correct-network
+  - validators-visible
 
-    - id: memory-updated
-      description: "validators.md reflects current state"
-      command: "Read validators.md"
-      expected: "All new validators and operators listed"
-      on_warn: true
+on_warn:
+  - memory-updated

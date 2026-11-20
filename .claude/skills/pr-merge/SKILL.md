@@ -5,8 +5,9 @@ user-invocable: true
 allowed-tools: [Bash, Read]
 hooks:
   Stop:
-    - type: command
-      command: "task claude:validate-skill -- --skill pr-merge"
+    - hooks:
+        - type: command
+          command: "task claude:validate-skill -- --skill pr-merge"
 ---
 
 # PR Merge
