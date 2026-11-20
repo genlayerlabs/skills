@@ -14,7 +14,7 @@ tasks:
         task docs:refresh
     cmds:
       - mkdir -p docs/skills
-      - task claude:skills-reference
+      - task claude:skills-reference -- --canonical
       - ./taskfiles/docs/scripts/update-claude-md.sh
     dir: "{{.USER_WORKING_DIR}}"
 

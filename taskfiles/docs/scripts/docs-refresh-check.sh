@@ -107,6 +107,10 @@ parse_arguments() {
     done
 }
 
+normalize_timestamp() {
+    sed "0,/^> Last updated: .*/s//> Last updated: <timestamp>/" "$1"
+}
+
 check_skills_reference() {
     local temp_dir="$1"
     local temp_reference="$temp_dir/docs/skills/REFERENCE.md"
@@ -117,7 +121,7 @@ check_skills_reference() {
     mkdir -p "$temp_dir/docs/skills"
 
     if [[ -x "$SKILLS_REFERENCE_GENERATOR" ]]; then
-        if ! "$SKILLS_REFERENCE_GENERATOR" --output "$temp_reference" >/dev/null 2>&1; then
+        if ! "$SKILLS_REFERENCE_GENERATOR" --canonical --output "$temp_reference" >/dev/null 2>&1; then
             log_error "Skills reference generator failed"
             return 1
         fi
@@ -129,10 +133,10 @@ check_skills_reference() {
     # Compare with existing
     if [[ -f "$REFERENCE_FILE" ]]; then
         if [[ -f "$temp_reference" ]]; then
-            # The "Last updated" line changes every minute; ignore it.
+            # Normalize only the generated header timestamp (first matching line); it changes every minute.
             if ! diff -q \
-                <(grep -v '^> Last updated: ' "$REFERENCE_FILE") \
-                <(grep -v '^> Last updated: ' "$temp_reference") >/dev/null 2>&1; then
+                <(normalize_timestamp "$REFERENCE_FILE") \
+                <(normalize_timestamp "$temp_reference") >/dev/null 2>&1; then
                 log_error "docs/skills/REFERENCE.md is out of sync"
                 echo "Run 'task docs:refresh' to update"
                 return 1

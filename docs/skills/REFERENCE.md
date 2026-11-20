@@ -1,7 +1,7 @@
 # Skill Reference
 
 > **Auto-generated** from `skill.yaml` files. Do not edit manually.
-> Last updated: 2026-11-20 22:54
+> Last updated: 2026-11-20 23:00
 
 ## Overview
 
