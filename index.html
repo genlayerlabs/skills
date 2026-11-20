@@ -603,7 +603,7 @@ Before returning any contract code, verify:
 - **Runner Dependencies** — Pin \`py-genlayer\` version hashes instead of using \`test\`, \`latest\`, or unversioned aliases
 - **Storage Rules** — \`TreeMap\` instead of dict, \`DynArray\` instead of list, \`u256\` for money
 - **LLM Resilience** — Defensive parsing, key variation handling, aggressive coercion, JSON response format
-- **Cross-Contract Calls** — Synchronous reads, async writes with \`emit()\`, factory patterns
+- **Cross-Contract Calls** — Synchronous reads, async writes with \`emit()\`, factory patterns with salted deploys (\`gl.contract.deploy(..., salted=gl.contract.Salted(n))\`)
 - **Error Classification** — \`[EXPECTED]\`, \`[EXTERNAL]\`, \`[TRANSIENT]\`, \`[LLM_ERROR]\` each with distinct validator behavior
 
 ### Contract Skeleton
