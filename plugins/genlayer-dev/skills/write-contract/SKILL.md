@@ -442,18 +442,18 @@ When to use: any contract where rules are specified in natural language and incl
 ### Read from another contract (synchronous)
 
 ```python
-other = gl.get_contract_at(Address(other_address))
+other = gl.contract.get_at(Address(other_address))
 value = other.view().get_data()
 ```
 
 ### Write to another contract (asynchronous)
 
 ```python
-other = gl.get_contract_at(Address(other_address))
-other.emit(on="accepted").process_data(payload)  # Non-blocking
+other = gl.contract.get_at(Address(other_address))
+other.emit(on="decided").process_data(payload)  # Non-blocking
 ```
 
-`emit()` queues the call — it executes after current transaction. Use `on="accepted"` (fast) or `on="finalized"` (safe).
+`emit()` queues the call — it executes after current transaction. `on` is `"decided"` (fast) or `"finalized"` (safe, the default); `on="accepted"` is not a valid value. `gl.get_contract_at` no longer exists: use `gl.contract.get_at`. Prefer `finalized`, especially when the call carries `value=`.
 
 **Warning:** If the current transaction is appealed after `emit()`, the emitted call still happens but the balance may already be decremented.
 
