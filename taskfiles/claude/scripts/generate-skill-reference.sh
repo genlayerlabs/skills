@@ -19,6 +19,7 @@ set -euo pipefail
 # INPUTS:
 # Optional:
 #   --output FILE    Output file path (default: docs/skills/REFERENCE.md)
+#   --canonical      Ignore yq even if installed (reproducible output; used by docs:refresh and docs:refresh-check)
 #   --debug          Enable debug logging
 #   --help           Show usage information
 #
@@ -80,6 +81,7 @@ Generate docs/skills/REFERENCE.md from skill.yaml files.
 
 Options:
     --output FILE   Output file path (default: $DEFAULT_OUTPUT_FILE)
+    --canonical     Ignore yq even if installed (reproducible output)
     --debug         Enable debug logging
     --help          Show this help message
 
@@ -92,6 +94,7 @@ EOF
 
 # Check if yq is available
 has_yq() {
+    [[ "${CANONICAL_MODE:-false}" == "true" ]] && return 1
     command -v yq >/dev/null 2>&1
 }
 
@@ -473,6 +476,10 @@ parse_arguments() {
                 [[ -z "${2:-}" ]] && die "Missing argument for --output" $ERR_INVALID_ARGS
                 OUTPUT_FILE="$2"
                 shift 2
+                ;;
+            --canonical)
+                CANONICAL_MODE=true
+                shift
                 ;;
             --debug)
                 DEBUG_MODE=true
