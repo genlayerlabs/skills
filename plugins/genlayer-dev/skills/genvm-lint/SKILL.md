@@ -18,6 +18,8 @@ Requires `genvm-linter` (included in `requirements.txt` for boilerplate projects
 pip install genvm-linter
 ```
 
+Contracts pinned to the v0.3 or v0.4 runners (the current `write-contract` headers) need `genvm-linter` 0.11.1 or later. As of 2026-11-23 that is a pre-release (0.11.1rc2), so install it with `pip install --pre genvm-linter`. Version 0.11.0 only knows the legacy v0.2 runners: on a current contract `check` passes the lint step and then fails validation with `Failed to load SDK: "filename 'runners/py-genlayer/...tar' not found"`.
+
 ## Workflow
 
 **Always lint before testing.** Run `genvm-lint check` after writing or modifying a contract. Fix all errors before running tests.
@@ -75,9 +77,10 @@ Runs Pyright with SDK paths auto-configured. Catches type mismatches, missing at
 
 ### download (pre-download GenVM artifacts)
 ```bash
-genvm-lint download                    # Latest
-genvm-lint download --version v0.2.12  # Specific
-genvm-lint download --list             # Show cached
+genvm-lint download                        # Latest
+genvm-lint download --version v0.6.0-rc14  # Specific genvm-manager release
+genvm-lint download --list                 # Show cached
+genvm-lint download --available            # Show releases on GitHub
 ```
 
 ## Output Formats
@@ -101,6 +104,12 @@ genvm-lint download --list             # Show cached
 - `1` — Lint or validation errors found
 - `2` — Contract file not found
 - `3` — SDK download failed
+
+## Limits
+
+`genvm-linter` 0.11.1rc2 reports E014 (`Class 'X' used in storage needs @allow_storage decorator`) for storage dataclasses decorated with `@gl.storage.allow`, because the lint step only recognizes the legacy decorator name. This is a false positive: `@allow_storage` does not exist on the v0.3 and v0.4 runners. When E014 is the only lint finding and validation passes, treat the check as passed and keep `@gl.storage.allow`.
+
+A passing `check` proves the contract loads in the runner its header pins. It does not prove the target network ships that runner: a v0.3 pin lints clean and is still rejected by Studio, and a v0.4 pin by Testnet Bradbury. Confirm the pin with the dry-runs in the `write-contract` skill.
 
 ## Agent Workflow
 

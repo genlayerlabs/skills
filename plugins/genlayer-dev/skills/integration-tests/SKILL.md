@@ -12,6 +12,8 @@ allowed-tools:
 
 Run contracts against a real GenLayer environment (GLSim, Studio, or testnet) with full consensus validation.
 
+Studio v0.123 and later (`studionet`, `studio_devnet`, a current local Studio) need `genlayer-test` 0.30.0 or later, which installs `genlayer-py` 0.19 (`pip install -U genlayer-test`). The matching JavaScript and CLI versions are `genlayer-js` 2.0.0 and CLI 0.40.0. See the [Consensus v0.6 migration guide](https://docs.genlayer.com/developers/consensus-v06-migration).
+
 ## Running Tests
 
 ```bash
@@ -44,6 +46,38 @@ def test_full_flow():
     result = contract.get_data(args=[contract.address]).call()
     assert result == "hello"
 ```
+
+### Fees on Studio v0.123 and later
+
+`studionet` and `studio_devnet` (studio-dev.genlayer.com) charge fees: a deploy or write sent without a fee distribution reverts with `FeesDistributionMissing`. `genlayer-test` does not add fees on its own; it passes `fees=` through to `genlayer-py`. Quote them from the network and pass them along:
+
+```python
+from gltest import get_contract_factory
+from gltest.assertions import tx_execution_succeeded
+
+
+def _fees(estimate):
+    return {"distribution": estimate["distribution"], "feeValue": estimate["feeValue"]}
+
+
+def test_full_flow(gl_client, default_account):
+    factory = get_contract_factory("MyContract")
+    contract = factory.deploy(args=[], fees=_fees(gl_client.estimate_transaction_fees()))
+
+    # Simulates the write and sizes the deposit for it (Studio and localnet only)
+    estimate = gl_client.estimate_transaction_fees_for_write(
+        address=contract.address,
+        function_name="set_data",
+        account=default_account,
+        args=["hello"],
+    )
+    tx_receipt = contract.set_data(args=["hello"]).transact(fees=_fees(estimate))
+    assert tx_execution_succeeded(tx_receipt)
+```
+
+- `estimate["policy"]["enabled"]` tells whether the network charges fees. Decide from it, not from the network name.
+- Accounts need no funding on `studionet`: a 0 GEN balance works as long as the transaction carries the estimated fees, and the unused part of the deposit is refunded.
+- `gltest --fee-profile artifacts/fee-profile.json` records the fees the test run consumed (Studio-based networks only) as a profile for the CLI (`--fee-profile`) and frontends. Cover every branch that emits messages to other contracts.
 
 `ACCEPTED` and `FINALIZED` are transaction lifecycle states, not proof that
 contract execution succeeded. A transaction can be accepted and finalized with
@@ -88,7 +122,7 @@ networks:
   localnet:
     # GenLayer Studio running locally
   studionet:
-    # studio.genlayer.com — gasless, no funding needed (0 GEN balance is fine)
+    # studio.genlayer.com: no funding needed (0 GEN balance is fine), but every deploy and write must carry fees
   testnet_bradbury:
     accounts:
       - "${ACCOUNT_PRIVATE_KEY_1}"
@@ -110,7 +144,7 @@ def test_expensive_operation():
 
 - **GLSim** (`pip install genlayer-test[sim]`, `glsim --port 4000 --validators 5`) — lightweight, no Docker, ~1s startup. Runs Python natively, not in GenVM. Good for fast iteration.
 - **Studio local** (`genlayer up`) — full GenVM, real consensus, Docker required. Validates runtime compatibility.
-- **studio.genlayer.com** (StudioNet) — hosted Studio, no setup, rate-limited (see Common Issues). **Gasless: no tokens required.** Accounts with 0 GEN balance can deploy and run tests normally.
+- **studio.genlayer.com** (StudioNet) — hosted Studio, no setup, rate-limited (see Common Issues). **No tokens required, but not gasless:** since Studio v0.123 every deploy and write must carry estimated fees (see "Fees on Studio v0.123 and later"). Accounts with 0 GEN balance can then deploy and run tests normally.
 - **Testnet Bradbury** — real network, requires funded accounts.
 
 ## When to Use Integration Tests
@@ -126,6 +160,9 @@ Direct mode should cover most logic testing. Use integration tests for final val
 
 ### "Transaction not found" errors
 Clear cache: `rm -rf .gltest_cache`
+
+### `FeesDistributionMissing` revert
+The deploy or write carried no fees. Pass `fees=` as shown in "Fees on Studio v0.123 and later". With `genlayer-test` older than 0.30.0, upgrade first.
 
 ### Slow tests
 Run single tests during development:

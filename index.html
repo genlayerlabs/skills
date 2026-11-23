@@ -582,11 +582,11 @@ The core skill for building GenLayer intelligent contracts — Python classes th
 All GenLayer networks reject \`py-genlayer:test\`, \`py-genlayer:latest\`, and unversioned runner aliases. Every generated contract must start with a pinned runner dependency header:
 
 \`\`\`python
-# v0.3.0
-# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
+# v0.4.0
+# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 \`\`\`
 
-That is the GenVM v0.6 runner Bradbury and Studio Dev (\`studio-next.genlayer.com\`) ship. Pins are per network, and the runner also fixes the API: studionet (\`studio.genlayer.com\`) still runs GenVM v0.2.16 and needs the pre-v0.6 \`1jb45aa8…\` pin with \`from genlayer import *\`. A pin the network does not ship fails every deploy with \`runner malformed\`. On Studio networks, \`gen_getContractSchemaForCode\` dry-runs a contract to check its pin without sending a transaction.
+That is the GenVM v0.4 runner that Studio v0.123 and later ship (\`studio.genlayer.com\`, \`studio-dev.genlayer.com\`, a current local Studio). Pins are per network: Testnet Bradbury ships the v0.3 runner, so there the header is \`# v0.3.0\` with \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\`. Both runners share the same API except for salted deploys (\`salted=\` on v0.4, \`salt_nonce=\` on v0.3). A pin the network does not ship fails every deploy with \`runner malformed\`. Check a pin without sending a transaction: \`gen_getContractSchemaForCode\` on Studio, \`gen_call\` with \`type: "deploy"\` on Bradbury.
 
 \`test\` and \`latest\` are local-development aliases for GenLayer runtime developers. They may work only in a specially configured local Studio environment with a GenLayer developer environment variable, but they do not work on GenLayer networks and must not appear in generated user contracts.
 
@@ -612,8 +612,8 @@ Before returning any contract code, verify:
 ### Contract Skeleton
 
 \`\`\`python
-# v0.3.0
-# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
+# v0.4.0
+# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 
 import genlayer as gl
 from genlayer.types import *
@@ -641,11 +641,13 @@ class MyContract(gl.contract.Contract):
 
 Always pin a specific runner version hash in the contract's first line. All GenLayer networks reject \`test\`, \`latest\`, and unversioned runner aliases.
 
-| Contract Type | Dependency |
-|---------------|------------|
-| Single-file Python | \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\` |
-| Multi-file Python package | \`py-genlayer-multi:2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130\` |
-| Embeddings / semantic search | Add \`py-lib-genlayer-embeddings:hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg\` before \`py-genlayer\` in a \`Seq\` block |
+| Contract Type | Studio v0.123+ (\`# v0.4.0\`) | Testnet Bradbury (\`# v0.3.0\`) |
+|---------------|------------|------------|
+| Single-file Python | \`py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0\` | \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\` |
+| Multi-file Python package | \`py-genlayer-multi:ys9w7shpvsdswe2fhrxh7agke954catkqb28cngq5924zw9bzx80\` | \`py-genlayer-multi:2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130\` |
+| Embeddings / semantic search | \`py-lib-genlayer-embeddings:hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg\` | Same hash |
+
+For embeddings, list the embeddings library before \`py-genlayer\` in a \`Seq\` block.
 
 ### Anti-Patterns
 
@@ -656,6 +658,7 @@ Always pin a specific runner version hash in the contract's first line. All GenL
 - \`dict\` / \`list\` for storage — use \`TreeMap\` / \`DynArray\`
 - \`float\` for money — use atto-scale \`u256\`
 - Inserting fields in middle of dataclass — always append at END
+- A pin copied from another network: check it against the target network with a dry-run before deploying
 
 > Part of the **genlayer-dev** plugin. Install with \`/plugin install genlayer-dev@genlayerlabs\``
         },
@@ -702,7 +705,7 @@ Static analysis and validation for GenLayer intelligent contracts. Always lint b
 - **2** — Contract file not found
 - **3** — SDK download failed
 
-> Install: \`pip install genvm-linter\``
+> Install: \`pip install genvm-linter\`. Contracts pinned to the v0.3 or v0.4 runner need genvm-linter 0.11.1 or later (\`pip install --pre genvm-linter\` while it is a pre-release).`
         },
         {
             id: 'direct-tests',
@@ -719,6 +722,8 @@ Fast, in-memory tests for intelligent contracts. No server, no Docker, no consen
 pytest tests/direct/ -v
 pytest tests/direct/test_specific.py::test_one -v
 \`\`\`
+
+Contracts pinned to the v0.3 or v0.4 runner need \`genlayer-test\` 0.30.0 or later.
 
 ### Basic Pattern
 
@@ -786,6 +791,27 @@ def test_full_flow():
     assert result == "hello"
 \`\`\`
 
+### Fees on Studio v0.123 and Later
+
+\`studio.genlayer.com\` charges fees since Studio v0.123: a deploy or write sent without a fee distribution reverts with \`FeesDistributionMissing\`. \`genlayer-test\` 0.30.0 or later passes \`fees=\` through to \`genlayer-py\`; it does not add fees on its own.
+
+\`\`\`python
+def _fees(estimate):
+    return {"distribution": estimate["distribution"], "feeValue": estimate["feeValue"]}
+
+def test_full_flow(gl_client, default_account):
+    factory = get_contract_factory("MyContract")
+    contract = factory.deploy(args=[], fees=_fees(gl_client.estimate_transaction_fees()))
+    estimate = gl_client.estimate_transaction_fees_for_write(
+        address=contract.address, function_name="set_data",
+        account=default_account, args=["hello"],
+    )
+    receipt = contract.set_data(args=["hello"]).transact(fees=_fees(estimate))
+    assert tx_execution_succeeded(receipt)
+\`\`\`
+
+Accounts need no funding there: a 0 GEN balance works when the transaction carries the estimated fees, and the unused part of the deposit is refunded.
+
 ### Lifecycle vs Execution
 
 \`ACCEPTED\` and \`FINALIZED\` are transaction lifecycle states, not proof that contract execution succeeded. A transaction can be accepted and finalized with an execution error, and failed execution applies no state changes. For deploy transactions, failed execution means no contract is created.
@@ -806,7 +832,7 @@ Always assert \`tx_execution_succeeded(receipt)\` before reading state, checking
 
 - **GLSim** — Lightweight, Python natively
 - **Studio local** — Full GenVM, Docker required
-- **studio.genlayer.com** — Hosted, no setup, gasless, rate-limited
+- **studio.genlayer.com** — Hosted, no setup, no funding needed, fees required on every deploy and write, rate-limited
 - **Testnet Bradbury** — Real network, funded accounts
 
 ### Studio Rate Limits
@@ -834,7 +860,10 @@ The command-line interface for deploying, calling, and debugging intelligent con
 
 \`\`\`bash
 npm install -g genlayer
+genlayer --version    # 0.40.0 or later
 \`\`\`
+
+Studio v0.123 and later need CLI 0.40.0 or later, together with \`genlayer-js\` 2.0.0, \`genlayer-py\` 0.19.0 and \`genlayer-test\` 0.30.0. See the [Consensus v0.6 migration guide](https://docs.genlayer.com/developers/consensus-v06-migration).
 
 ### Core Commands
 
@@ -855,11 +884,21 @@ genlayer network info
 genlayer network list
 \`\`\`
 
-Networks: \`localnet\`, \`testnet-asimov\`, \`testnet-bradbury\`, \`mainnet\`
+Networks: \`localnet\`, \`studionet\`, \`studio-dev\`, \`testnet-asimov\`, \`testnet-bradbury\`
+
+### Fees
+
+\`studionet\` is no longer gasless. Since Studio v0.123 every \`deploy\` and \`write\` must carry fees or it reverts with \`FeesDistributionMissing\`. The CLI does not add them on its own. Accounts still need no funding: a 0 GEN balance works when the transaction carries the estimated fees.
+
+\`\`\`bash
+genlayer estimate-fees --json
+genlayer deploy --contract file.py --fees "$(genlayer estimate-fees --json 2>/dev/null)"
+genlayer write <addr> <method> --fees "$(genlayer estimate-fees <addr> <method> --json 2>/dev/null)"
+\`\`\`
 
 ### Studio Rate Limits
 
-\`studionet\` is gasless but rate-limited per IP: **60 req/min, 1000 req/hr, 10000 req/day**. Batch deploy/write scripts can trip HTTP 429 / \`-32429\`; wait for the window to reset, throttle submissions, or use \`localnet\` for heavy batches.
+\`studionet\` is rate-limited per IP: **60 req/min, 1000 req/hr, 10000 req/day**. Batch deploy/write scripts can trip HTTP 429 / \`-32429\`; wait for the window to reset, throttle submissions, or use \`localnet\` for heavy batches.
 
 \`-32028\` indicates the pending-queue cap: up to 32 in-flight transactions per sender, plus a separate per-contract cap. Wait for receipts between batches.
 

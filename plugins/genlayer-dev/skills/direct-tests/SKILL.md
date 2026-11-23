@@ -12,6 +12,8 @@ allowed-tools:
 
 Write fast, in-memory tests for intelligent contracts. No server, no Docker — tests run in ~30-50ms.
 
+Contracts pinned to the v0.3 or v0.4 runners (see the `write-contract` skill) need `genlayer-test` 0.30.0 or later (`pip install -U genlayer-test`). Older versions fail at `direct_deploy` with `ValueError: Runner hash ... not found`.
+
 ## Running Tests
 
 ```bash
@@ -96,6 +98,17 @@ direct_vm.mock_llm(
 )
 ```
 
+**JSON prompts on the v0.3 and v0.4 runners.** With `genlayer-test` 0.30.0, a contract that calls `gl.nondet.exec_prompt(..., response_format="json")` fails on the mock above with `NondetException: invalid nondeterministic response: JSON result is not text`. The test runner parses the mock string into a dict, while the current SDK expects JSON text and parses it itself. Until `genlayer-test` fixes this, encode the mock twice:
+
+```python
+def llm_json(obj) -> str:
+    return json.dumps(json.dumps(obj))
+
+direct_vm.mock_llm(r".*Extract the match result.*", llm_json({"score": "2:1", "winner": 1}))
+```
+
+Use the plain `json.dumps(...)` form when the error does not appear (text prompts, legacy v0.2 runners).
+
 ## Clearing Mocks
 
 ```python
@@ -159,7 +172,7 @@ def test_validator_rejects_different_data(direct_vm, direct_deploy, direct_alice
 
 ## SDK Loading Order
 
-`direct_deploy` sets up the SDK before the contract is imported: it installs the WASI mock, adds the `genlayer` SDK to `sys.path` (the GenVM release comes from `sdk_version=`; when omitted, the loader uses a cached release or resolves the latest one; the contract header only supplies the runner hash within that release archive), then loads the contract. So:
+`direct_deploy` sets up the SDK before the contract is imported: it installs the WASI mock, adds the `genlayer` SDK to `sys.path` (the GenVM release comes from `sdk_version=` or the `GENVM_VERSION` environment variable, for example `GENVM_VERSION=v0.6.0-rc14`; when both are omitted, the loader uses a cached release or resolves the latest one; the contract header only supplies the runner hash within that release archive), then loads the contract. So:
 
 - Do not `import genlayer` / `from genlayer import ...` at module top level of a test file; do it inside the test after `direct_deploy(...)`.
 - Load contracts with `direct_deploy`, not a bare import of the contract file.
@@ -227,5 +240,6 @@ def mock_price_api(direct_vm, pair: str, price: float):
 
 - Always `direct_vm.sender = ...` before calling write methods
 - Use `--json` flag on `genvm-lint check` before writing tests to understand the contract's interface
+- `gl.vm.spawn_sandbox` inside a nondet block is not supported by the direct runner in `genlayer-test` 0.30.0 (`ValueError: unknown result code 14`); cover those paths with integration tests
 - By default a direct call runs the leader function only — validator logic is not exercised. To replay it explicitly, use `direct_vm.run_validator()` (see "Replaying the Validator"). Use integration tests for full consensus validation.
 - Import `genlayer` inside the test (or a fixture) only after `direct_deploy(...)` has run. In a clean pytest process the SDK is not on `sys.path` until then; a module-level `import genlayer` in a test file fails at collection time.
