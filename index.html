@@ -705,7 +705,7 @@ Static analysis and validation for GenLayer intelligent contracts. Always lint b
 - **2**: Contract file not found
 - **3**: SDK download failed
 
-> Install: \`pip install genvm-linter\`. Contracts pinned to the v0.3 or v0.4 runner need genvm-linter 0.11.1 or later (\`pip install --pre genvm-linter\` while it is a pre-release).`
+> Install: \`pip install genvm-linter\`. Contracts pinned to the v0.3 or v0.4 runner need genvm-linter 0.11.1 or later (\`pip install -U --pre genvm-linter\` while it is a pre-release).`
         },
         {
             id: 'direct-tests',
@@ -723,7 +723,7 @@ pytest tests/direct/ -v
 pytest tests/direct/test_specific.py::test_one -v
 \`\`\`
 
-Contracts pinned to the v0.3 or v0.4 runner need \`genlayer-test\` 0.30.0 or later.
+Contracts pinned to the v0.3 or v0.4 runner need \`genlayer-test\` 0.30.0 or later. Legacy v0.2 contracts need \`genlayer-test\` 0.29.x for direct tests.
 
 ### Basic Pattern
 
@@ -796,8 +796,10 @@ def test_full_flow():
 \`studio.genlayer.com\` charges fees since Studio v0.123: a deploy or write sent without a fee distribution reverts with \`FeesDistributionMissing\`. \`genlayer-test\` 0.30.0 or later passes \`fees=\` through to \`genlayer-py\`; it does not add fees on its own.
 
 \`\`\`python
+FEE_KEYS = ("distribution", "messageAllocations", "feeValue")
+
 def _fees(estimate):
-    return {"distribution": estimate["distribution"], "feeValue": estimate["feeValue"]}
+    return {key: estimate[key] for key in FEE_KEYS if key in estimate}
 
 def test_full_flow(gl_client, default_account):
     factory = get_contract_factory("MyContract")
@@ -891,9 +893,12 @@ Networks: \`localnet\`, \`studionet\`, \`studio-dev\`, \`testnet-asimov\`, \`tes
 \`studionet\` is no longer gasless. Since Studio v0.123 every \`deploy\` and \`write\` must carry fees or it reverts with \`FeesDistributionMissing\`. The CLI does not add them on its own. Accounts still need no funding: a 0 GEN balance works when the transaction carries the estimated fees.
 
 \`\`\`bash
-genlayer estimate-fees --json
-genlayer deploy --contract file.py --fees "$(genlayer estimate-fees --json 2>/dev/null)"
-genlayer write <addr> <method> --fees "$(genlayer estimate-fees <addr> <method> --json 2>/dev/null)"
+FEES="$(genlayer estimate-fees --json 2>/dev/null)"
+echo "$FEES"    # must be one JSON object
+genlayer deploy --contract file.py --fees "$FEES"
+
+FEES="$(genlayer estimate-fees <addr> <method> --args "hello" --json 2>/dev/null)"
+genlayer write <addr> <method> --args "hello" --fees "$FEES"
 \`\`\`
 
 ### Studio Rate Limits

@@ -93,27 +93,30 @@ Studio v0.123 and later run the Consensus v0.6 fee model. The CLI does not add f
 
 ```bash
 # Quote the network's current fee preset (read-only, sends no transaction)
-genlayer estimate-fees --json
+FEES="$(genlayer estimate-fees --json 2>/dev/null)"
+echo "$FEES"    # must be one JSON object
 
 # Deploy with the quoted fees
-genlayer deploy --contract contracts/my_contract.py --args "arg1" \
-  --fees "$(genlayer estimate-fees --json 2>/dev/null)"
+genlayer deploy --contract contracts/my_contract.py --args "arg1" --fees "$FEES"
 
-# Quote one write by simulating it (Studio and localnet only), then send it with that quote
+# Quote one write by simulating it, then send it with that quote
 FEES="$(genlayer estimate-fees 0x123...abc set_data --args "hello" --json 2>/dev/null)"
+echo "$FEES"
 genlayer write 0x123...abc set_data --args "hello" --fees "$FEES"
 ```
+
+Check the quote before using it. `estimate-fees` needs an active account (`genlayer account create` first) and otherwise prints its "create account?" prompt on stdout, where `$(...)` swallows it. It also prints errors on stdout, so `2>/dev/null` only hides the spinner and warnings. A value that is not JSON makes `deploy` and `write` stop with `--fees must be valid JSON.`; an empty value counts as no fees at all, and the transaction then reverts with `FeesDistributionMissing`.
 
 - `estimate-fees --json` prints `{"distribution": {...}, "feeValue": "<wei>", "policy": {...}}`. `--fees` reads `distribution`, `messageAllocations`, and `feeValue` from that object and ignores the rest.
 - `policy.enabled` tells whether the network charges fees. Decide from it, not from the network name: a Studio deployment can be configured gasless.
 - The deposit covers the worst case and the unused part is refunded. On `studionet` (2026-11-23) the generic preset quoted about 0.1 GEN and a simulated simple storage write about 0.0004 GEN.
-- For contracts that emit messages to other contracts, or to commit fee settings to the repo, generate a profile with `gltest --fee-profile` and pass it with `--fee-profile fee-profile.json` (optionally `--fee-preset low|standard|high`, `--appeal-rounds <n>`). See the migration guide.
+- For contracts that emit messages to other contracts, or to commit fee settings to the repo, generate a profile with `gltest --fee-profile` and pass it with `--fee-profile fee-profile.json` (optionally `--fee-preset low|standard|high`, `--appeal-rounds <n>`). See [Fee profiling and estimation](https://docs.genlayer.com/developers/decentralized-applications/fee-profiling-and-estimation).
 
 Verified on `studionet` on 2026-11-23 from a fresh account with a 0 GEN balance: a deploy without fees reverted with `FeesDistributionMissing`; a deploy and a write that carried the estimated distribution and `feeValue` were both accepted by consensus and executed successfully; the account balance afterwards was the refunded part of the deposit.
 
 ## Contract Deployment
 
-On Studio v0.123 and later add `--fees` (see **Fees**) to every `deploy`.
+On Studio v0.123 and later add `--fees` (see **Fees**) to every `deploy --contract`. `genlayer deploy` without `--contract` runs the scripts in `deploy/` and does not forward `--fees` or `--fee-profile` to them: each script must pass `fees` itself in `client.deployContract({..., fees})` (`genlayer-js` 2.0.0, for example from `client.estimateTransactionFees()`).
 
 ```bash
 # Deploy a specific contract

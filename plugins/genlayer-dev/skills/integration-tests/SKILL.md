@@ -12,7 +12,7 @@ allowed-tools:
 
 Run contracts against a real GenLayer environment (GLSim, Studio, or testnet) with full consensus validation.
 
-Studio v0.123 and later (`studionet`, `studio_devnet`, a current local Studio) need `genlayer-test` 0.30.0 or later, which installs `genlayer-py` 0.19 (`pip install -U genlayer-test`). The matching JavaScript and CLI versions are `genlayer-js` 2.0.0 and CLI 0.40.0. See the [Consensus v0.6 migration guide](https://docs.genlayer.com/developers/consensus-v06-migration).
+Studio v0.123 and later (`studionet`, `studio_devnet`, a current local Studio) need `genlayer-test` 0.30.0 or later with `genlayer-py` 0.19.0 or later (`pip install -U genlayer-test genlayer-py`; naming both matters, because pip keeps an installed `genlayer-py` 0.19 release candidate otherwise). The matching JavaScript and CLI versions are `genlayer-js` 2.0.0 and CLI 0.40.0. See the [Consensus v0.6 migration guide](https://docs.genlayer.com/developers/consensus-v06-migration).
 
 ## Running Tests
 
@@ -47,6 +47,8 @@ def test_full_flow():
     assert result == "hello"
 ```
 
+This fee-less form only works on networks that charge no fees (GLSim, a Studio configured gasless). On `studionet` the deploy reverts before the assertions run: use the fee-bearing form below.
+
 ### Fees on Studio v0.123 and later
 
 `studionet` and `studio_devnet` (studio-dev.genlayer.com) charge fees: a deploy or write sent without a fee distribution reverts with `FeesDistributionMissing`. `genlayer-test` does not add fees on its own; it passes `fees=` through to `genlayer-py`. Quote them from the network and pass them along:
@@ -56,15 +58,19 @@ from gltest import get_contract_factory
 from gltest.assertions import tx_execution_succeeded
 
 
+FEE_KEYS = ("distribution", "messageAllocations", "feeValue")
+
+
 def _fees(estimate):
-    return {"distribution": estimate["distribution"], "feeValue": estimate["feeValue"]}
+    # messageAllocations is present when the write emits messages to other contracts
+    return {key: estimate[key] for key in FEE_KEYS if key in estimate}
 
 
 def test_full_flow(gl_client, default_account):
     factory = get_contract_factory("MyContract")
     contract = factory.deploy(args=[], fees=_fees(gl_client.estimate_transaction_fees()))
 
-    # Simulates the write and sizes the deposit for it (Studio and localnet only)
+    # Simulates the write and sizes the deposit for it (genlayer-py supports this on Studio networks only)
     estimate = gl_client.estimate_transaction_fees_for_write(
         address=contract.address,
         function_name="set_data",
@@ -77,7 +83,7 @@ def test_full_flow(gl_client, default_account):
 
 - `estimate["policy"]["enabled"]` tells whether the network charges fees. Decide from it, not from the network name.
 - Accounts need no funding on `studionet`: a 0 GEN balance works as long as the transaction carries the estimated fees, and the unused part of the deposit is refunded.
-- `gltest --fee-profile artifacts/fee-profile.json` records the fees the test run consumed (Studio-based networks only) as a profile for the CLI (`--fee-profile`) and frontends. Cover every branch that emits messages to other contracts.
+- `gltest --fee-profile artifacts/fee-profile.json` records the fees the test run consumed (read from the receipts, which Studio networks expose) as a profile for the CLI (`--fee-profile`) and frontends. Cover every branch that emits messages to other contracts.
 
 `ACCEPTED` and `FINALIZED` are transaction lifecycle states, not proof that
 contract execution succeeded. A transaction can be accepted and finalized with
@@ -116,18 +122,22 @@ result = contract.view_method(args=[arg1]).call()
 ## Configuration (gltest.config.yaml)
 
 ```yaml
-contract_path: contracts/
-
 networks:
+  default: localnet
   localnet:
     # GenLayer Studio running locally
-  studionet:
+  studionet: {}
     # studio.genlayer.com: no funding needed (0 GEN balance is fine), but every deploy and write must carry fees
   testnet_bradbury:
     accounts:
       - "${ACCOUNT_PRIVATE_KEY_1}"
       - "${ACCOUNT_PRIVATE_KEY_2}"
+
+paths:
+  contracts: contracts/
 ```
+
+`genlayer-test` 0.30.0 accepts only `networks`, `paths` and `environment` at the top level, needs `networks.default`, and rejects an empty entry for any network other than `localnet` (hence `studionet: {}`).
 
 ## Test Markers
 
