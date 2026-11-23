@@ -83,7 +83,7 @@ def test_full_flow(gl_client, default_account):
 
 - `estimate["policy"]["enabled"]` tells whether the network charges fees. Decide from it, not from the network name.
 - Accounts need no funding on `studionet`: a 0 GEN balance works as long as the transaction carries the estimated fees, and the unused part of the deposit is refunded.
-- `gltest --fee-profile artifacts/fee-profile.json` records the fees the test run consumed (read from the receipts, which Studio networks expose) as a profile for the CLI (`--fee-profile`) and frontends. Cover every branch that emits messages to other contracts.
+- `gltest --fee-profile artifacts/fee-profile.json` records the fees the test run consumed (read from the receipts, which Studio networks expose) as a profile for the CLI (`--fee-profile`) and frontends. Cover every branch that emits messages to other contracts. Tests that feed a profile should wait for finalized receipts: pass `wait_until="finalized"` to `factory.deploy(...)` and `.transact(...)`. The default wait stops at `ACCEPTED`, which can come before fee accounting and refunds are settled.
 
 `ACCEPTED` and `FINALIZED` are transaction lifecycle states, not proof that
 contract execution succeeded. A transaction can be accepted and finalized with

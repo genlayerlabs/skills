@@ -127,8 +127,11 @@ transaction and cost no fees.
   `allow_storage`): the contract uses the legacy `from genlayer import *`
   import on a v0.3 or v0.4 runner.
 
-On Studio, reproduce the error without a transaction by dry-running the same
-code with `gen_getContractSchemaForCode`. On Testnet Bradbury a
+On Studio, reproduce an import or schema error without a transaction by
+dry-running the same code with `gen_getContractSchemaForCode`. That call does
+not run `__init__`: when the constructor is what fails, send the `gen_call`
+deploy simulation above with the same constructor args instead (the error's
+`data.receipt.result` holds the base64-encoded error). On Testnet Bradbury a
 `FINISHED_WITH_ERROR` receipt does not include the error; the RPC returns it
 (`genlayer trace <txId>` in CLI 0.40 calls the same method):
 
