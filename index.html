@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GenLayer Skills — AI-native skills for intelligent contract development</title>
-<meta name="description" content="Plugin marketplace for GenLayer. Skills for Claude Code and Codex — writing intelligent contracts, running validators, and shipping code.">
+<title>GenLayer Skills: AI-native skills for intelligent contract development</title>
+<meta name="description" content="Plugin marketplace for GenLayer. Skills for Claude Code and Codex: writing intelligent contracts, running validators, and shipping code.">
 <style>
 /* ── GenLayer Green Phosphor CRT Theme ── */
 :root {
@@ -575,7 +575,7 @@ const skills = {
             badge: 'plugin',
             content: `## Write Contract
 
-The core skill for building GenLayer intelligent contracts — Python classes that run on GenVM with built-in AI capabilities.
+The core skill for building GenLayer intelligent contracts: Python classes that run on GenVM with built-in AI capabilities.
 
 ### Critical: Pin the Runner Version
 
@@ -599,15 +599,15 @@ Before returning any contract code, verify:
 
 ### What It Covers
 
-- **Architecture Fit** — Decide whether GenLayer should own the consensus/settlement step or whether the work belongs in a frontend/backend/off-chain LLM
-- **Runner Header** — Pinned \`py-genlayer\` version hashes are mandatory for GenLayer networks
-- **Equivalence Principle** — The critical decision: \`strict_eq\` for deterministic calls, independent verification for LLM/web operations
-- **Validator Consensus** — Schema-only validators are rejected as an anti-pattern; validators must rerun, derive, compare, or verify against source data
-- **Runner Dependencies** — Pin \`py-genlayer\` version hashes instead of using \`test\`, \`latest\`, or unversioned aliases
-- **Storage Rules** — \`TreeMap\` instead of dict, \`DynArray\` instead of list, \`u256\` for money
-- **LLM Resilience** — Defensive parsing, key variation handling, aggressive coercion, JSON response format
-- **Cross-Contract Calls** — Synchronous reads via \`gl.contract.get_at(addr).view()\`, async writes with \`.emit(on="decided" | "finalized")\` (default \`finalized\`), factory patterns with salted deploys (\`gl.contract.deploy(..., salted=gl.contract.Salted(n))\`)
-- **Error Classification** — \`[EXPECTED]\`, \`[EXTERNAL]\`, \`[TRANSIENT]\`, \`[LLM_ERROR]\` each with distinct validator behavior
+- **Architecture Fit**: Decide whether GenLayer should own the consensus/settlement step or whether the work belongs in a frontend/backend/off-chain LLM
+- **Runner Header**: Pinned \`py-genlayer\` version hashes are mandatory for GenLayer networks
+- **Equivalence Principle**: The critical decision is \`strict_eq\` for deterministic calls and independent verification for LLM/web operations
+- **Validator Consensus**: Schema-only validators are rejected as an anti-pattern; validators must rerun, derive, compare, or verify against source data
+- **Runner Dependencies**: Pin \`py-genlayer\` version hashes instead of using \`test\`, \`latest\`, or unversioned aliases
+- **Storage Rules**: \`TreeMap\` instead of dict, \`DynArray\` instead of list, \`u256\` for money
+- **LLM Resilience**: Defensive parsing, key variation handling, aggressive coercion, JSON response format
+- **Cross-Contract Calls**: Synchronous reads via \`gl.contract.get_at(addr).view()\`, async writes with \`.emit(on="decided" | "finalized")\` (default \`finalized\`), factory patterns with salted deploys (\`gl.contract.deploy(..., salted=gl.contract.Salted(n))\`)
+- **Error Classification**: \`[EXPECTED]\`, \`[EXTERNAL]\`, \`[TRANSIENT]\`, \`[LLM_ERROR]\` each with distinct validator behavior
 
 ### Contract Skeleton
 
@@ -651,13 +651,13 @@ For embeddings, list the embeddings library before \`py-genlayer\` in a \`Seq\` 
 
 ### Anti-Patterns
 
-- \`py-genlayer:test\`, \`py-genlayer:latest\`, or unversioned \`py-genlayer\` — All GenLayer networks reject runner aliases; pin the documented runner version hash
-- \`strict_eq()\` for LLM calls — LLM outputs are non-deterministic
-- Schema-only validators for LLM/web output — format checks do not verify the leader's answer
-- \`prompt_non_comparative\` for classification/scoring/extraction decisions — use comparative validation because decisions need substantive agreement
-- \`dict\` / \`list\` for storage — use \`TreeMap\` / \`DynArray\`
-- \`float\` for money — use atto-scale \`u256\`
-- Inserting fields in middle of dataclass — always append at END
+- \`py-genlayer:test\`, \`py-genlayer:latest\`, or unversioned \`py-genlayer\`: All GenLayer networks reject runner aliases; pin the documented runner version hash
+- \`strict_eq()\` for LLM calls: LLM outputs are non-deterministic
+- Schema-only validators for LLM/web output: format checks do not verify the leader's answer
+- \`prompt_non_comparative\` for classification/scoring/extraction decisions: use comparative validation because decisions need substantive agreement
+- \`dict\` / \`list\` for storage: use \`TreeMap\` / \`DynArray\`
+- \`float\` for money: use atto-scale \`u256\`
+- Inserting fields in middle of dataclass: always append at END
 - A pin copied from another network: check it against the target network with a dry-run before deploying
 
 > Part of the **genlayer-dev** plugin. Install with \`/plugin install genlayer-dev@genlayerlabs\``
@@ -700,21 +700,21 @@ Static analysis and validation for GenLayer intelligent contracts. Always lint b
 
 ### Exit Codes
 
-- **0** — All checks passed
-- **1** — Lint or validation errors
-- **2** — Contract file not found
-- **3** — SDK download failed
+- **0**: All checks passed
+- **1**: Lint or validation errors
+- **2**: Contract file not found
+- **3**: SDK download failed
 
 > Install: \`pip install genvm-linter\`. Contracts pinned to the v0.3 or v0.4 runner need genvm-linter 0.11.1 or later (\`pip install --pre genvm-linter\` while it is a pre-release).`
         },
         {
             id: 'direct-tests',
             name: 'Direct Tests',
-            desc: 'Fast in-memory tests — ~30ms per test, no server required',
+            desc: 'Fast in-memory tests: ~30ms per test, no server required',
             badge: 'plugin',
             content: `## Direct Tests
 
-Fast, in-memory tests for intelligent contracts. No server, no Docker, no consensus — just pure logic testing at ~30ms per test.
+Fast, in-memory tests for intelligent contracts. No server, no Docker, no consensus: just pure logic testing at ~30ms per test.
 
 ### Running Tests
 
@@ -747,13 +747,13 @@ def test_set_and_get(direct_vm, direct_deploy, direct_alice):
 
 ### Cheatcodes
 
-- \`direct_vm.sender = address\` — Set transaction sender
-- \`direct_vm.expect_revert("msg")\` — Expect a revert
-- \`direct_vm.prank(address)\` — Temporary sender change
-- \`direct_vm.snapshot()\` / \`revert(id)\` — State snapshots
-- \`direct_vm.warp("2024-06-01T12:00:00Z")\` — Time travel
-- \`direct_vm.mock_web(regex, response)\` — Mock HTTP calls
-- \`direct_vm.mock_llm(regex, response)\` — Mock LLM calls
+- \`direct_vm.sender = address\`: Set transaction sender
+- \`direct_vm.expect_revert("msg")\`: Expect a revert
+- \`direct_vm.prank(address)\`: Temporary sender change
+- \`direct_vm.snapshot()\` / \`revert(id)\`: State snapshots
+- \`direct_vm.warp("2024-06-01T12:00:00Z")\`: Time travel
+- \`direct_vm.mock_web(regex, response)\`: Mock HTTP calls
+- \`direct_vm.mock_llm(regex, response)\`: Mock LLM calls
 
 ### Important
 
@@ -766,7 +766,7 @@ By default a direct call runs the **leader function only**. To replay the valida
             badge: 'plugin',
             content: `## Integration Tests
 
-Run contracts against real GenLayer environments with full consensus validation — leader execution, validator verification, and finalization.
+Run contracts against real GenLayer environments with full consensus validation: leader execution, validator verification, and finalization.
 
 ### Running Tests
 
@@ -822,7 +822,7 @@ Always assert \`tx_execution_succeeded(receipt)\` before reading state, checking
 
 | Aspect | Direct | Integration |
 |--------|--------|-------------|
-| Speed | ~30ms | seconds–minutes |
+| Speed | ~30ms | seconds to minutes |
 | Server | No | Yes |
 | Consensus | Leader only | Full + validators |
 | Write methods | Return values | Return receipts |
@@ -830,10 +830,10 @@ Always assert \`tx_execution_succeeded(receipt)\` before reading state, checking
 
 ### Environments
 
-- **GLSim** — Lightweight, Python natively
-- **Studio local** — Full GenVM, Docker required
-- **studio.genlayer.com** — Hosted, no setup, no funding needed, fees required on every deploy and write, rate-limited
-- **Testnet Bradbury** — Real network, funded accounts
+- **GLSim**: Lightweight, Python natively
+- **Studio local**: Full GenVM, Docker required
+- **studio.genlayer.com**: Hosted, no setup, no funding needed, fees required on every deploy and write, rate-limited
+- **Testnet Bradbury**: Real network, funded accounts
 
 ### Studio Rate Limits
 
@@ -931,7 +931,7 @@ genlayer account send 0x123...abc 10gen
         {
             id: 'genlayernode',
             name: 'Validator Node Setup',
-            desc: 'Interactive wizard and triage runbook — from bare Linux to running validator in 20–45 minutes',
+            desc: 'Interactive wizard and triage runbook: from bare Linux to running validator in 20 to 45 minutes',
             badge: 'plugin',
             content: `## Validator Node Setup
 
@@ -941,11 +941,11 @@ A comprehensive interactive wizard that takes you from a bare Linux server to a 
 
 \`\`\`
 Step 0   Determine server location (local / SSH / cloud)
-Step 1   Check prerequisites (arch, Docker, Python, cosign) — install missing
+Step 1   Check prerequisites (arch, Docker, Python, cosign), install missing
 Step 2   Full node, new validator or existing? (staking wizard)
 Step 3   Download & setup (tarball, verify, GenVM, symlinks)
-Step 4   Environment config (.env — RPC key, LLM key)
-Step 5   Node config (config.yaml — network, manifest, addresses, ports)
+Step 4   Environment config (.env: RPC key, LLM key)
+Step 5   Node config (config.yaml: network, manifest, addresses, ports)
 Step 6   Operator key (upload / copy / generate)
 Step 7   Start WebDriver (Docker Compose)
 Step 8   Doctor check (verify configuration)
@@ -958,26 +958,26 @@ Step 11  Monitoring setup (optional telemetry)
 
 | Resource | Minimum | Recommended |
 |----------|---------|-------------|
-| Architecture | AMD64 only | — |
+| Architecture | AMD64 only | n/a |
 | RAM | 16 GB | 32 GB |
 | CPU | 8 cores | 16+ cores |
 | Storage | 128 GB SSD | 256+ GB |
-| GEN tokens | Deployed self-stake minimum (validator) | — |
-| GEN for gas | ~10 GEN | — |
+| GEN tokens | Deployed self-stake minimum (validator) | n/a |
+| GEN for gas | ~10 GEN | n/a |
 
 ### Three Key Addresses
 
 | Address | Purpose |
 |---------|---------|
-| **Owner** | Cold wallet — controls validator, stays local |
-| **Operator** | Hot wallet — signs blocks, goes on server |
+| **Owner** | Cold wallet: controls validator, stays local |
+| **Operator** | Hot wallet: signs blocks, goes on server |
 | **Validator** | Smart contract on-chain, used in config |
 
 ### Deployment Methods
 
-- **Systemd** (recommended) — Auto-restart, journal logs
-- **Docker Compose** — Container isolation
-- **Manual** — Screen/tmux for testing
+- **Systemd** (recommended): Auto-restart, journal logs
+- **Docker Compose**: Container isolation
+- **Manual**: Screen/tmux for testing
 
 ### Operational Triage
 
@@ -992,7 +992,7 @@ Heurist, Comput3, io.net, LibertAI, Anthropic, Google, xAI, Atoma
         {
             id: 'validator-manage',
             name: 'Validator Management',
-            desc: 'Manage validators across testnets — join, fund, set identity, monitor',
+            desc: 'Manage validators across testnets: join, fund, set identity, monitor',
             badge: 'dev',
             content: `## Validator Management
 
@@ -1000,9 +1000,9 @@ Manage GenLayer validators across multiple testnets using the \`genlayer\` CLI. 
 
 ### Key Concepts
 
-- **Owner** — Controls validator on-chain. Can own many validators.
-- **Operator** — Runs node software. Each validator has exactly one.
-- **Network isolation** — Each testnet has its own staking contract.
+- **Owner**: Controls validator on-chain. Can own many validators.
+- **Operator**: Runs node software. Each validator has exactly one.
+- **Network isolation**: Each testnet has its own staking contract.
 
 ### Common Operations
 
