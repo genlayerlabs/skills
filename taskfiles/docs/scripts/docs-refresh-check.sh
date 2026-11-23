@@ -107,6 +107,15 @@ parse_arguments() {
     done
 }
 
+# Replace the generated header timestamp (line 4, "> Last updated: YYYY-MM-DD HH:MM")
+# with a placeholder; it is an error if line 4 is not in that format.
+normalize_timestamp() {
+    local ts_re='^> Last updated: [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}$'
+    # Fail unless the header carries a real timestamp (a literal placeholder is rejected).
+    sed -n 4p "$1" | grep -q "$ts_re" || return 1
+    sed "4s/$ts_re/> Last updated: <timestamp>/" "$1"
+}
+
 check_skills_reference() {
     local temp_dir="$1"
     local temp_reference="$temp_dir/docs/skills/REFERENCE.md"
@@ -117,7 +126,7 @@ check_skills_reference() {
     mkdir -p "$temp_dir/docs/skills"
 
     if [[ -x "$SKILLS_REFERENCE_GENERATOR" ]]; then
-        if ! "$SKILLS_REFERENCE_GENERATOR" --output "$temp_reference" >/dev/null 2>&1; then
+        if ! "$SKILLS_REFERENCE_GENERATOR" --canonical --output "$temp_reference" >/dev/null 2>&1; then
             log_error "Skills reference generator failed"
             return 1
         fi
@@ -129,7 +138,15 @@ check_skills_reference() {
     # Compare with existing
     if [[ -f "$REFERENCE_FILE" ]]; then
         if [[ -f "$temp_reference" ]]; then
-            if ! diff -q "$REFERENCE_FILE" "$temp_reference" >/dev/null 2>&1; then
+            # Normalize only the generated header timestamp; it changes every minute.
+            local norm_existing="$temp_dir/existing.normalized"
+            local norm_fresh="$temp_dir/fresh.normalized"
+            if ! normalize_timestamp "$REFERENCE_FILE" > "$norm_existing" \
+                || ! normalize_timestamp "$temp_reference" > "$norm_fresh"; then
+                log_error "Failed to normalize docs/skills/REFERENCE.md for comparison"
+                return 1
+            fi
+            if ! diff -q "$norm_existing" "$norm_fresh" >/dev/null 2>&1; then
                 log_error "docs/skills/REFERENCE.md is out of sync"
                 echo "Run 'task docs:refresh' to update"
                 return 1
