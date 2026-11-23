@@ -5,8 +5,9 @@ user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob]
 hooks:
   Stop:
-    - type: command
-      command: "task claude:validate-skill -- --skill create-skill"
+    - hooks:
+        - type: command
+          command: "task claude:validate-skill -- --skill create-skill"
   PostToolUse:
     - matcher: "Edit|Write"
       hooks:
