@@ -21,55 +21,100 @@ unversioned runner aliases. Every generated contract MUST start with a pinned
 runner dependency header.
 
 ```python
-# v0.3.0
-# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
+# v0.4.0
+# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 ```
 
 The pin must name a runner **the target network's GenVM actually ships**.
-Pins are per network, not universal, and the runner also fixes which API the
-contract must use. No pin works everywhere today (verified 2026-11-05):
+Pins are per network, not universal. No single pin works on both Studio and
+Testnet Bradbury (verified 2026-11-23 with the dry-runs below):
 
-| Network | GenVM | Runner pin | API |
-|---|---|---|---|
-| Testnet Bradbury | v0.6.0-rc10 | `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` | v0.6 |
-| Studio Dev (CLI `studio-dev`, `studio-dev.genlayer.com`; browser alias `studio-next.genlayer.com`) | v0.6 | `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` | v0.6 |
-| Studio (`studio.genlayer.com`, studionet) | v0.2.16 | `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6` | pre-v0.6 |
+| Network | GenVM executor | Header for new contracts |
+|---|---|---|
+| Studio v0.123 and later: `studio.genlayer.com` (CLI `studionet`), `studio-dev.genlayer.com` (CLI `studio-dev`), local Studio (`localnet`) | v0.4 | `# v0.4.0` and `py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0` |
+| Testnet Bradbury | v0.3 | `# v0.3.0` and `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` |
 
-Default to the v0.6 pin and API. Use the pre-v0.6 pin and API (see the
-migration table in **GenVM v0.6 API**) only when the user targets studionet.
-A pin the network does not ship fails every deploy: the tx reaches consensus,
-then ends `FINISHED_WITH_ERROR` with `invalid_contract runner malformed`.
+Ask which network the contract targets. When the user does not say, use the
+Studio (v0.4) header. Both lines share the same API (see **Current API**); only
+the header and salted deploys differ, so moving a contract between Studio and
+Bradbury means swapping the header and re-checking it with a dry-run.
+
+Studio also keeps a legacy v0.2 executor: contracts pinned to an old runner
+(`py-genlayer:1jb45aa8…` and older) and written with the legacy API still
+deploy and run there. Bradbury rejects those pins. Never write new contracts
+against them; migrate old ones with the table in **Current API**.
+
+A pin the network does not ship fails every deploy with
+`invalid_contract runner malformed`.
 
 ### Finding the right pin for a network
 
 Neither the networks nor the tools expose a "current runner" lookup, so check
-the pin before deploying:
+the header and API with a dry-run before deploying. Dry-runs send no
+transaction and cost no fees.
 
-- **Studio and Studio Dev: dry-run the contract.** `gen_getContractSchemaForCode`
-  runs the contract in that network's GenVM without sending a transaction. If
-  it returns a schema, the pin and API are right; if it returns `execution
-  failed`, they are not:
+- **Studio (studionet, studio-dev, localnet): `gen_getContractSchemaForCode`.**
+  It loads the contract in that network's GenVM. A `result` with the schema
+  means the pin and API are right. An `execution failed` error means they are
+  not, and the error carries `stderr` and `genvm_log`:
 
   ```bash
-  curl -s https://studio-dev.genlayer.com/api -H 'content-type: application/json' \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"gen_getContractSchemaForCode\",\"params\":[\"$(xxd -p contract.py | tr -d '\n')\"]}"
+  curl -s https://studio.genlayer.com/api -H 'content-type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"gen_getContractSchemaForCode\",\"params\":[\"0x$(xxd -p contract.py | tr -d '\n')\"]}"
   ```
 
-- **Testnet: ask the node.** Testnet RPCs have no dry-run method. A runner
-  hash is the directory plus the file name of the zip under the node's GenVM:
-  `opt/genvm/current/runners/py-genlayer/ba/bwp9t…zip` → `py-genlayer:babwp9t…`.
-  The same directory lists `py-genlayer-multi`, `py-lib-genlayer-embeddings`,
-  and the other runners. Without node access, use the table above and confirm
-  with a test deploy.
+- **Testnet Bradbury: `gen_call` with `type: "deploy"`.** The testnet RPC has
+  no schema method, but it simulates a deploy. `"status":{"code":0}` means the
+  pin and API are right; an `execution failed` error means they are not. The
+  `data` field is the RLP of `[code, constructor calldata, 0x00]`, which
+  `genlayer-py` can build:
+
+  ```python
+  # dryrun.py: python dryrun.py contract.py [constructor args...] | curl -s https://rpc-bradbury.genlayer.com -H 'content-type: application/json' -d @-
+  import json, sys
+  from genlayer_py.abi import calldata
+  from genlayer_py.abi.transactions import serialize
+  from genlayer_py.contracts.utils import make_calldata_object
+
+  code = open(sys.argv[1], "rb").read()
+  ctor = calldata.encode(make_calldata_object(method=None, args=sys.argv[2:], kwargs=None))
+  print(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "gen_call", "params": [{
+      "type": "deploy",
+      "from": "0x" + "00" * 19 + "01",
+      "to": "0x" + "00" * 20,
+      "data": serialize([code, ctor, b"\x00"]),
+  }]}))
+  ```
+
+- **Where the hashes come from.** Every `genlayerlabs/genvm-manager` release
+  ships `executor/<version>/data/all.json`, which lists each runner's hashes
+  and the executor line (`forks`) they belong to. The macOS tarball is the
+  smallest asset that contains it:
+
+  ```bash
+  gh release download v0.6.0-rc14 -R genlayerlabs/genvm-manager -p genvm-arm64-macos.tar.xz
+  tar -xJf genvm-arm64-macos.tar.xz --wildcards 'executor/*/data/all.json'
+  jq '."py-genlayer"' executor/v0.4.0-rc1/data/all.json
+  ```
+
+  Studio pins its GenVM release in `third_party/genvm/version` of the
+  `genlayer-studio` repo (v0.123.0 pins `v0.6.0-rc14`).
 - **Never copy a pin from older docs, tutorials, or generated code** without
-  checking it against the target network. Pins go stale with every GenVM release.
-  The public docs' contract examples (docs.genlayer.com, as of 2026-11-05) use
-  the studionet pin and pre-v0.6 API, so they fail on Bradbury and Studio Dev.
+  checking it against the target network. Pins go stale with every GenVM
+  release.
 
 ### Diagnosing a failed deploy
 
-A `FINISHED_WITH_ERROR` receipt does not include the error. The GenLayer RPC
-returns it:
+- `FeesDistributionMissing`: the transaction was sent without fees. This is
+  not a contract problem; see the `genlayer-cli` skill.
+- `runner malformed`: stale or unknown runner pin for that network.
+- `NameError: name 'gl' is not defined`: the contract uses the legacy
+  `from genlayer import *` import on a v0.3 or v0.4 runner.
+
+On Studio, reproduce the error without a transaction by dry-running the same
+code with `gen_getContractSchemaForCode`. On Testnet Bradbury a
+`FINISHED_WITH_ERROR` receipt does not include the error; the RPC returns it
+(`genlayer trace <txId>` in CLI 0.40 calls the same method):
 
 ```bash
 curl -s https://rpc-bradbury.genlayer.com -H 'content-type: application/json' \
@@ -77,9 +122,7 @@ curl -s https://rpc-bradbury.genlayer.com -H 'content-type: application/json' \
 ```
 
 Read `return_data` (calldata-encoded error text), `stderr`, and `genvm_log`.
-`runner malformed` means a stale or unknown runner pin. `NameError: name 'gl'
-is not defined` means the contract uses the pre-v0.6 `from genlayer import *`
-import.
+Studio does not implement `gen_dbg_traceTransaction`.
 
 `test` and `latest` are local-development aliases for GenLayer runtime
 developers. They may work only in a specially configured local Studio
@@ -92,9 +135,9 @@ Before returning any contract code, verify:
 - There is no `py-genlayer:test`.
 - There is no `py-genlayer:latest`.
 - There is no unversioned `py-genlayer`.
-- The contract uses the v0.6 API (`import genlayer as gl`, `gl.contract.Contract`). See **GenVM v0.6 API** below.
+- The API matches the runner the header pins. For the v0.3 and v0.4 runners that is `import genlayer as gl` and `gl.contract.Contract` (see **Current API**).
 
-Always lint with `genvm-lint check` after writing or modifying a contract.
+Always lint with `genvm-lint check` after writing or modifying a contract. The `genvm-lint` skill names the linter version these pins need and one known false positive (E014 on `@gl.storage.allow`).
 
 ## When to Use GenLayer
 
@@ -125,8 +168,8 @@ If the boundary is unclear, create a one-page architecture note before coding: u
 ## Contract Skeleton
 
 ```python
-# v0.3.0
-# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
+# v0.4.0
+# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 
 from dataclasses import dataclass
 
@@ -162,26 +205,31 @@ class MyContract(gl.contract.Contract):
         self.item_order.append(item_id)
 ```
 
-## GenVM v0.6 API
+## Current API (v0.3 and v0.4 runners)
 
-GenVM v0.6 changed the import style and moved most names into submodules. Code
-written for the old runner fails on v0.6 networks, and code written for v0.6
-fails on the old runner. Do not mix the two. The examples in this skill use
-the v0.6 API; for studionet, translate them with the left column.
+The v0.3 and v0.4 runners share one API: an explicit `import genlayer as gl`
+plus submodule imports. Every example in this skill uses it and is valid on
+both lines, except salted deploys (see **Factory pattern**). The legacy v0.2
+runners (`py-genlayer:1jb45aa8…` and older) use a different API: code written
+for one family fails to load on the other, so do not mix them. To migrate a
+legacy contract, swap the header and translate with this table:
 
-| Pre-v0.6 (`1jb45…` runner) | v0.6 (`babwp9…` runner) |
+| Legacy v0.2 runner | v0.3 and v0.4 runners |
 |---|---|
 | `from genlayer import *` | `import genlayer as gl` + `from genlayer.types import *` |
 | `class C(gl.Contract)` | `class C(gl.contract.Contract)` |
 | `TreeMap`, `DynArray` from the star import | `from genlayer.storage import DynArray, TreeMap` |
 | `@allow_storage` | `@gl.storage.allow` (+ `from dataclasses import dataclass`) |
-| `gl.message.sender_account` | `gl.message.sender_address` |
-| `gl.UserError` | `gl.vm.UserError` (payload in `.data`) |
+| `gl.vm.UserError`, text in `.message` | `gl.vm.UserError`, payload in `.data` |
 | `gl.vm.run_nondet_unsafe(leader, validator)` | `gl.vm.run_nondet(leader, validator)` |
-| `gl.exec_prompt(...)` / `gl.get_webpage(...)` | `gl.nondet.exec_prompt(...)` / `gl.nondet.web.render(url, mode="text")` |
+| `gl.vm.run_nondet(leader, validator, compare_user_errors=...)` | `gl.vm.run_nondet_default(leader, validator, compare_user_errors=...)` |
 | `gl.get_contract_at(addr)` | `gl.contract.get_at(addr)` |
 | `gl.deploy_contract(...)` | `gl.contract.deploy(...)` |
 | `emit(on="accepted")` | `emit(on="decided")` or `emit(on="finalized")` (default) |
+
+Unchanged between the two: `gl.message.sender_address`, `@gl.public.view`,
+`@gl.public.write`, `gl.nondet.exec_prompt`, `gl.nondet.web.*`, and
+`gl.eq_principle.*`.
 
 ## Runner Dependencies
 
@@ -189,25 +237,45 @@ The contract header declares the GenVM Python runner. Always pin a specific
 runner version hash that the target network ships. All GenLayer networks reject
 `test`, `latest`, and unversioned runner aliases in generated contracts.
 
-The hashes below are the GenVM v0.6.0-rc10 runners (Bradbury, node
-v0.6.0-rc.3; the single-file pin is also verified on Studio Dev). For any other
-network, check them with **Finding the right pin for a network** above.
+| Runner | v0.4 (Studio v0.123 and later) | v0.3 (Testnet Bradbury) |
+|---|---|---|
+| `py-genlayer` | `kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0` | `babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` |
+| `py-genlayer-multi` | `ys9w7shpvsdswe2fhrxh7agke954catkqb28cngq5924zw9bzx80` | `2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130` |
+| `py-lib-genlayer-embeddings` | `hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg` | `hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg` |
+
+These are the hashes in `genvm-manager` v0.6.0-rc14 (`executor/v0.4.0-rc1` and
+`executor/v0.3.0`), each dry-run on its network on 2026-11-23. The examples
+below use the v0.4 column; for Bradbury swap in the v0.3 column and `# v0.3.0`.
+For any other network or a newer release, check with **Finding the right pin
+for a network** above.
 
 ### Single-file Python contracts
 
 ```python
-# v0.3.0
-# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
+# v0.4.0
+# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 ```
 
 ### Multi-file Python contract packages
 
 Use `py-genlayer-multi` when the contract is packaged across multiple files.
-It maps the package's `contract/` directory to `/contract/`.
+The pin goes in a `runner.json` next to the package's `__init__.py`, not in a
+header comment:
 
-```python
-# { "Depends": "py-genlayer-multi:2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130" }
 ```
+contracts/my_contract/
+├── __init__.py    # the contract class
+├── helpers.py     # imported as `from .helpers import ...`
+└── runner.json
+```
+
+```json
+{ "Depends": "py-genlayer-multi:ys9w7shpvsdswe2fhrxh7agke954catkqb28cngq5924zw9bzx80" }
+```
+
+The deployed code is a zip with `runner.json` at the root and the Python files
+under `contract/` (mapped to `/contract/` at runtime). `genlayer-test` builds
+that zip when it finds `runner.json` beside `__init__.py`.
 
 ### Contracts using embeddings or semantic search
 
@@ -215,10 +283,11 @@ Add `py-lib-genlayer-embeddings` before the main Python runner with a `Seq`
 block.
 
 ```python
+# v0.4.0
 # {
 #   "Seq": [
 #     { "Depends": "py-lib-genlayer-embeddings:hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg" },
-#     { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
+#     { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 #   ]
 # }
 ```
@@ -325,7 +394,7 @@ def resolve(self) -> str:
 
     return gl.eq_principle.prompt_comparative(
         analyze,
-        principle="`outcome` field must be exactly the same. All other fields must be similar.",
+        "`outcome` field must be exactly the same. All other fields must be similar.",
     )
 ```
 
@@ -563,10 +632,10 @@ value = other.view().get_data()
 
 ```python
 other = gl.contract.get_at(Address(other_address))
-other.emit(on="finalized").process_data(payload)  # Non-blocking
+other.emit(on="decided").process_data(payload)  # Non-blocking
 ```
 
-`emit()` queues the call — it executes after current transaction. Use `on="decided"` (fast) or `on="finalized"` (safe, the default).
+`emit()` queues the call — it executes after current transaction. `on` is `"decided"` (fast) or `"finalized"` (safe, the default); `on="accepted"` is not a valid value. `gl.get_contract_at` no longer exists: use `gl.contract.get_at`. Prefer `finalized`, especially when the call carries `value=`.
 
 **Warning:** If the current transaction is appealed after `emit()`, the emitted call still happens but the balance may already be decremented.
 
@@ -581,14 +650,19 @@ def __init__(self, num_workers: int):
         addr = gl.contract.deploy(
             code=worker_code.encode("utf-8"),
             args=[i, gl.message.contract_address],
-            salt_nonce=i + 1,
-            on="finalized",
+            salted=gl.contract.Salted(i + 1),  # v0.3 runner (Bradbury): salt_nonce=i + 1
+            on="decided",
         )
         self.worker_addresses.append(addr)
 ```
 
-`gl.contract.deploy` returns the address only when `salt_nonce` is non-zero; with
-`salt_nonce=0` the address is non-deterministic and it returns `None`.
+Salted deploys are the one place where the v0.3 and v0.4 runners differ:
+
+- **v0.4 runner (Studio v0.123 and later):** `gl.contract.deploy(code=, args=, kwargs=, salted=int | gl.contract.Salted | None, value=, on="decided" | "finalized")`. The `salt_nonce=` keyword does not exist (`TypeError: deploy() got an unexpected keyword argument 'salt_nonce'`). Only `salted=gl.contract.Salted(n)` makes `deploy()` return the child's address; a plain `int` salt deploys at a fixed address but returns `None`. To predict the child address, call `gl.contract.Salted(n).resolve()`: it calls `predictGhostAddress(n, gl.message.contract_address)` on the settlement-chain factory at `gl.message.create2["deployer"]`, so the result depends on the salt and the deploying contract address. `Salted.resolve_hardcoded()` computes the same locally from a hardcoded formula, which can go stale if governance changes the factory's derivation; prefer `resolve()`.
+- **v0.3 runner (Testnet Bradbury):** `gl.contract.deploy(code=, args=, kwargs=, salt_nonce=int, value=, on="decided" | "finalized")`. It returns the child's address when `salt_nonce` is non-zero and `None` when it is `0`. `salted=`, `gl.contract.Salted`, and `gl.message.create2` do not exist there.
+
+On both, `gl.deploy_contract` no longer exists and `on="accepted"` is not a valid value for `deploy()`.
+
 Workers are immutable after deployment. Code changes require redeploying the factory.
 
 ### Cross-chain RPC verification
@@ -653,8 +727,9 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 | Don't | Do Instead | Why |
 |-------|-----------|-----|
 | `py-genlayer:test`, `py-genlayer:latest`, or unversioned `py-genlayer` | Pin the documented runner version hash | All GenLayer networks reject runner aliases and unpinned dependencies |
-| Copy a runner pin from old docs or another network | Check the pin against the target network's runners | A runner the network's GenVM does not ship fails every deploy with `runner malformed` |
-| Pre-v0.6 API (`from genlayer import *`, `gl.Contract`) on a v0.6 network | `import genlayer as gl`, `gl.contract.Contract` | The v0.6 runner does not export the old names, so the contract fails to load |
+| Copy a runner pin from old docs or another network | Check the pin against the target network with a dry-run | A runner the network's GenVM does not ship fails every deploy with `runner malformed` |
+| Legacy API (`from genlayer import *`, `gl.Contract`) with a v0.3 or v0.4 pin | `import genlayer as gl`, `gl.contract.Contract` | The v0.3 and v0.4 runners do not export the old names, so the contract fails to load |
+| `salt_nonce=` on Studio, or `salted=` on Bradbury | Use the salted-deploy form of the runner the header pins | The keyword differs between the v0.3 and v0.4 runners and the wrong one raises `TypeError` |
 | `strict_eq()` for LLM calls | Custom validator function | LLM outputs are non-deterministic — strict_eq always fails consensus |
 | Store `list` or `dict` | `DynArray[T]` or `TreeMap[K, V]` | Python builtins aren't persistable |
 | Use native `float` for money | Atto-scale `u256` (value * 10^18) | Standard across blockchains for cross-chain interop |
