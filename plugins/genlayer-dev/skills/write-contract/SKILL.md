@@ -31,13 +31,17 @@ Testnet Bradbury (verified 2026-11-23 with the dry-runs below):
 
 | Network | GenVM executor | Header for new contracts |
 |---|---|---|
-| Studio v0.123 and later: `studio.genlayer.com` (CLI `studionet`), `studio-dev.genlayer.com` (CLI `studio-dev`), local Studio (`localnet`) | v0.4 | `# v0.4.0` and `py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0` |
+| Studio v0.123 and later: `studio.genlayer.com` (CLI `studionet`), `studio-dev.genlayer.com` (CLI `studio-dev`; `studio-next.genlayer.com` is an alias of the same chain), local Studio (`localnet`) | v0.4 | `# v0.4.0` and `py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0` |
 | Testnet Bradbury | v0.3 | `# v0.3.0` and `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` |
 
 Ask which network the contract targets. When the user does not say, use the
-Studio (v0.4) header. Both lines share the same API (see **Current API**); only
-the header and salted deploys differ, so moving a contract between Studio and
-Bradbury means swapping the header and re-checking it with a dry-run.
+Studio (v0.4) header. Both lines share the same API (see **Current API**): for
+the examples in this skill only the header and salted deploys differ. Moving a
+contract between Studio and Bradbury means swapping the header and re-checking
+it with a dry-run, because the runners differ in a few more places these
+examples do not use: v0.4 removed the `__receive__` hook (a contract that
+defines it fails to load), changed `emit_transfer` to take only `value`, and
+added `gl.message.create2`.
 
 Studio also keeps a legacy v0.2 executor: contracts pinned to an old runner
 (`py-genlayer:1jb45aa8…` and older) and written with the legacy API still
@@ -56,7 +60,9 @@ transaction and cost no fees.
 - **Studio (studionet, studio-dev, localnet): `gen_getContractSchemaForCode`.**
   It loads the contract in that network's GenVM. A `result` with the schema
   means the pin and API are right. An `execution failed` error means they are
-  not, and the error carries `stderr` and `genvm_log`:
+  not; `stderr` and `genvm_log` are embedded in the error's `message` string
+  (there is no `data` field). This call imports the contract but does not run
+  `__init__`:
 
   ```bash
   curl -s https://studio.genlayer.com/api -H 'content-type: application/json' \
@@ -64,20 +70,24 @@ transaction and cost no fees.
   ```
 
 - **Testnet Bradbury: `gen_call` with `type: "deploy"`.** The testnet RPC has
-  no schema method, but it simulates a deploy. `"status":{"code":0}` means the
-  pin and API are right; an `execution failed` error means they are not. The
+  no schema method, but it simulates a deploy, constructor included.
+  `"status":{"code":0}` means the pin and API are right; an `execution failed`
+  error means they are not. Studio accepts the same payload at
+  `https://studio.genlayer.com/api` (success is `"result":"00"`), which is the
+  way to dry-run a constructor there. The
   `data` field is the RLP of `[code, constructor calldata, 0x00]`, which
   `genlayer-py` can build:
 
   ```python
-  # dryrun.py: python dryrun.py contract.py [constructor args...] | curl -s https://rpc-bradbury.genlayer.com -H 'content-type: application/json' -d @-
+  # dryrun.py: python dryrun.py contract.py '["hello", 3]' | curl -s https://rpc-bradbury.genlayer.com -H 'content-type: application/json' -d @-
   import json, sys
   from genlayer_py.abi import calldata
   from genlayer_py.abi.transactions import serialize
   from genlayer_py.contracts.utils import make_calldata_object
 
   code = open(sys.argv[1], "rb").read()
-  ctor = calldata.encode(make_calldata_object(method=None, args=sys.argv[2:], kwargs=None))
+  args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else []  # constructor args as one JSON array, so types survive
+  ctor = calldata.encode(make_calldata_object(method=None, args=args, kwargs=None))
   print(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "gen_call", "params": [{
       "type": "deploy",
       "from": "0x" + "00" * 19 + "01",
@@ -88,8 +98,10 @@ transaction and cost no fees.
 
 - **Where the hashes come from.** Every `genlayerlabs/genvm-manager` release
   ships `executor/<version>/data/all.json`, which lists each runner's hashes
-  and the executor line (`forks`) they belong to. The macOS tarball is the
-  smallest asset that contains it:
+  and, for the v0.3 and v0.4 executors, the executor line (`forks`) they
+  belong to. `<version>` is the executor build inside that release
+  (`v0.4.0-rc1` in `v0.6.0-rc14`; list `executor/` to see the names). The
+  macOS tarball is the smallest asset that contains it:
 
   ```bash
   gh release download v0.6.0-rc14 -R genlayerlabs/genvm-manager -p genvm-arm64-macos.tar.xz
@@ -101,15 +113,19 @@ transaction and cost no fees.
   `genlayer-studio` repo (v0.123.0 pins `v0.6.0-rc14`).
 - **Never copy a pin from older docs, tutorials, or generated code** without
   checking it against the target network. Pins go stale with every GenVM
-  release.
+  release. The contract examples on docs.genlayer.com still carried the legacy
+  `py-genlayer:1jb45aa8…` pin and the legacy API on 2026-11-23: they run on
+  Studio's legacy executor, fail on Bradbury, and are not the API to write new
+  contracts against.
 
 ### Diagnosing a failed deploy
 
 - `FeesDistributionMissing`: the transaction was sent without fees. This is
   not a contract problem; see the `genlayer-cli` skill.
 - `runner malformed`: stale or unknown runner pin for that network.
-- `NameError: name 'gl' is not defined`: the contract uses the legacy
-  `from genlayer import *` import on a v0.3 or v0.4 runner.
+- `NameError: name 'gl' is not defined` (or another legacy name, such as
+  `allow_storage`): the contract uses the legacy `from genlayer import *`
+  import on a v0.3 or v0.4 runner.
 
 On Studio, reproduce the error without a transaction by dry-running the same
 code with `gen_getContractSchemaForCode`. On Testnet Bradbury a
@@ -517,8 +533,8 @@ def __init__(self):
 
 - **Append new fields at END only** if using upgradable contracts. Storage layout is order-sensitive — reordering or inserting fields breaks deployed contracts. See the upgradability docs for details.
 - **Default values for new fields** — existing storage reads zero/empty for fields added after deployment.
-- **Initialize DynArray/TreeMap by appending** in `__init__`, not by assignment. `self.items = [x]` does not work.
-- **O(1) stat indexes** — maintain a `TreeMap[str, u256]` counter alongside collections for fast counts.
+- **Fill a TreeMap key by key** in `__init__` (`self.balances[addr] = u256(0)`). Assigning a `dict` raises `TypeError: incompatible storage type`. A `DynArray` accepts both `append` and a list assignment (`self.items = [x]`).
+- **Stat indexes** — maintain a `TreeMap[str, u256]` counter alongside collections for fast counts.
 - **Complex data in DynArray** — for storing structured data (dicts, nested objects), serialize to JSON string: `DynArray[str]` with `json.dumps()`/`json.loads()`.
 
 ## LLM Resilience
@@ -641,6 +657,8 @@ other.emit(on="decided").process_data(payload)  # Non-blocking
 
 ### Factory pattern — deploy child contracts
 
+This example reads the worker source from the contract package, so it needs the multi-file layout (`py-genlayer-multi`, see **Runner Dependencies**) with `Worker.py` next to `__init__.py`. In a single-file contract `/contract/Worker.py` does not exist (`FileNotFoundError`); embed the worker source as a string there.
+
 ```python
 def __init__(self, num_workers: int):
     with open("/contract/Worker.py", "rt") as f:
@@ -656,7 +674,7 @@ def __init__(self, num_workers: int):
         self.worker_addresses.append(addr)
 ```
 
-Salted deploys are the one place where the v0.3 and v0.4 runners differ:
+Salted deploys are the one place where these examples differ between the v0.3 and v0.4 runners:
 
 - **v0.4 runner (Studio v0.123 and later):** `gl.contract.deploy(code=, args=, kwargs=, salted=int | gl.contract.Salted | None, value=, on="decided" | "finalized")`. The `salt_nonce=` keyword does not exist (`TypeError: deploy() got an unexpected keyword argument 'salt_nonce'`). Only `salted=gl.contract.Salted(n)` makes `deploy()` return the child's address; a plain `int` salt deploys at a fixed address but returns `None`. To predict the child address, call `gl.contract.Salted(n).resolve()`: it calls `predictGhostAddress(n, gl.message.contract_address)` on the settlement-chain factory at `gl.message.create2["deployer"]`, so the result depends on the salt and the deploying contract address. `Salted.resolve_hardcoded()` computes the same locally from a hardcoded formula, which can go stale if governance changes the factory's derivation; prefer `resolve()`.
 - **v0.3 runner (Testnet Bradbury):** `gl.contract.deploy(code=, args=, kwargs=, salt_nonce=int, value=, on="decided" | "finalized")`. It returns the child's address when `salt_nonce` is non-zero and `None` when it is `0`. `salted=`, `gl.contract.Salted`, and `gl.message.create2` do not exist there.
@@ -729,7 +747,7 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 | `py-genlayer:test`, `py-genlayer:latest`, or unversioned `py-genlayer` | Pin the documented runner version hash | All GenLayer networks reject runner aliases and unpinned dependencies |
 | Copy a runner pin from old docs or another network | Check the pin against the target network with a dry-run | A runner the network's GenVM does not ship fails every deploy with `runner malformed` |
 | Legacy API (`from genlayer import *`, `gl.Contract`) with a v0.3 or v0.4 pin | `import genlayer as gl`, `gl.contract.Contract` | The v0.3 and v0.4 runners do not export the old names, so the contract fails to load |
-| `salt_nonce=` on Studio, or `salted=` on Bradbury | Use the salted-deploy form of the runner the header pins | The keyword differs between the v0.3 and v0.4 runners and the wrong one raises `TypeError` |
+| `salt_nonce=` on Studio, or `salted=` on Bradbury | Use the salted-deploy form of the runner the header pins | The keyword differs between the v0.3 and v0.4 runners: the wrong one raises `TypeError`, and `gl.contract.Salted` on the v0.3 runner raises `AttributeError` |
 | `strict_eq()` for LLM calls | Custom validator function | LLM outputs are non-deterministic — strict_eq always fails consensus |
 | Store `list` or `dict` | `DynArray[T]` or `TreeMap[K, V]` | Python builtins aren't persistable |
 | Use native `float` for money | Atto-scale `u256` (value * 10^18) | Standard across blockchains for cross-chain interop |
@@ -741,7 +759,7 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 | Let validator agree on LLM errors | Return `False` (disagree) to force rotation | Agreeing on broken LLM output locks bad state |
 | Use bare `Exception` in contracts | Use `gl.vm.UserError` with error prefix | Bare exceptions become unrecoverable VMError |
 | Compare variable API fields in validators | Extract stable fields or derive status | Timestamps, counts change between calls |
-| O(n) scans over large collections | Maintain TreeMap indexes for O(1) lookups | Transactions have compute limits |
+| O(n) scans over large collections | Maintain TreeMap indexes for keyed lookups | Transactions have compute limits |
 
 ## Testing Strategy
 

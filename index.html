@@ -586,7 +586,7 @@ All GenLayer networks reject \`py-genlayer:test\`, \`py-genlayer:latest\`, and u
 # { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 \`\`\`
 
-That is the GenVM v0.4 runner that Studio v0.123 and later ship (\`studio.genlayer.com\`, \`studio-dev.genlayer.com\`, a current local Studio). Pins are per network: Testnet Bradbury ships the v0.3 runner, so there the header is \`# v0.3.0\` with \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\`. Both runners share the same API except for salted deploys (\`salted=\` on v0.4, \`salt_nonce=\` on v0.3). A pin the network does not ship fails every deploy with \`runner malformed\`. Check a pin without sending a transaction: \`gen_getContractSchemaForCode\` on Studio, \`gen_call\` with \`type: "deploy"\` on Bradbury.
+That is the GenVM v0.4 runner that Studio v0.123 and later ship (\`studio.genlayer.com\`, \`studio-dev.genlayer.com\`, a current local Studio). Pins are per network: Testnet Bradbury ships the v0.3 runner, so there the header is \`# v0.3.0\` with \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\`. The examples in the skill are valid on both runners except for salted deploys (\`salted=\` on v0.4, \`salt_nonce=\` on v0.3). A pin the network does not ship fails every deploy with \`runner malformed\`. Check a pin without sending a transaction: \`gen_getContractSchemaForCode\` on Studio, \`gen_call\` with \`type: "deploy"\` on Bradbury.
 
 \`test\` and \`latest\` are local-development aliases for GenLayer runtime developers. They may work only in a specially configured local Studio environment with a GenLayer developer environment variable, but they do not work on GenLayer networks and must not appear in generated user contracts.
 
