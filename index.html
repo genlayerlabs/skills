@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GenLayer Skills — AI-native skills for intelligent contract development</title>
-<meta name="description" content="Plugin marketplace for GenLayer. Skills for Claude Code and Codex — writing intelligent contracts, running validators, and shipping code.">
+<title>GenLayer Skills: AI-native skills for intelligent contract development</title>
+<meta name="description" content="Plugin marketplace for GenLayer. Skills for Claude Code and Codex: writing intelligent contracts, running validators, and shipping code.">
 <style>
 /* ── GenLayer Green Phosphor CRT Theme ── */
 :root {
@@ -575,15 +575,18 @@ const skills = {
             badge: 'plugin',
             content: `## Write Contract
 
-The core skill for building GenLayer intelligent contracts — Python classes that run on GenVM with built-in AI capabilities.
+The core skill for building GenLayer intelligent contracts: Python classes that run on GenVM with built-in AI capabilities.
 
 ### Critical: Pin the Runner Version
 
 All GenLayer networks reject \`py-genlayer:test\`, \`py-genlayer:latest\`, and unversioned runner aliases. Every generated contract must start with a pinned runner dependency header:
 
 \`\`\`python
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.4.0
+# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 \`\`\`
+
+That is the GenVM v0.4 runner that Studio v0.123 and later ship (\`studio.genlayer.com\`, \`studio-dev.genlayer.com\`, a current local Studio). Pins are per network: Testnet Bradbury ships the v0.3 runner, so there the header is \`# v0.3.0\` with \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\`. The examples in the skill are valid on both runners except for salted deploys (\`salted=\` on v0.4, \`salt_nonce=\` on v0.3). A pin the network does not ship fails every deploy with \`runner malformed\`. Check a pin without sending a transaction: \`gen_getContractSchemaForCode\` on Studio, \`gen_call\` with \`type: "deploy"\` on Bradbury.
 
 \`test\` and \`latest\` are local-development aliases for GenLayer runtime developers. They may work only in a specially configured local Studio environment with a GenLayer developer environment variable, but they do not work on GenLayer networks and must not appear in generated user contracts.
 
@@ -596,30 +599,32 @@ Before returning any contract code, verify:
 
 ### What It Covers
 
-- **Architecture Fit** — Decide whether GenLayer should own the consensus/settlement step or whether the work belongs in a frontend/backend/off-chain LLM
-- **Runner Header** — Pinned \`py-genlayer\` version hashes are mandatory for GenLayer networks
-- **Equivalence Principle** — The critical decision: \`strict_eq\` for deterministic calls, independent verification for LLM/web operations
-- **Validator Consensus** — Schema-only validators are rejected as an anti-pattern; validators must rerun, derive, compare, or verify against source data
-- **Runner Dependencies** — Pin \`py-genlayer\` version hashes instead of using \`test\`, \`latest\`, or unversioned aliases
-- **Storage Rules** — \`TreeMap\` instead of dict, \`DynArray\` instead of list, \`u256\` for money
-- **LLM Resilience** — Defensive parsing, key variation handling, aggressive coercion, JSON response format
-- **Cross-Contract Calls** — Synchronous reads via \`gl.contract.get_at(addr).view()\`, async writes with \`.emit(on="decided" | "finalized")\` (default \`finalized\`), factory patterns with salted deploys (\`gl.contract.deploy(..., salted=gl.contract.Salted(n))\`)
-- **Error Classification** — \`[EXPECTED]\`, \`[EXTERNAL]\`, \`[TRANSIENT]\`, \`[LLM_ERROR]\` each with distinct validator behavior
+- **Architecture Fit**: Decide whether GenLayer should own the consensus/settlement step or whether the work belongs in a frontend/backend/off-chain LLM
+- **Runner Header**: Pinned \`py-genlayer\` version hashes are mandatory for GenLayer networks
+- **Equivalence Principle**: The critical decision is \`strict_eq\` for deterministic calls and independent verification for LLM/web operations
+- **Validator Consensus**: Schema-only validators are rejected as an anti-pattern; validators must rerun, derive, compare, or verify against source data
+- **Runner Dependencies**: Pin \`py-genlayer\` version hashes instead of using \`test\`, \`latest\`, or unversioned aliases
+- **Storage Rules**: \`TreeMap\` instead of dict, \`DynArray\` instead of list, \`u256\` for money
+- **LLM Resilience**: Defensive parsing, key variation handling, aggressive coercion, JSON response format
+- **Cross-Contract Calls**: Synchronous reads via \`gl.contract.get_at(addr).view()\`, async writes with \`.emit(on="decided" | "finalized")\` (default \`finalized\`), factory patterns with salted deploys (\`gl.contract.deploy(..., salted=gl.contract.Salted(n))\`)
+- **Error Classification**: \`[EXPECTED]\`, \`[EXTERNAL]\`, \`[TRANSIENT]\`, \`[LLM_ERROR]\` each with distinct validator behavior
 
 ### Contract Skeleton
 
 \`\`\`python
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.4.0
+# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
+from genlayer.storage import TreeMap
 
-@gl.contract
-class MyContract:
+class MyContract(gl.contract.Contract):
     owner: Address
-    items: TreeMap[str, Item]
+    items: TreeMap[str, str]
 
     def __init__(self):
-        self.owner = gl.message.sender_account
+        self.owner = gl.message.sender_address
 
     @gl.public.view
     def get_item(self, item_id: str) -> dict:
@@ -627,29 +632,33 @@ class MyContract:
 
     @gl.public.write
     def set_item(self, item_id: str, value: str):
-        if gl.message.sender_account != self.owner:
-            raise gl.UserError("Only owner")
+        if gl.message.sender_address != self.owner:
+            raise gl.vm.UserError("Only owner")
+        self.items[item_id] = value
 \`\`\`
 
 ### Runner Dependencies
 
 Always pin a specific runner version hash in the contract's first line. All GenLayer networks reject \`test\`, \`latest\`, and unversioned runner aliases.
 
-| Contract Type | Dependency |
-|---------------|------------|
-| Single-file Python | \`py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6\` |
-| Multi-file Python package | \`py-genlayer-multi:06zyvrlivjga0d5jlpdbprksc0pa6jmllxvp8s20hq1l512vh5yk\` |
-| Embeddings / semantic search | Add \`py-lib-genlayer-embeddings:0bmbm3cyfwxsyh454z53vxqjf47wz2q7smcqp1q4g4a6k2kidnyk\` before \`py-genlayer\` in a \`Seq\` block |
+| Contract Type | Studio v0.123+ (\`# v0.4.0\`) | Testnet Bradbury (\`# v0.3.0\`) |
+|---------------|------------|------------|
+| Single-file Python | \`py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0\` | \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\` |
+| Multi-file Python package | \`py-genlayer-multi:ys9w7shpvsdswe2fhrxh7agke954catkqb28cngq5924zw9bzx80\` | \`py-genlayer-multi:2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130\` |
+| Embeddings / semantic search | \`py-lib-genlayer-embeddings:hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg\` | Same hash |
+
+For embeddings, list the embeddings library before \`py-genlayer\` in a \`Seq\` block.
 
 ### Anti-Patterns
 
-- \`py-genlayer:test\`, \`py-genlayer:latest\`, or unversioned \`py-genlayer\` — All GenLayer networks reject runner aliases; pin the documented runner version hash
-- \`strict_eq()\` for LLM calls — LLM outputs are non-deterministic
-- Schema-only validators for LLM/web output — format checks do not verify the leader's answer
-- \`prompt_non_comparative\` for classification/scoring/extraction decisions — use comparative validation because decisions need substantive agreement
-- \`dict\` / \`list\` for storage — use \`TreeMap\` / \`DynArray\`
-- \`float\` for money — use atto-scale \`u256\`
-- Inserting fields in middle of dataclass — always append at END
+- \`py-genlayer:test\`, \`py-genlayer:latest\`, or unversioned \`py-genlayer\`: All GenLayer networks reject runner aliases; pin the documented runner version hash
+- \`strict_eq()\` for LLM calls: LLM outputs are non-deterministic
+- Schema-only validators for LLM/web output: format checks do not verify the leader's answer
+- \`prompt_non_comparative\` for classification/scoring/extraction decisions: use comparative validation because decisions need substantive agreement
+- \`dict\` / \`list\` for storage: use \`TreeMap\` / \`DynArray\`
+- \`float\` for money: use atto-scale \`u256\`
+- Inserting fields in middle of dataclass: always append at END
+- A pin copied from another network: check it against the target network with a dry-run before deploying
 
 > Part of the **genlayer-dev** plugin. Install with \`/plugin install genlayer-dev@genlayerlabs\``
         },
@@ -691,21 +700,21 @@ Static analysis and validation for GenLayer intelligent contracts. Always lint b
 
 ### Exit Codes
 
-- **0** — All checks passed
-- **1** — Lint or validation errors
-- **2** — Contract file not found
-- **3** — SDK download failed
+- **0**: All checks passed
+- **1**: Lint or validation errors
+- **2**: Contract file not found
+- **3**: SDK download failed
 
-> Install: \`pip install genvm-linter\``
+> Install: \`pip install genvm-linter\`. Contracts pinned to the v0.3 or v0.4 runner need genvm-linter 0.11.1 or later (\`pip install -U --pre genvm-linter\` while it is a pre-release).`
         },
         {
             id: 'direct-tests',
             name: 'Direct Tests',
-            desc: 'Fast in-memory tests — ~30ms per test, no server required',
+            desc: 'Fast in-memory tests: ~30ms per test, no server required',
             badge: 'plugin',
             content: `## Direct Tests
 
-Fast, in-memory tests for intelligent contracts. No server, no Docker, no consensus — just pure logic testing at ~30ms per test.
+Fast, in-memory tests for intelligent contracts. No server, no Docker, no consensus: just pure logic testing at ~30ms per test.
 
 ### Running Tests
 
@@ -713,6 +722,8 @@ Fast, in-memory tests for intelligent contracts. No server, no Docker, no consen
 pytest tests/direct/ -v
 pytest tests/direct/test_specific.py::test_one -v
 \`\`\`
+
+Contracts pinned to the v0.3 or v0.4 runner need \`genlayer-test\` 0.30.0 or later. Legacy v0.2 contracts need \`genlayer-test\` 0.29.x for direct tests.
 
 ### Basic Pattern
 
@@ -736,13 +747,13 @@ def test_set_and_get(direct_vm, direct_deploy, direct_alice):
 
 ### Cheatcodes
 
-- \`direct_vm.sender = address\` — Set transaction sender
-- \`direct_vm.expect_revert("msg")\` — Expect a revert
-- \`direct_vm.prank(address)\` — Temporary sender change
-- \`direct_vm.snapshot()\` / \`revert(id)\` — State snapshots
-- \`direct_vm.warp("2024-06-01T12:00:00Z")\` — Time travel
-- \`direct_vm.mock_web(regex, response)\` — Mock HTTP calls
-- \`direct_vm.mock_llm(regex, response)\` — Mock LLM calls
+- \`direct_vm.sender = address\`: Set transaction sender
+- \`direct_vm.expect_revert("msg")\`: Expect a revert
+- \`direct_vm.prank(address)\`: Temporary sender change
+- \`direct_vm.snapshot()\` / \`revert(id)\`: State snapshots
+- \`direct_vm.warp("2024-06-01T12:00:00Z")\`: Time travel
+- \`direct_vm.mock_web(regex, response)\`: Mock HTTP calls
+- \`direct_vm.mock_llm(regex, response)\`: Mock LLM calls
 
 ### Important
 
@@ -755,7 +766,7 @@ By default a direct call runs the **leader function only**. To replay the valida
             badge: 'plugin',
             content: `## Integration Tests
 
-Run contracts against real GenLayer environments with full consensus validation — leader execution, validator verification, and finalization.
+Run contracts against real GenLayer environments with full consensus validation: leader execution, validator verification, and finalization.
 
 ### Running Tests
 
@@ -780,6 +791,29 @@ def test_full_flow():
     assert result == "hello"
 \`\`\`
 
+### Fees on Studio v0.123 and Later
+
+\`studio.genlayer.com\` charges fees since Studio v0.123: a deploy or write sent without a fee distribution reverts with \`FeesDistributionMissing\`. \`genlayer-test\` 0.30.0 or later passes \`fees=\` through to \`genlayer-py\`; it does not add fees on its own.
+
+\`\`\`python
+FEE_KEYS = ("distribution", "messageAllocations", "feeValue")
+
+def _fees(estimate):
+    return {key: estimate[key] for key in FEE_KEYS if key in estimate}
+
+def test_full_flow(gl_client, default_account):
+    factory = get_contract_factory("MyContract")
+    contract = factory.deploy(args=[], fees=_fees(gl_client.estimate_transaction_fees()))
+    estimate = gl_client.estimate_transaction_fees_for_write(
+        address=contract.address, function_name="set_data",
+        account=default_account, args=["hello"],
+    )
+    receipt = contract.set_data(args=["hello"]).transact(fees=_fees(estimate))
+    assert tx_execution_succeeded(receipt)
+\`\`\`
+
+Accounts need no funding there: a 0 GEN balance works when the transaction carries the estimated fees, and the unused part of the deposit is refunded.
+
 ### Lifecycle vs Execution
 
 \`ACCEPTED\` and \`FINALIZED\` are transaction lifecycle states, not proof that contract execution succeeded. A transaction can be accepted and finalized with an execution error, and failed execution applies no state changes. For deploy transactions, failed execution means no contract is created.
@@ -790,7 +824,7 @@ Always assert \`tx_execution_succeeded(receipt)\` before reading state, checking
 
 | Aspect | Direct | Integration |
 |--------|--------|-------------|
-| Speed | ~30ms | seconds–minutes |
+| Speed | ~30ms | seconds to minutes |
 | Server | No | Yes |
 | Consensus | Leader only | Full + validators |
 | Write methods | Return values | Return receipts |
@@ -798,10 +832,10 @@ Always assert \`tx_execution_succeeded(receipt)\` before reading state, checking
 
 ### Environments
 
-- **GLSim** — Lightweight, Python natively
-- **Studio local** — Full GenVM, Docker required
-- **studio.genlayer.com** — Hosted, no setup, gasless, rate-limited
-- **Testnet Bradbury** — Real network, funded accounts
+- **GLSim**: Lightweight, Python natively
+- **Studio local**: Full GenVM, Docker required
+- **studio.genlayer.com**: Hosted, no setup, no funding needed, fees required on every deploy and write, rate-limited
+- **Testnet Bradbury**: Real network, funded accounts
 
 ### Studio Rate Limits
 
@@ -828,7 +862,10 @@ The command-line interface for deploying, calling, and debugging intelligent con
 
 \`\`\`bash
 npm install -g genlayer
+genlayer --version    # 0.40.0 or later
 \`\`\`
+
+Studio v0.123 and later need CLI 0.40.0 or later, together with \`genlayer-js\` 2.0.0, \`genlayer-py\` 0.19.0 and \`genlayer-test\` 0.30.0. See the [Consensus v0.6 migration guide](https://docs.genlayer.com/developers/consensus-v06-migration).
 
 ### Core Commands
 
@@ -849,11 +886,24 @@ genlayer network info
 genlayer network list
 \`\`\`
 
-Networks: \`localnet\`, \`testnet-asimov\`, \`testnet-bradbury\`, \`mainnet\`
+Networks: \`localnet\`, \`studionet\`, \`studio-dev\`, \`testnet-asimov\`, \`testnet-bradbury\`
+
+### Fees
+
+\`studionet\` is no longer gasless. Since Studio v0.123 every \`deploy\` and \`write\` must carry fees or it reverts with \`FeesDistributionMissing\`. The CLI does not add them on its own. Accounts still need no funding: a 0 GEN balance works when the transaction carries the estimated fees.
+
+\`\`\`bash
+FEES="$(genlayer estimate-fees --json 2>/dev/null)"
+echo "$FEES"    # must be one JSON object
+genlayer deploy --contract file.py --fees "$FEES"
+
+FEES="$(genlayer estimate-fees <addr> <method> --args "hello" --json 2>/dev/null)"
+genlayer write <addr> <method> --args "hello" --fees "$FEES"
+\`\`\`
 
 ### Studio Rate Limits
 
-\`studionet\` is gasless but rate-limited per IP: **60 req/min, 1000 req/hr, 10000 req/day**. Batch deploy/write scripts can trip HTTP 429 / \`-32429\`; wait for the window to reset, throttle submissions, or use \`localnet\` for heavy batches.
+\`studionet\` is rate-limited per IP: **60 req/min, 1000 req/hr, 10000 req/day**. Batch deploy/write scripts can trip HTTP 429 / \`-32429\`; wait for the window to reset, throttle submissions, or use \`localnet\` for heavy batches.
 
 \`-32028\` indicates the pending-queue cap: up to 32 in-flight transactions per sender, plus a separate per-contract cap. Wait for receipts between batches.
 
@@ -886,7 +936,7 @@ genlayer account send 0x123...abc 10gen
         {
             id: 'genlayernode',
             name: 'Validator Node Setup',
-            desc: 'Interactive wizard and triage runbook — from bare Linux to running validator in 20–45 minutes',
+            desc: 'Interactive wizard and triage runbook: from bare Linux to running validator in 20 to 45 minutes',
             badge: 'plugin',
             content: `## Validator Node Setup
 
@@ -896,11 +946,11 @@ A comprehensive interactive wizard that takes you from a bare Linux server to a 
 
 \`\`\`
 Step 0   Determine server location (local / SSH / cloud)
-Step 1   Check prerequisites (arch, Docker, Python, cosign) — install missing
+Step 1   Check prerequisites (arch, Docker, Python, cosign), install missing
 Step 2   Full node, new validator or existing? (staking wizard)
 Step 3   Download & setup (tarball, verify, GenVM, symlinks)
-Step 4   Environment config (.env — RPC key, LLM key)
-Step 5   Node config (config.yaml — network, manifest, addresses, ports)
+Step 4   Environment config (.env: RPC key, LLM key)
+Step 5   Node config (config.yaml: network, manifest, addresses, ports)
 Step 6   Operator key (upload / copy / generate)
 Step 7   Start WebDriver (Docker Compose)
 Step 8   Doctor check (verify configuration)
@@ -913,26 +963,26 @@ Step 11  Monitoring setup (optional telemetry)
 
 | Resource | Minimum | Recommended |
 |----------|---------|-------------|
-| Architecture | AMD64 only | — |
+| Architecture | AMD64 only | n/a |
 | RAM | 16 GB | 32 GB |
 | CPU | 8 cores | 16+ cores |
 | Storage | 128 GB SSD | 256+ GB |
-| GEN tokens | Deployed self-stake minimum (validator) | — |
-| GEN for gas | ~10 GEN | — |
+| GEN tokens | Deployed self-stake minimum (validator) | n/a |
+| GEN for gas | ~10 GEN | n/a |
 
 ### Three Key Addresses
 
 | Address | Purpose |
 |---------|---------|
-| **Owner** | Cold wallet — controls validator, stays local |
-| **Operator** | Hot wallet — signs blocks, goes on server |
+| **Owner** | Cold wallet: controls validator, stays local |
+| **Operator** | Hot wallet: signs blocks, goes on server |
 | **Validator** | Smart contract on-chain, used in config |
 
 ### Deployment Methods
 
-- **Systemd** (recommended) — Auto-restart, journal logs
-- **Docker Compose** — Container isolation
-- **Manual** — Screen/tmux for testing
+- **Systemd** (recommended): Auto-restart, journal logs
+- **Docker Compose**: Container isolation
+- **Manual**: Screen/tmux for testing
 
 ### Operational Triage
 
@@ -947,7 +997,7 @@ Heurist, Comput3, io.net, LibertAI, Anthropic, Google, xAI, Atoma
         {
             id: 'validator-manage',
             name: 'Validator Management',
-            desc: 'Manage validators across testnets — join, fund, set identity, monitor',
+            desc: 'Manage validators across testnets: join, fund, set identity, monitor',
             badge: 'dev',
             content: `## Validator Management
 
@@ -955,9 +1005,9 @@ Manage GenLayer validators across multiple testnets using the \`genlayer\` CLI. 
 
 ### Key Concepts
 
-- **Owner** — Controls validator on-chain. Can own many validators.
-- **Operator** — Runs node software. Each validator has exactly one.
-- **Network isolation** — Each testnet has its own staking contract.
+- **Owner**: Controls validator on-chain. Can own many validators.
+- **Operator**: Runs node software. Each validator has exactly one.
+- **Network isolation**: Each testnet has its own staking contract.
 
 ### Common Operations
 

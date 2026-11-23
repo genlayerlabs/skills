@@ -28,7 +28,7 @@ After adding the marketplace, enable individual plugins from Codex's plugin menu
 
 | Plugin | Description |
 |--------|-------------|
-| `genlayer-dev` | Development skills for intelligent contracts — pinned GenVM runner versions, linting, direct mode tests, and integration tests. |
+| `genlayer-dev` | Development skills for intelligent contracts: pinned GenVM runner versions, linting, direct mode tests, and integration tests. |
 | `genlayer-docs` | Search GenLayer protocol and SDK documentation through the hosted Docs MCP service. |
 | `genlayernode` | Interactive wizard to set up a GenLayer validator node on Linux. |
 
