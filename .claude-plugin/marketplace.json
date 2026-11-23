@@ -12,7 +12,7 @@
     {
       "name": "genlayer-dev",
       "source": "./plugins/genlayer-dev",
-      "description": "Development skills for GenLayer intelligent contracts — pinned GenVM runner versions, linting, direct mode tests, and integration tests."
+      "description": "Development skills for GenLayer intelligent contracts: pinned GenVM runner versions, linting, direct mode tests, and integration tests."
     },
     {
       "name": "genlayer-docs",

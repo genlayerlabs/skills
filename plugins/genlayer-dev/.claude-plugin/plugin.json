@@ -1,5 +1,5 @@
 {
   "name": "genlayer-dev",
   "version": "1.2.0",
-  "description": "Development skills for GenLayer intelligent contracts — pinned GenVM runner versions, linting, direct mode tests, and integration tests."
+  "description": "Development skills for GenLayer intelligent contracts: pinned GenVM runner versions, linting, direct mode tests, and integration tests."
 }
