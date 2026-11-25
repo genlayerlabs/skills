@@ -322,7 +322,7 @@ Never edit the network values by hand. If a value looks wrong, re-run `resolve-n
 4. Verify import:
    ```bash
    sudo ls -la /opt/genlayer-node/${VERSION}/data/node/keystore/
-   # Should show the keystore file (doctor in Phase 8 checks that it unlocks)
+   # Should show the keystore file (doctor does not unlock it; the node does at start)
    ```
 
 **Option B: Copy from previous installation** (not needed between v0.6.x versions: the data
