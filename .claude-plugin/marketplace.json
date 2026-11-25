@@ -7,7 +7,7 @@
     {
       "name": "genlayernode",
       "source": "./plugins/genlayernode",
-      "description": "Interactive wizard to set up a GenLayer validator node on Linux."
+      "description": "Interactive wizard to set up and update a GenLayer validator node on Linux, for any active GenLayer network (current phase and node version resolved at run time)."
     },
     {
       "name": "genlayer-dev",

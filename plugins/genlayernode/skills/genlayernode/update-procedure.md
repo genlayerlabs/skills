@@ -3,8 +3,12 @@
 ## Goal
 Minimize validator downtime during updates by preparing the new version while the old version continues running.
 
-Conventions (`VERSION`, `INSTALL_ROOT`, `NODE_DIR`, `MINOR`, `NODE_USER`) are the ones defined at the
-top of `install-procedure.md`. `VERSION` is the **new** version; `OLD_VERSION` the running one.
+Conventions (`VERSION`, `INSTALL_ROOT`, `NODE_DIR`, `MINOR`, `NODE_USER`, `DATA_KEY`) are the ones
+defined in `install-procedure.md` Phase 0. `VERSION` is the **new** version; `OLD_VERSION` the running one.
+
+**Classify first** (`pre-update-checklist.md` Phase 0). This page's zero-downtime sequence is for
+a **patch on the same phase**. If the running node's `/health` `network` is a previous phase,
+go to "Network Phase Change" below: the patch steps would copy the old phase's config and data.
 
 ## Process Overview
 
@@ -63,7 +67,7 @@ All preparation steps happen WHILE the validator is actively running and validat
 curl -s http://localhost:9153/health | jq '{status, network, node_version}'
 OLD_VERSION=$(basename "$(dirname "$(readlink -f /opt/genlayer-node/bin)")")   # e.g. v0.6.0
 case "$OLD_VERSION" in v[0-9]*) ;; *) echo "cannot determine OLD_VERSION ('$OLD_VERSION') - stop" >&2; exit 1 ;; esac
-VERSION=v0.6.1                                                  # the approved new version
+VERSION=$(scripts/resolve-version.sh --line "$RELEASE_LINE")  # latest stable on the network's line (R2)
 INSTALL_ROOT=/opt/genlayer-node; NODE_DIR=${INSTALL_ROOT}/${VERSION}; NODE_USER=genlayer
 MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+')
 
@@ -97,9 +101,12 @@ grep -q 'genvm-llm-greybox.lua' ${OLD_CFG}/genvm-module-llm.yaml && \
 sudo -u ${NODE_USER} sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: true/' ${NEW_CFG}/genvm-module-llm.yaml
 # Docker only: re-create docker-compose.override.yml in ${NODE_DIR} (SKILL.md -> Docker Compose Deployment).
 
-# 6. Link the shared data directory (genvm.db, ops.db, keystore/ — no copy, no resync)
+# 6. Link the SAME shared data directory the running version uses (genvm.db, ops.db, keystore/ —
+#    no copy, no resync). Reading the old link keeps both naming conventions working
+#    (../<deployment_dir>-<minor>/data, or ../<minor>/data on older installs).
 test ! -e ${NODE_DIR}/data -o -L ${NODE_DIR}/data || { echo "${NODE_DIR}/data is a real directory - stop" >&2; exit 1; }
-sudo -u ${NODE_USER} ln -sfn ../${MINOR}/data ${NODE_DIR}/data
+DATA_LINK=$(readlink ${INSTALL_ROOT}/${OLD_VERSION}/data) || { echo "old data/ is not a link - stop" >&2; exit 1; }
+sudo -u ${NODE_USER} ln -sfn "${DATA_LINK}" ${NODE_DIR}/data
 ls -la ${NODE_DIR}/data/node/
 ```
 
@@ -149,7 +156,7 @@ containers from the new directory.
 > **See `common-procedures.md` -> "Verification Commands"**
 
 ```bash
-# Check version, network and health
+# Check version, network and health (network must still be NODE_NETWORK_NAME)
 curl -s http://localhost:9153/health | jq '{status, network, node_version, genvm_version}'
 
 # Check sync status
@@ -186,10 +193,56 @@ Major version updates may require:
 
 The principle remains: **Prepare everything first, then quick switch.**
 
-**v0.5.x (Bradbury Phase 1 / Asimov) -> v0.6.x (Bradbury Phase 2) is NOT an in-place update.**
-Phase 2 is a new chain (Arbitrum Orbit, chain id 4221) with new contracts and a new validator
-registration. Do a fresh install (`install-procedure.md`) in a new directory, with a fresh data
-directory; stop and disable the old node first.
+**v0.5.x (Bradbury Phase 1 / Asimov) -> v0.6.x is NOT an in-place update.** It is a network
+phase change: follow the next section.
+
+## Network Phase Change (e.g. Bradbury Phase 2 -> Phase 3, later Bradbury -> Clarke)
+
+A new phase is a **new consensus deployment**: new contracts, a new validator registration and
+new chain state, often on the **same chain id and the same node release line** (Bradbury Phase 2
+and 3: chain 4221, node v0.6). Nothing fails loudly if you treat it as a patch: the copied config
+keeps the old AddressManager and the node keeps syncing the old phase. So it is a fresh install,
+with three differences:
+
+1. **Stake again on the new phase** (laptop). Pin the CLI first and check the registration:
+   ```bash
+   NET=$(scripts/setup-cli-network.sh --cli-network "$CLI_NETWORK" \
+     --deployment-dir "$DEPLOYMENT_DIR" --deployment-key "$DEPLOYMENT_KEY")
+   genlayer staking validator-info 0xYOUR_VALIDATOR_WALLET --network "$NET"   # not found = join again
+   ```
+   Then `staking-wizard-procedure.md` (or validator-join) with `--network "$NET"`. The operator
+   key can be reused if the same operator registers on the new phase; the stake cannot.
+2. **Fresh data directory** for the new phase: `install-procedure.md` Phase 0 gives it a new
+   `DATA_KEY` (`<deployment_dir>-<minor>`). Never link the old phase's `genvm.db`/`ops.db`.
+   Copy only the operator keystore, if reused:
+   ```bash
+   OLD_DATA=$(readlink -f ${INSTALL_ROOT}/data)                       # the old phase's data dir
+   sudo install -d -m 700 -o genlayer -g genlayer ${INSTALL_ROOT}/${DATA_KEY}/data/node/keystore
+   sudo -u genlayer cp -p ${OLD_DATA}/node/keystore/* ${INSTALL_ROOT}/${DATA_KEY}/data/node/keystore/
+   ```
+3. **Fresh network config**: never copy `config.yaml` or `protocol-manifest.json` from the old
+   version. Run `install-procedure.md` Phases 0–10 in full (Phase 5 resolves and verifies the
+   new phase's config). Copy `.env` from the old version only if the RPC provider is the same,
+   then let the user check it.
+
+Order on the server:
+
+```bash
+# a. Prepare the new version while the old node runs (Phases 0, 2-7 of install-procedure.md).
+#    If the new version's directory name already exists (same version number on the old phase),
+#    the old tree is retired below first: a GenVM tree cannot be moved and reused, but the old
+#    phase's tree is never started again.
+# b. Stop and disable the old node (both must never run with the same operator):
+sudo systemctl stop genlayer-node
+# c. Only when the version directory name collides: retire the old tree (logs stay in its data dir)
+#    sudo mv ${INSTALL_ROOT}/${VERSION} ${INSTALL_ROOT}/retired-<old_deployment_dir>-${VERSION}
+#    then install the new version (install-procedure.md Phases 2-7) into ${INSTALL_ROOT}/${VERSION}.
+# d. Doctor (Phase 8), switch the symlinks (common-procedures.md -> "Setup Symlinks"), start (Phase 9).
+# e. Verify /health .network == NODE_NETWORK_NAME (Phase 10). A previous phase's name: stop, redo Phase 5.
+```
+
+No rollback across a phase change: the old phase is replaced. If the new node fails, fix it
+forward (doctor, logs); do not restart the old phase's node with the same operator.
 
 ## Downtime Comparison
 

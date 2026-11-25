@@ -1,0 +1,76 @@
+# GenLayer network registry for the genlayernode skill.
+#
+# This file holds WHICH networks exist and WHERE their values are published.
+# It never holds contract addresses, genesis blocks, RPC hosts or node versions:
+# those change with every phase or release and are fetched and cross-checked at
+# run time by scripts/resolve-network.sh (see network-resolution-procedure.md).
+#
+# When a network launches a new phase (e.g. Bradbury Phase 3 -> Phase 4), the
+# ONLY edit needed here is that network's `current_phase` block. When a new
+# network launches (Clarke, Mainnet), flip its `status` to `active` and fill
+# the `TBD` fields from its genlayer-networks folder and its docs page.
+
+schema: 1
+
+# URL templates. {placeholders} are filled from the network entry below.
+sources:
+  # Node release bucket (public). Versions are listed, never hardcoded.
+  node_release_index: "https://storage.googleapis.com/storage/v1/b/gh-af/o?prefix=genlayer-node/bin/amd64/&delimiter=/"
+  node_release_base: "https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/{version}"
+
+  # Network config + trusted protocol manifest for operators (public docs repo,
+  # synced from genlayer-node on each node release). Can LAG a phase launch.
+  network_config: "https://raw.githubusercontent.com/genlayerlabs/genlayer-docs/main/content/validators/{config_file}.yaml"
+  protocol_manifest: "https://raw.githubusercontent.com/genlayerlabs/genlayer-docs/main/content/validators/{config_file}.protocol-manifest.json"
+
+  # Deployment book (public). Source of truth for "which deployment is the
+  # current phase". Used to catch docs/CLI that still point at an old phase.
+  deployment_book: "https://raw.githubusercontent.com/genlayerlabs/genlayer-networks/main/{deployment_dir}/testnet_deployments.json"
+
+networks:
+  - id: bradbury
+    display_name: "Bradbury Testnet"
+    status: active                 # active | planned | retired
+    kind: testnet
+    chain_id: 4221                 # decimal; the rollup chain, shared by every Bradbury phase
+    rollup: "Arbitrum Orbit (Conduit)"
+    cli_network: testnet-bradbury  # `genlayer ... --network <this>`
+    config_file: bradbury          # docs file stem: bradbury.yaml + bradbury.protocol-manifest.json
+    rpc_key_required: true         # Conduit RPC key in GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY
+    rpc_key_portal: "https://app.conduit.xyz/rpc-keys"
+    current_phase:
+      name: "Bradbury Phase 3"
+      deployment_dir: bradbury-phase-3                      # folder in genlayer-networks
+      deployment_key: genlayerOrbitTestnet.deployment_bradbury_phase_3
+      node_network_name: bradbury-phase3                    # name the node logs after detecting the deployment
+      node_release_line: v0.6                               # install the latest stable v0.6.x
+      launched: 2026-11-24
+    previous_phases:
+      # Phases share chain 4221 and are told apart ONLY by contract address.
+      # A node or CLI still on one of these is on the wrong network.
+      - { name: "Bradbury Phase 2", deployment_dir: bradbury-phase-2, node_network_name: bradbury-phase2 }
+      - { name: "Bradbury Phase 1", deployment_dir: bradbury,         node_network_name: bradbury-phase1 }
+
+  - id: clarke
+    display_name: "Clarke"
+    status: planned                # replaces Bradbury when it launches
+    kind: testnet
+    chain_id: TBD
+    cli_network: TBD
+    config_file: TBD
+    current_phase: TBD
+
+  - id: mainnet
+    display_name: "GenLayer Mainnet"
+    status: planned
+    kind: mainnet
+    chain_id: TBD
+    cli_network: TBD
+    config_file: TBD
+    current_phase: TBD
+
+  - id: asimov
+    display_name: "Asimov Testnet"
+    status: retired                # v0.4.x line; this skill no longer installs it
+    kind: testnet
+    cli_network: testnet-asimov

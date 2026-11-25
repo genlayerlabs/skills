@@ -1,6 +1,6 @@
 ---
 name: genlayernode
-description: Interactive wizard to set up a GenLayer validator node on Linux.
+description: Set up or update a GenLayer validator node on Linux for any active GenLayer network (Bradbury now, Clarke and Mainnet later); phase, node version and config are resolved at run time.
 allowed-tools:
   - Bash
   - Read
@@ -17,7 +17,36 @@ hooks:
 
 # GenLayer Validator Setup
 
-Interactive wizard to set up a GenLayer validator node from scratch on a Linux server.
+Interactive wizard to set up a GenLayer validator node from scratch on a Linux server, on the
+network the user chooses, on that network's **current phase**, with a node release that supports it.
+
+## The Rule This Skill Is Built On: Resolve, Never Remember
+
+GenLayer runs several networks and replaces them over time: Bradbury phases 1 → 2 → 3, then
+Clarke, then Mainnet. Each phase is a new consensus deployment, often **on the same chain id and
+the same node release line**, so stale values fail **silently**: the node syncs a dead deployment
+and the CLI stakes on it.
+
+- **Never** use a contract address, genesis block, RPC host, node version, protocol manifest,
+  LLM provider list or minimum stake from memory, from an earlier run, or from the examples in
+  these files. Examples show the shape of values, not the values.
+- `networks.yaml` lists the networks (identity + where their values are published). It is the
+  only file edited when a phase or network launches.
+- Everything else is resolved at run time by `scripts/` and cross-checked against the
+  `genlayer-networks` deployment book: follow `network-resolution-procedure.md` (R1–R5) at the
+  start of every install and update.
+
+| Script | Runs on | Does |
+|--------|---------|------|
+| `scripts/resolve-version.sh --line <release_line>` | anywhere | Latest stable version on the network's release line (`--list`, `--check`, `--pre`) |
+| `scripts/resolve-network.sh ...` | server | Fetches config + manifest, verifies them against the current phase. Exit 3 = docs still on an older phase: stop |
+| `scripts/apply-network-config.sh ...` | server | Writes the verified values into `config.yaml`, installs the manifest |
+| `scripts/setup-cli-network.sh ...` | laptop | Pins the `genlayer` CLI to the current phase; prints `NET` for `--network "$NET"` |
+| `scripts/list-llm-providers.sh <node-dir>` | server | LLM providers the installed release supports |
+
+Updates are classified first (`pre-update-checklist.md` Phase 0): **patch** (same phase, same
+line), **release line**, or **network phase change** (new stake, new data directory, fresh
+config: `update-procedure.md` → "Network Phase Change"; never a patch, even on the same version line).
 
 ## MANDATORY: Show Process Overview at Start
 
@@ -36,6 +65,11 @@ Interactive wizard to set up a GenLayer validator node from scratch on a Linux s
 
 I'll guide you through the complete validator node installation. Here's what we'll do:
 
+**Step 0: Resolve Network, Phase and Version**
+- Network from networks.yaml (active networks only), its current phase
+- Node version: latest stable on the phase's release line (resolve-version.sh)
+- Shown here before anything is installed: <network>, <phase>, <version>
+
 **Step 1: Determine Server Location**
 - Identify where the validator will run (local/GCP/AWS/SSH)
 - Configure access method for commands
@@ -48,8 +82,9 @@ I'll guide you through the complete validator node installation. Here's what we'
 
 **Step 3: Full Node, New or Existing Validator**
 - Full node: no staking, no operator key
-- New validator: Run staking wizard on your machine (deployed self-stake minimum)
-- Existing: Provide validator wallet address
+- Pin the CLI to the current phase (setup-cli-network.sh)
+- New validator, or validator from a previous phase: run the staking wizard on your machine (deployed self-stake minimum)
+- Existing on the current phase: provide validator wallet address
 
 **Step 4: Download & Extract Node Software**
 - Download GenLayer node tarball from official storage
@@ -64,10 +99,9 @@ I'll guide you through the complete validator node installation. Here's what we'
 - Set LLM provider (you'll add API key manually)
 
 **Step 6: Configure Node (config.yaml)**
-- Set validator wallet address
-- Configure operator address
-- Set network endpoints and ports
-- Set the network's consensus values and download its protocol manifest
+- Fetch the network config + protocol manifest and verify them against the current phase (resolve-network.sh)
+- Write them into config.yaml (apply-network-config.sh): never typed by hand
+- Set validator wallet address and operator address
 - Set node mode (full or validator)
 
 **Step 7: Set Up Operator Key (validator only)**
@@ -89,7 +123,7 @@ I'll guide you through the complete validator node installation. Here's what we'
 - Manual (screen/tmux)
 
 **Step 11: Verify Node Running**
-- Check health endpoint
+- Check health endpoint: `network` must be the current phase's name
 - Verify sync status
 
 **Estimated time: 20-45 minutes**
@@ -105,8 +139,8 @@ Always show a brief description of what will happen:
 ## Step 4: Download & Extract Node Software
 
 This step will:
-1. Download the GenLayer node v0.4.4 tarball (~XX MB)
-2. Create directory /opt/genlayer-node/v0.4.4/
+1. Download the GenLayer node <VERSION> tarball (resolved in Step 0)
+2. Create directory /opt/genlayer-node/<VERSION>/
 3. Extract binary, configs, and GenVM files
 4. Set up symlinks for easy access
 5. Run GenVM setup to download dependencies (~2 min)
@@ -165,15 +199,19 @@ THEN: Stop old -> Switch symlinks -> Start new
 **For fresh installations, see `install-procedure.md` for the step-by-step installation guide.**
 
 ### Database Storage Structure
-For patch versions (v0.6.x), the data directory MUST be shared, not copied
-(v0.6 keeps `genvm.db`, `ops.db` and the keystore there):
+For patch versions (v0.6.x) **on the same phase**, the data directory MUST be shared, not copied
+(v0.6 keeps `genvm.db`, `ops.db` and the keystore there). A new phase gets its own data
+directory, even on the same release line: its chain state and node state are different.
 
-**Correct structure:**
+**Correct structure** (example: Bradbury Phase 3; `<deployment_dir>-<minor>`):
 ```
-/opt/genlayer-node/v0.6/data/node/      <- Shared: genvm.db, ops.db, keystore/, logs/
-/opt/genlayer-node/v0.6.0/data          -> symlink to ../v0.6/data
-/opt/genlayer-node/v0.6.1/data          -> symlink to ../v0.6/data
+/opt/genlayer-node/bradbury-phase-3-v0.6/data/node/  <- Shared: genvm.db, ops.db, keystore/, logs/
+/opt/genlayer-node/v0.6.0/data          -> symlink to ../bradbury-phase-3-v0.6/data
+/opt/genlayer-node/v0.6.1/data          -> symlink to ../bradbury-phase-3-v0.6/data
 ```
+
+Installs made before this convention use `/opt/genlayer-node/v0.6/data`; patch updates keep
+whatever the running version links to.
 
 ### LLM Strategy and Provider Configuration
 
@@ -245,19 +283,19 @@ Before starting, ensure your setup meets these requirements:
 - **Operating System**: Ubuntu 22.04+, Debian 12+, or compatible Linux distribution (Python 3.10+)
 
 ### Software Dependencies
-- **Node.js**: v20 or higher — only on the machine that runs the GenLayer CLI (staking wizard), not on the server
+- **Node.js**: v20 or higher, **genlayer CLI ≥ 0.40.1**, **jq** and **curl** — only on the machine that runs the GenLayer CLI (staking wizard, `setup-cli-network.sh`), not on the server
 - **Docker**: v20.10 or higher with Compose plugin
 - **Python**: Python 3.10+ with pip and venv modules
 - **cosign**: To verify the release signature
 - **Git**: For version control (optional but recommended)
 
 ### Blockchain Requirements
-- **GEN Tokens**: The deployed self-stake minimum (`genlayer staking epoch-info --network testnet-bradbury`; 42,000 GEN is the protocol default) if creating new validator
+- **GEN Tokens**: The deployed self-stake minimum (`genlayer staking epoch-info --network "$NET"`; 42,000 GEN is the protocol default) if creating new validator
 - **GEN for gas**: Small amount of GEN for gas fees on operator account (~10 GEN recommended)
-- **RPC Access**: HTTP and WebSocket URLs for GenLayer Chain, and the RPC provider's API key if it needs one (from your network's section in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator)
+- **RPC Access**: the RPC URLs are resolved with the network config; the user provides only the RPC provider's API key when the network needs one
 
 ### API Keys Required
-- **RPC Provider**: API key, if your network's RPC provider needs one — full nodes and validators (Testnet Bradbury: Conduit, https://app.conduit.xyz/rpc-keys)
+- **RPC Provider**: API key, if the network's RPC provider needs one (`networks.yaml` → `rpc_key_required`, `rpc_key_portal`) — full nodes and validators
 - **LLM Provider**: API key from one of these providers (a full node syncs without one, but doctor fails):
   - Heurist (recommended for validators)
   - Comput3
@@ -287,13 +325,16 @@ flowchart TD
 ### Version Handling
 
 When specifying a version:
-- **Specific version**: Use exact version like `v0.6.0`
-- **Latest version**: Use the version approved for your network in the release announcement — the most recent listed release may not be approved yet
-- **No version specified**: Skill will prompt you to choose from the 5 most recent versions
+- **Specific version**: verify it exists and is on the network's release line: `scripts/resolve-version.sh --check <version>`
+- **Latest / no version specified**: the latest stable release on the current phase's release line
+  (`networks.yaml` → `node_release_line`): `scripts/resolve-version.sh --line <release_line>`.
+  Not the newest release overall: a newer line may not support the current phase
+- **Let the user pick**: `scripts/resolve-version.sh --line <release_line> --list`
 
 The skill automatically handles:
-- Version-specific directory structure (`/opt/genlayer-node/v0.6.0/`)
-- Shared data directory across patch versions (v0.6.x shares genvm.db, ops.db, keystore)
+- Version-specific directory structure (`/opt/genlayer-node/<VERSION>/`)
+- Shared data directory across patch versions **of one phase** (`/opt/genlayer-node/<deployment_dir>-<minor>/data`:
+  genvm.db, ops.db, keystore). A new phase gets a new data directory, even on the same release line
 - Symlinks for easy access to current version
 
 ## Purpose
@@ -304,7 +345,7 @@ Guide validators through complete GenLayer node installation including:
 - Node software download, verification and extraction
 - Configuration via config.yaml, protocol manifest and .env file
 - Operator key import from wizard export
-- LLM provider setup (Heurist, Comput3, io.net, LibertAI, Anthropic, Google)
+- LLM provider setup (the providers the installed release supports: `scripts/list-llm-providers.sh`)
 - Node startup as systemd service (binary) or Docker Compose
 - Optional telemetry/monitoring setup
 
@@ -312,8 +353,8 @@ Guide validators through complete GenLayer node installation including:
 
 ### Directory Structure After Installation
 ```
-/opt/genlayer-node/
-├── v0.6/data/node/                 # Shared data directory (all v0.6.x)
+/opt/genlayer-node/                 # example: Bradbury Phase 3 on v0.6.0
+├── bradbury-phase-3-v0.6/data/node/ # Shared data directory (this phase, all v0.6.x)
 │   ├── genvm.db
 │   ├── ops.db
 │   ├── keystore/
@@ -323,7 +364,7 @@ Guide validators through complete GenLayer node installation including:
 │   ├── opt/genvm/<genvm-version>/
 │   ├── docker-compose.yaml
 │   ├── .env
-│   ├── data -> ../v0.6/data
+│   ├── data -> ../bradbury-phase-3-v0.6/data
 │   └── configs/node/{config.yaml,protocol-manifest.json}
 ├── bin -> v0.6.0/bin               # Symlinks for easy access
 ├── opt -> v0.6.0/opt
@@ -338,7 +379,7 @@ Guide validators through complete GenLayer node installation including:
 ### Requires
 - AMD64 Linux server (16GB+ RAM, 8+ cores, 128GB+ SSD)
 - Docker, Python 3.10+ with pip and venv, cosign
-- RPC provider API key, if your network needs one (Testnet Bradbury: Conduit)
+- RPC provider API key, if the network needs one (`networks.yaml` → `rpc_key_required`; Bradbury: Conduit)
 - Deployed self-stake minimum in GEN (if new validator)
 - LLM API key from supported provider
 - Operator keystore from staking wizard (validator only, or generate new)
@@ -346,15 +387,16 @@ Guide validators through complete GenLayer node installation including:
 ### Default Configuration
 | Setting | Default Value |
 |---------|---------------|
-| RPC URL | **No default** - user must provide |
-| WebSocket | **No default** - user must provide |
+| RPC URL | **No default** - resolved (`resolve-network.sh`) |
+| WebSocket | **No default** - resolved (`resolve-network.sh`) |
 | Consensus Address (AddressManager) | **Per-deployment — no default** (v0.6+: `consensus.consensusaddress` in config.yaml) |
 | Chain ID | **Per-deployment — no default** (v0.6+: `consensus.chainid`, decimal) |
 | Genesis Block | **Per-deployment** — AddressManager deploy block (v0.6+: `consensus.genesis`; missing ⇒ scans from block 0) |
 | Protocol Manifest | **Per-deployment** (v0.6+: the network's manifest, saved at `configs/node/protocol-manifest.json`) |
 
-Take the per-deployment values from your network's section in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator. The Testnet Bradbury
-values are shown as an example in `install-procedure.md` Phase 5.
+The per-deployment values are resolved and verified by `scripts/resolve-network.sh` and written by
+`scripts/apply-network-config.sh` (`install-procedure.md` Phase 5). Never ask the user for them and
+never type them from memory.
 | Install Path | `/opt/genlayer-node` |
 | RPC Port | `9151` |
 | Ops Port | `9153` |
@@ -452,10 +494,12 @@ its pinned GitHub release `.deb`. Node.js is not needed on the server.
 
 **Note**: The staking wizard runs on your **local machine** (not the server), since it manages wallet keys.
 
-- **New**: Run staking wizard (deployed self-stake minimum: `genlayer staking epoch-info --network testnet-bradbury`)
+- **New**: Run staking wizard (deployed self-stake minimum: `genlayer staking epoch-info --network "$NET"`)
   ```bash
-  npm install -g "genlayer@${CLI_VERSION}"   # exact version from the release announcement for your network
-  genlayer staking wizard --network testnet-bradbury
+  npm install -g genlayer@latest                 # >= 0.40.1
+  NET=$(scripts/setup-cli-network.sh --cli-network "$CLI_NETWORK" \
+    --deployment-dir "$DEPLOYMENT_DIR" --deployment-key "$DEPLOYMENT_KEY")   # pin the current phase
+  genlayer staking wizard --network "$NET"
   ```
   The wizard is **fully interactive** (requires TTY) and guides you through:
   1. Account selection or creation (owner account)
@@ -468,7 +512,7 @@ its pinned GitHub release `.deb`. Node.js is not needed on the server.
   8. Optional identity setup (moniker, website, socials; `--skip-identity`)
   9. Summary
 
-  **Phase 2**: the operator must be an account the CLI holds, so it can sign the proof of
+  **Since Bradbury Phase 2** the operator must be an account the CLI holds, so it can sign the proof of
   possession. An external operator address alone fails.
 
   **Three addresses are produced:**
@@ -491,23 +535,25 @@ its pinned GitHub release `.deb`. Node.js is not needed on the server.
   genlayer account show --account "Operator Name"
 
   # Send GEN from owner to operator (recommended: 10 GEN)
-  genlayer account send 0xOPERATOR_ADDRESS 10gen --account "Owner Name" --network testnet-bradbury
+  genlayer account send 0xOPERATOR_ADDRESS 10gen --account "Owner Name" --network "$NET"
   ```
 
   **See `staking-wizard-procedure.md` for the complete step-by-step wizard walkthrough, alternative CLI commands, and troubleshooting.**
 
-- **Existing**: Skip to download (must have validator wallet address and operator keystore)
+- **Existing**: Skip to download (must have validator wallet address and operator keystore).
+  First check it is registered on the **current** phase: `genlayer staking validator-info 0xVALIDATOR --network "$NET"`.
+  A validator from a previous phase must join again.
 
 ### 2. Download & Setup
 **Note**: For remote servers, download to the remote server, not your local machine.
 
-**List available versions:**
+**Resolve the version** (never assume it):
 ```bash
-curl -s "https://storage.googleapis.com/storage/v1/b/gh-af/o?prefix=genlayer-node/bin/amd64" | \
-  grep -o '"name": *"[^"]*"' | sed -n 's/.*\/\(v[^/]*\)\/.*/\1/p' | sed 's/-rc/~rc/' | sort -ruV | sed 's/~rc/-rc/' | head -5
+VERSION=$(scripts/resolve-version.sh --line "$RELEASE_LINE")      # latest stable on the network's line
+scripts/resolve-version.sh --line "$RELEASE_LINE" --list           # to let the user pick
 ```
 
-**Download, verify and install (replace ${VERSION} with the approved version, e.g., v0.6.0):**
+**Download, verify and install ${VERSION}:**
 See `install-procedure.md` Phase 2 for the exact commands. In short:
 ```bash
 base=https://storage.googleapis.com/gh-af/genlayer-node/bin/amd64/${VERSION}
@@ -532,10 +578,10 @@ chmod +x install.sh
 sudo -u genlayer -H ./install.sh --install-dir /opt/genlayer-node/${VERSION} \
   --tarball genlayer-node-linux-amd64-${VERSION}.tar.gz
 
-# Shared data directory + symlinks for easy access (install-procedure.md Phase 2)
-MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+')
-sudo -u genlayer mkdir -p /opt/genlayer-node/${MINOR}/data/node/keystore /opt/genlayer-node/${MINOR}/data/node/logs
-sudo -u genlayer ln -sfn ../${MINOR}/data /opt/genlayer-node/${VERSION}/data
+# Shared data directory (one per phase + release line) + symlinks (install-procedure.md Phase 0/2)
+MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+'); DATA_KEY=${DEPLOYMENT_DIR}-${MINOR}
+sudo -u genlayer mkdir -p /opt/genlayer-node/${DATA_KEY}/data/node/keystore /opt/genlayer-node/${DATA_KEY}/data/node/logs
+sudo -u genlayer ln -sfn ../${DATA_KEY}/data /opt/genlayer-node/${VERSION}/data
 cd /opt/genlayer-node
 for p in bin opt configs data docker-compose.yaml alloy-config.river alloy-healthcheck.sh genvm-module-web-docker.yaml .env; do
   sudo -u genlayer ln -sfn ${VERSION}/$p $p
@@ -562,17 +608,15 @@ sudo chmod 600 /opt/genlayer-node/${VERSION}/.env
 ```
 
 **Key values to configure:**
-1. **RPC key** - The RPC/WebSocket URLs are in config.yaml (step 4). The RPC provider's API key, if it needs one (Testnet Bradbury: Conduit), goes here:
+1. **RPC key** - The RPC/WebSocket URLs are in config.yaml (step 4). The RPC provider's API key, if the network needs one (`networks.yaml` → `rpc_key_required`), goes here:
    ```bash
    GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=<set by the user>
    ```
 
-2. **LLM API Key** - Set ONE of these (leave others empty):
+2. **LLM API Key** - Set ONE, for a provider the installed release supports
+   (`scripts/list-llm-providers.sh /opt/genlayer-node/${VERSION}` prints provider and variable), e.g.:
    - `OPENROUTERKEY=`
    - `HEURISTKEY=`
-   - `ANTHROPICKEY=`
-   - `GEMINIKEY=`
-   - Or the env var for your chosen provider (see LLM Provider Environment Variables table)
 
 3. **Node Password** (validator only) - the operator keystore's export passphrase:
    `GENLAYERNODE_PASSWORD=` (binary) or `NODE_PASSWORD=` (Docker)
@@ -592,15 +636,23 @@ sudo chmod 600 /opt/genlayer-node/${VERSION}/.env
 
 First ask if user wants to copy existing config or use example:
 - **Use example config (Recommended)**: Edit the artifact's config.yaml in place, then customize via wizard
-- **Copy from previous**: Copy config.yaml from previous installation (keep the new `genvm.root_dir`)
+- **Copy from previous**: Copy config.yaml from previous installation (keep the new `genvm.root_dir`).
+  **Only on the same phase**: after a phase change the old config names the old deployment.
 
-**Network values and protocol manifest** — required since v0.6. Take them from
-your network's section in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator. The commands and the Testnet Bradbury
-example are in `install-procedure.md` Phase 5:
-- Download the network's manifest to `configs/node/protocol-manifest.json`
-- `rollup:` RPC/WebSocket URLs and `provider`
-- `consensus:` `consensusaddress`, `chainid` (decimal), `manifestpath: "configs/node/protocol-manifest.json"`, `genesis`
-- `node.mode`: `"full"` or `"validator"`
+**Network values and protocol manifest** — required since v0.6. Resolved and verified, never typed
+(`install-procedure.md` Phase 5):
+```bash
+scripts/resolve-network.sh --config-file "$CONFIG_FILE" --chain-id "$CHAIN_ID" \
+  --deployment-dir "$DEPLOYMENT_DIR" --deployment-key "$DEPLOYMENT_KEY" \
+  --previous-dirs "$PREVIOUS_DIRS" --out /tmp/genlayer-network      # must exit 0
+sudo -u genlayer scripts/apply-network-config.sh --resolved /tmp/genlayer-network \
+  --node-dir /opt/genlayer-node/${VERSION} [--validator 0x... --operator 0x...]
+```
+- Writes `rollup:` RPC/WebSocket URLs and `provider`; `consensus:` `consensusaddress`, `chainid`
+  (decimal), `genesis`; installs the manifest at `consensus.manifestpath`
+- Exit 3 from `resolve-network.sh`: the published docs still describe an older phase. **Stop**;
+  get the current phase's files from the GenLayer team and re-run with `--config-url/--manifest-url`
+- `node.mode`: `"full"` or `"validator"` (set by the wizard below)
 
 #### Configuration Wizard (Group-based)
 After copying the base config, go through each configuration GROUP and ask whether to modify or keep defaults:
@@ -700,7 +752,7 @@ First ask how user wants to provide the operator key:
    Note: the user sets `GENLAYERNODE_PASSWORD` (Docker: `NODE_PASSWORD`) in .env to the export passphrase; doctor verifies it unlocks
 7. For keystore directory: Already in correct location, just verify contents show UTC--* file
 
-**Note**: The keystore lives in the shared data directory (`/opt/genlayer-node/v0.6/data/node/keystore/`, reached through the version's `data` link).
+**Note**: The keystore lives in the shared data directory (`/opt/genlayer-node/<deployment_dir>-<minor>/data/node/keystore/`, reached through the version's `data` link).
 
 ### 6. Start WebDriver
 WebDriver is required for web-based contract operations. Start it before running doctor check:
@@ -868,15 +920,19 @@ After starting the node, verify it's running and syncing:
 curl -s http://localhost:9153/health | jq
 ```
 
-Expected response (example: Testnet Bradbury):
+Expected response (shape):
 ```json
 {
   "status": "healthy",
-  "network": "bradbury-phase2",
-  "node_version": "v0.6.0",
-  "genvm_version": "v0.6.0-rc10"
+  "network": "<NODE_NETWORK_NAME>",
+  "node_version": "<VERSION>",
+  "genvm_version": "..."
 }
 ```
+
+`network` must equal the current phase's `node_network_name` in `networks.yaml` (e.g.
+`bradbury-phase3`). A previous phase's name means the config is stale: stop the node and redo
+the network config (`network-resolution-procedure.md` R5).
 
 **Sync status:**
 ```bash
@@ -931,6 +987,12 @@ This skill is defined by canonical YAML files:
 - **sharp-edges.yaml** - 30+ common gotchas with detection and fixes
 - **validations.yaml** - 25+ automated pre/post checks
 - **collaboration.yaml** - Dependencies and composition
+- **networks.yaml** - Networks, current phase, where their values are published. The only file
+  edited when a phase or network launches (see the end of `network-resolution-procedure.md`).
+  If a launch needs any other edit to this skill, something was hardcoded that should be resolved
+- **network-resolution-procedure.md** - R1–R5: choose and verify network, phase, version, CLI
+- **scripts/** - `resolve-version.sh`, `resolve-network.sh`, `apply-network-config.sh`,
+  `setup-cli-network.sh`, `list-llm-providers.sh` (and `validate.sh`, the Stop hook)
 
 ## Usage
 
@@ -952,7 +1014,7 @@ I want to set up a validator node
 
 **With specific version:**
 ```
-Install validator node version v0.4.4
+Install validator node version v0.6.1
 ```
 
 **With latest version:**
@@ -997,25 +1059,14 @@ When you use the word "latest", the skill will automatically fetch and install t
 
 **IMPORTANT**: When collecting user inputs, follow these rules:
 
-### config.yaml Rollup URLs (Step 4) - Ask via Wizard
-Use AskUserQuestion with these options (tool requires minimum 2 options):
-- **RPC URL** - Options: ["Skip for now", "I'll enter my URL"]
-- **WebSocket URL** - Options: ["Skip for now", "I'll enter my URL"]
+### Network Values (Step 4) - Never Ask, Always Resolve
+RPC/WebSocket URLs, provider, consensus address, chain id, genesis and the protocol manifest are
+resolved by `scripts/resolve-network.sh` and written by `scripts/apply-network-config.sh`. Show the
+resolved values (they are public); do not ask the user to type them. Ask only which **network** to
+join, and only when `networks.yaml` lists more than one active network.
 
-**IMPORTANT**: The "Other" text field in AskUserQuestion does not work reliably. When user selects "I'll enter my URL", follow up with a **plain text question** asking them to type the URL directly.
-
-Example flow:
-```
-Step 1: AskUserQuestion
-  Question: "Do you have the GenLayer Chain RPC URL?" (from your network's docs)
-  Options:
-    - "Skip for now" (will need to configure manually later)
-    - "I'll enter my URL"
-
-Step 2: If user selected "I'll enter my URL", ask:
-  "Please enter the RPC URL:"
-  [User types URL directly in chat]
-```
+**IMPORTANT**: The "Other" text field in AskUserQuestion does not work reliably. For free text
+(connection details, wallet addresses), ask a **plain text question** in chat.
 
 ### config.yaml Configuration (Step 4) - Node Identity Group
 These values are configured in config.yaml during the Node Identity group:
