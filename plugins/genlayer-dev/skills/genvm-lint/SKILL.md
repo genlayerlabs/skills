@@ -112,7 +112,7 @@ genvm-lint download --available            # Show releases on GitHub
 
 `genvm-linter` 0.11.1rc2 reports E014 (`Class 'X' used in storage needs @allow_storage decorator`) for storage dataclasses decorated with `@gl.storage.allow`, because the lint step only recognizes the legacy decorator name. This is a false positive: `@allow_storage` does not exist on the v0.3 and v0.4 runners. When E014 is the only lint finding and validation passes, treat the check as passed and keep `@gl.storage.allow`.
 
-A passing `check` proves the contract loads in the runner its header pins. It does not prove the target network ships that runner: a v0.3 pin lints clean and is still rejected by Studio, and a v0.4 pin by Testnet Bradbury. Confirm the pin with the dry-runs in the `write-contract` skill. For the same reason, ignore the `py-genlayer: a newer runner is available` hint that 0.11.1 prints for a v0.3 pin when the contract targets Testnet Bradbury.
+A passing `check` proves the contract loads in the runner its header pins. It does not prove the target network ships that runner: a v0.3 pin (written for the retired Bradbury Phase 2) lints clean and is still rejected by Studio and Testnet Bradbury Phase 3. Confirm the pin with the dry-runs in the `write-contract` skill.
 
 ## Agent Workflow
 
