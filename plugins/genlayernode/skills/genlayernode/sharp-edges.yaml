@@ -171,13 +171,14 @@ edges:
     severity: critical
 
   - id: cli-network-add-ambiguous-book
-    description: "`genlayer network add --deployment <book>` refuses the deployment book"
+    description: "`genlayer network add --deployment <book>` refuses the deployment book (CLI 0.40.0)"
     detect: |
-      # genlayer 0.40.x: "Multiple deployment entries map to roundsStorage: RoundsStorage and Rounds"
+      genlayer --version   # 0.40.0 or older
+      # error: "Multiple deployment entries map to roundsStorage: RoundsStorage and Rounds"
     impact: "Custom profile not created; falling back to the built-in (possibly stale) alias."
     fix: |
-      Do not pass --deployment. Pass every address explicitly; scripts/setup-cli-network.sh does this
-      (--consensus-main, --consensus-data, --staking, --fee-manager, --rounds-storage, --appeals).
+      Upgrade the CLI: npm install -g genlayer@latest (>= 0.40.1 takes RoundsStorage and ignores Rounds).
+      Then re-run scripts/setup-cli-network.sh, which imports the book with --deployment.
     severity: medium
 
   - id: phase-change-treated-as-upgrade
