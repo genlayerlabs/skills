@@ -26,22 +26,24 @@ runner dependency header.
 ```
 
 The pin must name a runner **the target network's GenVM actually ships**.
-Pins are per network, not universal. No single pin works on both Studio and
-Testnet Bradbury (verified 2026-11-23 with the dry-runs below):
+Pins are per network, not universal: check them with the dry-runs below
+whenever a network upgrades its GenVM. Today Studio and Testnet Bradbury ship
+the same runner (Studio verified 2026-11-23, Bradbury 2026-11-25):
 
 | Network | GenVM executor | Header for new contracts |
 |---|---|---|
 | Studio v0.123 and later: `studio.genlayer.com` (CLI `studionet`), `studio-dev.genlayer.com` (CLI `studio-dev`; `studio-next.genlayer.com` is an alias of the same chain), local Studio (`localnet`) | v0.4 | `# v0.4.0` and `py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0` |
-| Testnet Bradbury | v0.3 | `# v0.3.0` and `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` |
+| Testnet Bradbury (Phase 3, genesis 2026-11-24) | v0.4 | `# v0.4.0` and `py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0` |
 
-Ask which network the contract targets. When the user does not say, use the
-Studio (v0.4) header. Both lines share the same API (see **Current API**): for
-the examples in this skill only the header and salted deploys differ. Moving a
-contract between Studio and Bradbury means swapping the header and re-checking
-it with a dry-run, because the runners differ in a few more places these
-examples do not use: v0.4 removed the `__receive__` hook (a contract that
-defines it fails to load), changed `emit_transfer` to take only `value`, and
-added `gl.message.create2`.
+Bradbury Phase 2 (retired 2026-11-24) ran the v0.3 executor, with the header
+`# v0.3.0` and `py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0`.
+Bradbury Phase 3 rejects that pin (`execution failed ... genvm execution
+error`), so do not write new contracts against it. The v0.3 and v0.4 runners
+share the same API (see **Current API**): migrating a Phase 2 contract means
+swapping the header, switching salted deploys to `salted=`, and re-checking it
+with a dry-run, because the runners differ in a few more places: v0.4 removed
+the `__receive__` hook (a contract that defines it fails to load), changed
+`emit_transfer` to take only `value`, and added `gl.message.create2`.
 
 Studio also keeps a legacy v0.2 executor: contracts pinned to an old runner
 (`py-genlayer:1jb45aa8…` and older) and written with the legacy API still
@@ -256,17 +258,18 @@ The contract header declares the GenVM Python runner. Always pin a specific
 runner version hash that the target network ships. All GenLayer networks reject
 `test`, `latest`, and unversioned runner aliases in generated contracts.
 
-| Runner | v0.4 (Studio v0.123 and later) | v0.3 (Testnet Bradbury) |
+| Runner | v0.4 (Studio v0.123 and later, Testnet Bradbury Phase 3) | v0.3 (Bradbury Phase 2, retired) |
 |---|---|---|
 | `py-genlayer` | `kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0` | `babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0` |
 | `py-genlayer-multi` | `ys9w7shpvsdswe2fhrxh7agke954catkqb28cngq5924zw9bzx80` | `2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130` |
 | `py-lib-genlayer-embeddings` | `hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg` | `hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg` |
 
 These are the hashes in `genvm-manager` v0.6.0-rc14 (`executor/v0.4.0-rc1` and
-`executor/v0.3.0`), each dry-run on its network on 2026-11-23. The examples
-below use the v0.4 column; for Bradbury swap in the v0.3 column and `# v0.3.0`.
-For any other network or a newer release, check with **Finding the right pin
-for a network** above.
+`executor/v0.3.0`). The `py-genlayer` v0.4 pin was dry-run on Studio on
+2026-11-23 and on Testnet Bradbury on 2026-11-25. The examples below use the
+v0.4 column; the v0.3 column only identifies contracts written for Bradbury
+Phase 2. For any other network or a newer release, check with **Finding the
+right pin for a network** above.
 
 ### Single-file Python contracts
 
@@ -671,16 +674,16 @@ def __init__(self, num_workers: int):
         addr = gl.contract.deploy(
             code=worker_code.encode("utf-8"),
             args=[i, gl.message.contract_address],
-            salted=gl.contract.Salted(i + 1),  # v0.3 runner (Bradbury): salt_nonce=i + 1
+            salted=gl.contract.Salted(i + 1),  # v0.3 runner (Bradbury Phase 2): salt_nonce=i + 1
             on="decided",
         )
         self.worker_addresses.append(addr)
 ```
 
-Salted deploys are the one place where these examples differ between the v0.3 and v0.4 runners:
+Salted deploys are the one place where these examples differ between the v0.3 and v0.4 runners, which matters when migrating a Bradbury Phase 2 contract:
 
-- **v0.4 runner (Studio v0.123 and later):** `gl.contract.deploy(code=, args=, kwargs=, salted=int | gl.contract.Salted | None, value=, on="decided" | "finalized")`. The `salt_nonce=` keyword does not exist (`TypeError: deploy() got an unexpected keyword argument 'salt_nonce'`). Only `salted=gl.contract.Salted(n)` makes `deploy()` return the child's address; a plain `int` salt deploys at a fixed address but returns `None`. To predict the child address, call `gl.contract.Salted(n).resolve()`: it calls `predictGhostAddress(n, gl.message.contract_address)` on the settlement-chain factory at `gl.message.create2["deployer"]`, so the result depends on the salt and the deploying contract address. `Salted.resolve_hardcoded()` computes the same locally from a hardcoded formula, which can go stale if governance changes the factory's derivation; prefer `resolve()`.
-- **v0.3 runner (Testnet Bradbury):** `gl.contract.deploy(code=, args=, kwargs=, salt_nonce=int, value=, on="decided" | "finalized")`. It returns the child's address when `salt_nonce` is non-zero and `None` when it is `0`. `salted=`, `gl.contract.Salted`, and `gl.message.create2` do not exist there.
+- **v0.4 runner (Studio v0.123 and later, Testnet Bradbury Phase 3):** `gl.contract.deploy(code=, args=, kwargs=, salted=int | gl.contract.Salted | None, value=, on="decided" | "finalized")`. The `salt_nonce=` keyword does not exist (`TypeError: deploy() got an unexpected keyword argument 'salt_nonce'`). Only `salted=gl.contract.Salted(n)` makes `deploy()` return the child's address; a plain `int` salt deploys at a fixed address but returns `None`. To predict the child address, call `gl.contract.Salted(n).resolve()`: it calls `predictGhostAddress(n, gl.message.contract_address)` on the settlement-chain factory at `gl.message.create2["deployer"]`, so the result depends on the salt and the deploying contract address. `Salted.resolve_hardcoded()` computes the same locally from a hardcoded formula, which can go stale if governance changes the factory's derivation; prefer `resolve()`.
+- **v0.3 runner (Bradbury Phase 2, retired):** `gl.contract.deploy(code=, args=, kwargs=, salt_nonce=int, value=, on="decided" | "finalized")`. It returns the child's address when `salt_nonce` is non-zero and `None` when it is `0`. `salted=`, `gl.contract.Salted`, and `gl.message.create2` do not exist there.
 
 On both, `gl.deploy_contract` no longer exists and `on="accepted"` is not a valid value for `deploy()`.
 
@@ -750,7 +753,7 @@ def validator_fn(leaders_res: gl.vm.Result) -> bool:
 | `py-genlayer:test`, `py-genlayer:latest`, or unversioned `py-genlayer` | Pin the documented runner version hash | All GenLayer networks reject runner aliases and unpinned dependencies |
 | Copy a runner pin from old docs or another network | Check the pin against the target network with a dry-run | A runner the network's GenVM does not ship fails every deploy with `runner malformed` |
 | Legacy API (`from genlayer import *`, `gl.Contract`) with a v0.3 or v0.4 pin | `import genlayer as gl`, `gl.contract.Contract` | The v0.3 and v0.4 runners do not export the old names, so the contract fails to load |
-| `salt_nonce=` on Studio, or `salted=` on Bradbury | Use the salted-deploy form of the runner the header pins | The keyword differs between the v0.3 and v0.4 runners: the wrong one raises `TypeError`, and `gl.contract.Salted` on the v0.3 runner raises `AttributeError` |
+| `salt_nonce=` with a v0.4 pin, or `salted=` with a v0.3 pin | Use the salted-deploy form of the runner the header pins | The keyword differs between the v0.3 and v0.4 runners: the wrong one raises `TypeError`, and `gl.contract.Salted` on the v0.3 runner raises `AttributeError` |
 | `strict_eq()` for LLM calls | Custom validator function | LLM outputs are non-deterministic — strict_eq always fails consensus |
 | Store `list` or `dict` | `DynArray[T]` or `TreeMap[K, V]` | Python builtins aren't persistable |
 | Use native `float` for money | Atto-scale `u256` (value * 10^18) | Standard across blockchains for cross-chain interop |

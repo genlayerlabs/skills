@@ -586,7 +586,7 @@ All GenLayer networks reject \`py-genlayer:test\`, \`py-genlayer:latest\`, and u
 # { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 \`\`\`
 
-That is the GenVM v0.4 runner that Studio v0.123 and later ship (\`studio.genlayer.com\`, \`studio-dev.genlayer.com\`, a current local Studio). Pins are per network: Testnet Bradbury ships the v0.3 runner, so there the header is \`# v0.3.0\` with \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\`. The examples in the skill are valid on both runners except for salted deploys (\`salted=\` on v0.4, \`salt_nonce=\` on v0.3). A pin the network does not ship fails every deploy with \`runner malformed\`. Check a pin without sending a transaction: \`gen_getContractSchemaForCode\` on Studio, \`gen_call\` with \`type: "deploy"\` on Bradbury.
+That is the GenVM v0.4 runner that Studio v0.123 and later (\`studio.genlayer.com\`, \`studio-dev.genlayer.com\`, a current local Studio) and Testnet Bradbury Phase 3 ship. Bradbury Phase 2 (retired 2026-11-24) ran the v0.3 runner, with the header \`# v0.3.0\` and \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\`; Phase 3 rejects it. Migrating such a contract means swapping the header and switching salted deploys from \`salt_nonce=\` to \`salted=\`. A pin the network does not ship fails every deploy with \`runner malformed\`. Check a pin without sending a transaction: \`gen_getContractSchemaForCode\` on Studio, \`gen_call\` with \`type: "deploy"\` on Bradbury.
 
 \`test\` and \`latest\` are local-development aliases for GenLayer runtime developers. They may work only in a specially configured local Studio environment with a GenLayer developer environment variable, but they do not work on GenLayer networks and must not appear in generated user contracts.
 
@@ -641,7 +641,7 @@ class MyContract(gl.contract.Contract):
 
 Always pin a specific runner version hash in the contract's first line. All GenLayer networks reject \`test\`, \`latest\`, and unversioned runner aliases.
 
-| Contract Type | Studio v0.123+ (\`# v0.4.0\`) | Testnet Bradbury (\`# v0.3.0\`) |
+| Contract Type | Studio v0.123+, Testnet Bradbury Phase 3 (\`# v0.4.0\`) | Bradbury Phase 2, retired (\`# v0.3.0\`) |
 |---------------|------------|------------|
 | Single-file Python | \`py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0\` | \`py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0\` |
 | Multi-file Python package | \`py-genlayer-multi:ys9w7shpvsdswe2fhrxh7agke954catkqb28cngq5924zw9bzx80\` | \`py-genlayer-multi:2f6ynxqmzzg1dmcsaj5m2k1b1bgpe1y3850y7vhm8m2eewcvg130\` |
