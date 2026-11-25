@@ -1,7 +1,7 @@
 # Skill Reference
 
 > **Auto-generated** from `skill.yaml` files. Do not edit manually.
-> Last updated: 2026-11-25 13:59
+> Last updated: 2026-11-25 17:41
 
 ## Overview
 
@@ -12,7 +12,7 @@ Total: **8 skills** across 4 kinds.
 | commit | action | 1.0.0 | Execute git commit with conventional commit message analy... |
 | create-skill | meta | 1.0.0 | Scaffold a new Claude Code skill using the multi-YAML pat... |
 | docs-refresh | gate | 1.0.0 | Refresh documentation with deterministic generation from ... |
-| genlayernode | gate | 2.0.0 | Interactive wizard to set up or update a GenLayer validat... |
+| genlayernode | gate | 2.0.1 | Interactive wizard to set up or update a GenLayer validat... |
 | linear | integration | 1.0.0 | Create and manage Linear issues using templates for the G... |
 | pr-create | action | 1.0.0 | Creates GitHub pull requests with conventional commit-sty... |
 | pr-merge | action | 1.0.0 | Merge GitHub pull requests with strict CI validation. Nev... |

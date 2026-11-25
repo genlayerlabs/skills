@@ -1,6 +1,6 @@
 name: genlayernode
 kind: gate
-version: "2.0.0"
+version: "2.0.1"
 description: "Interactive wizard to set up or update a GenLayer validator node on Linux, for any active GenLayer network. Resolves the network's current phase, node version and config at run time."
 severity: high
 tags:
