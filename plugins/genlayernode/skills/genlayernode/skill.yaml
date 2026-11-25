@@ -1,7 +1,7 @@
 name: genlayernode
 kind: gate
-version: "1.0.0"
-description: "Interactive wizard to set up a GenLayer validator node on Linux."
+version: "2.0.0"
+description: "Interactive wizard to set up or update a GenLayer validator node on Linux, for any active GenLayer network. Resolves the network's current phase, node version and config at run time."
 severity: high
 tags:
   - validator
@@ -28,10 +28,12 @@ owns:
 
 # Default configuration values (from infrastructure)
 defaults:
-  network: testnet-bradbury   # CLI network alias; the testnet documented today
-  # NOTE: rpc_url, websocket_url, the RPC provider key, consensus address, chain id, genesis and
-  # the protocol manifest are PER-DEPLOYMENT - NO defaults. Take them from the network's section
-  # in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator.
+  network: "${NET}"   # CLI profile pinned to the current phase by scripts/setup-cli-network.sh (never a built-in alias from memory)
+  # NOTE: rpc_url, websocket_url, consensus address, chain id, genesis, the protocol manifest and
+  # the node version are PER-DEPLOYMENT - NO defaults. They are resolved at run time from
+  # networks.yaml by scripts/resolve-network.sh and scripts/resolve-version.sh, verified against the
+  # genlayer-networks deployment book (network-resolution-procedure.md). The RPC provider key is a
+  # secret the user sets in .env.
   install_path: "/opt/genlayer-node"
   data_dir: "./data/node"
   node_rpc_port: 9151
@@ -43,13 +45,41 @@ defaults:
 
 # Required user configuration (no defaults)
 required_inputs:
-  - rpc_url: "GenLayer Chain HTTP RPC URL (from the network's docs)"
-  - websocket_url: "GenLayer Chain WebSocket URL (from the network's docs)"
-  - consensus_values: "consensusaddress, chainid, genesis and the protocol manifest (from the network's docs)"
+  - network: "An active network from networks.yaml (asked only when more than one is active)"
   - rpc_key: "RPC provider API key, if the provider needs one (set by the user in .env)"
   - validator_wallet_address: "From staking wizard or existing wallet"
   - operator_address: "From keystore import or generate new"
   - llm_api_key: "From chosen LLM provider"
+
+# Resolved at run time, never asked and never written into this skill
+# (network-resolution-procedure.md; scripts/)
+resolution:
+  registry: "networks.yaml"
+  never_hardcode:
+    - "contract addresses (AddressManager, staking), genesis block, chain id of a phase"
+    - "RPC / WebSocket URLs and provider"
+    - "protocol manifest"
+    - "node version (latest stable on the phase's release line)"
+    - "LLM provider list and key variable names"
+    - "minimum stake (genlayer staking epoch-info)"
+  steps:
+    - id: R1
+      what: "Choose network (status: active only) and read its current_phase"
+    - id: R2
+      what: "Resolve version"
+      command: "scripts/resolve-version.sh --line ${RELEASE_LINE}"
+    - id: R3
+      what: "Fetch config + manifest, verify vs the deployment book (exit 3 = docs on an older phase: stop)"
+      command: "scripts/resolve-network.sh --config-file ${CONFIG_FILE} --chain-id ${CHAIN_ID} --deployment-dir ${DEPLOYMENT_DIR} --deployment-key ${DEPLOYMENT_KEY} --previous-dirs ${PREVIOUS_DIRS} --out /tmp/genlayer-network"
+    - id: R4
+      what: "Pin the genlayer CLI to the current phase (laptop)"
+      command: "NET=$(scripts/setup-cli-network.sh --cli-network ${CLI_NETWORK} --deployment-dir ${DEPLOYMENT_DIR} --deployment-key ${DEPLOYMENT_KEY})"
+    - id: R5
+      what: "After start: /health .network == NODE_NETWORK_NAME"
+  update_types:
+    patch: "same phase, same release line: zero-downtime switch (update-procedure.md)"
+    release_line: "same phase, new line: update-procedure.md -> Major Version Updates"
+    phase_change: "network name changes: new stake, new data dir (DATA_KEY), fresh config (update-procedure.md -> Network Phase Change)"
 
 # Directory structure after installation
 directory_structure:
@@ -62,7 +92,7 @@ directory_structure:
         - "opt/genvm/<genvm-version>/"
         - "docker-compose.yaml"
         - ".env"
-        - "data -> ../{MINOR}/data (shared: genvm.db, ops.db, keystore/, logs/)"
+        - "data -> ../{DEPLOYMENT_DIR}-{MINOR}/data (shared by this phase's patch versions: genvm.db, ops.db, keystore/, logs/)"
         - "configs/node/config.yaml"
         - "configs/node/protocol-manifest.json"
     - path: "bin -> {VERSION}/bin"
@@ -150,11 +180,11 @@ inputs_required:
     required: true
 
   - id: node_version
-    description: "Version of genlayer-node to install"
+    description: "Version of genlayer-node to install (default: latest stable on the current phase's release line)"
     type: string
     how_to_find: |
-      curl -s "https://storage.googleapis.com/storage/v1/b/gh-af/o?prefix=genlayer-node/bin/amd64" | \
-      grep -o '"name": *"[^"]*"' | sed -n 's/.*\/\(v[^/]*\)\/.*/\1/p' | sort -ru | head -5
+      scripts/resolve-version.sh --line ${RELEASE_LINE}          # latest stable
+      scripts/resolve-version.sh --line ${RELEASE_LINE} --list   # choices
     required: true
 
   - id: validator_wallet_address
@@ -268,16 +298,9 @@ inputs_required:
 config_wizard:
   sections:
     - id: rollup
-      name: "Rollup Configuration (Required - No Defaults)"
-      questions:
-        - id: genlayerchainrpcurl
-          prompt: "GenLayer Chain RPC URL"
-          required: true
-          validation: "Must be a valid HTTP(S) URL - user must provide the network's RPC endpoint (no API key in it)"
-        - id: genlayerchainwebsocketurl
-          prompt: "GenLayer Chain WebSocket URL"
-          required: true
-          validation: "Must be a valid WSS URL - user must provide the network's WebSocket endpoint (no API key in it)"
+      name: "Rollup + Consensus (resolved - never asked)"
+      resolved_by: "scripts/resolve-network.sh + scripts/apply-network-config.sh"
+      note: "genlayerchainrpcurl, genlayerchainwebsocketurl, provider, consensusaddress, chainid, genesis and the manifest come from the verified resolved.env. Show them to the user; do not ask for them. The RPC key is a secret the user sets in .env."
 
     - id: node_identity
       name: "Node Identity"
@@ -413,7 +436,7 @@ patterns:
   - id: install-genlayer-cli
     description: |
       Install the GenLayer CLI globally via npm.
-    command: 'npm install -g "genlayer@${CLI_VERSION}"  # exact version from the release announcement for your network'
+    command: 'npm install -g genlayer@latest  # >= 0.40.1; then pin the phase: NET=$(scripts/setup-cli-network.sh ...)'
 
   - id: create-validator-wallet
     description: |
@@ -422,7 +445,7 @@ patterns:
       The wizard is FULLY INTERACTIVE (requires TTY) and cannot be automated.
       It runs on the user's LOCAL machine, not the validator server.
       See staking-wizard-procedure.md for the complete walkthrough.
-    command: "genlayer staking wizard --network testnet-bradbury"
+    command: "genlayer staking wizard --network ${NET}"
     notes:
       - "The wizard creates THREE addresses: owner, operator, and validator wallet"
       - "Owner = cold wallet that controls withdrawals (stays local)"
@@ -430,7 +453,7 @@ patterns:
       - "Validator Wallet = smart contract deployed on-chain (used in config.yaml)"
       - "The wizard handles: account selection, balance check, operator creation, keystore export, staking transaction, and identity setup"
       - "If user cannot run wizard, use individual CLI commands (see staking-wizard-procedure.md)"
-      - "Phase 2: the operator must be a CLI account so it can sign the proof of possession; an address alone fails"
+      - "Since Bradbury Phase 2: the operator must be a CLI account so it can sign the proof of possession; an address alone fails"
     outputs:
       - "validator_wallet_address (from on-chain transaction result)"
       - "operator_address (from operator account creation)"
@@ -451,8 +474,8 @@ patterns:
       - "genlayer account create --name 'Operator Name'"
       - "genlayer account unlock --account 'Operator Name'"
       - "genlayer account export --account 'Operator Name' --output './operator-keystore.json'"
-      - "genlayer staking validator-join --account 'Owner Name' --amount <deployed minimum>gen --operator 0xOPERATOR_ADDRESS --network testnet-bradbury"
-      - "genlayer staking set-identity 0xVALIDATOR_WALLET --account 'Operator Name' --moniker 'My Validator' --network testnet-bradbury"
+      - "genlayer staking validator-join --account 'Owner Name' --amount <deployed minimum>gen --operator 0xOPERATOR_ADDRESS --network ${NET}"
+      - "genlayer staking set-identity 0xVALIDATOR_WALLET --account 'Operator Name' --moniker 'My Validator' --network ${NET}"
     notes:
       - "account create, account unlock, and account export require interactive password input"
       - "validator-join is non-interactive when all flags are provided"
@@ -471,7 +494,7 @@ patterns:
       the validator misses validation rounds.
     commands:
       - "genlayer account show --account '${OPERATOR_ACCOUNT_NAME}'"
-      - "genlayer account send ${OPERATOR_ADDRESS} 10gen --account '${OWNER_ACCOUNT_NAME}' --network testnet-bradbury"
+      - "genlayer account send ${OPERATOR_ADDRESS} 10gen --account '${OWNER_ACCOUNT_NAME}' --network ${NET}"
       - "genlayer account show --account '${OPERATOR_ACCOUNT_NAME}'"
     notes:
       - "Recommended initial funding: 10 GEN"
@@ -481,19 +504,18 @@ patterns:
   - id: verify-validator-info
     description: |
       Verify validator registration after staking wizard completes.
-    command: "genlayer staking validator-info 0xVALIDATOR_WALLET_ADDRESS --network testnet-bradbury"
+    command: "genlayer staking validator-info 0xVALIDATOR_WALLET_ADDRESS --network ${NET}"
     notes:
       - "Use the validatorWallet address, NOT the owner address"
       - "Check selfStakePendingDeposits for activation epoch"
       - "genlayer staking validators shows status pending until the deposit activates (typically 2 epochs)"
-      - "needsPriming may need to be resolved with: genlayer staking validator-prime 0xVALIDATOR_WALLET_ADDRESS --network testnet-bradbury"
+      - "needsPriming may need to be resolved with: genlayer staking validator-prime 0xVALIDATOR_WALLET_ADDRESS --network ${NET}"
 
   - id: list-available-versions
     description: |
       List available node versions from the release bucket.
     command: |
-      curl -s "https://storage.googleapis.com/storage/v1/b/gh-af/o?prefix=genlayer-node/bin/amd64" | \
-      grep -o '"name": *"[^"]*"' | sed -n 's/.*\/\(v[^/]*\)\/.*/\1/p' | sort -ru | head -10
+      scripts/resolve-version.sh --line ${RELEASE_LINE} --list
 
   - id: download-and-extract
     description: |
@@ -513,7 +535,7 @@ patterns:
     description: |
       Create symlinks for current version for easy access from /opt/genlayer-node.
     commands:
-      - "sudo -u genlayer ln -sfn ../${MINOR}/data /opt/genlayer-node/${VERSION}/data"
+      - "sudo -u genlayer ln -sfn ../${DEPLOYMENT_DIR}-${MINOR}/data /opt/genlayer-node/${VERSION}/data  # DATA_KEY: one per phase + line"
       - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/bin /opt/genlayer-node/bin"
       - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/opt /opt/genlayer-node/opt"
       - "sudo -u genlayer ln -sfn /opt/genlayer-node/${VERSION}/data /opt/genlayer-node/data"
@@ -577,7 +599,11 @@ patterns:
 
   - id: generate-config-yaml
     description: |
-      Generate config.yaml from wizard answers.
+      Generate config.yaml from wizard answers. The rollup/consensus values are NEVER typed: they
+      are written by scripts/apply-network-config.sh from resolve-network.sh's verified resolved.env.
+    commands:
+      - "scripts/resolve-network.sh --config-file ${CONFIG_FILE} --chain-id ${CHAIN_ID} --deployment-dir ${DEPLOYMENT_DIR} --deployment-key ${DEPLOYMENT_KEY} --previous-dirs ${PREVIOUS_DIRS} --out /tmp/genlayer-network"
+      - "sudo -u genlayer scripts/apply-network-config.sh --resolved /tmp/genlayer-network --node-dir /opt/genlayer-node/${VERSION} --validator ${VALIDATOR_WALLET_ADDRESS} --operator ${OPERATOR_ADDRESS}"
     template: |
       # GenLayer Node Configuration
       # Generated by genlayernode skill
@@ -588,7 +614,7 @@ patterns:
         genlayerchainwebsocketurl: "${WEBSOCKET_URL}"
         provider: "${RPC_PROVIDER}"
 
-      # Consensus configuration (AddressManager) - per-deployment, from the network's docs
+      # Consensus configuration (AddressManager) - per-deployment, from resolved.env (apply-network-config.sh)
       consensus:
         consensusaddress: "${CONSENSUS_ADDRESS}"
         chainid: "${CHAIN_ID}"
@@ -941,6 +967,17 @@ anti_patterns:
     severity: critical
 
 procedure:
+  - step: "Resolve network, phase and version"
+    decision_point: true
+    detail: |
+      network-resolution-procedure.md R1-R2. Read networks.yaml; offer status: active networks only
+      (planned -> stop: not launched; retired -> stop). Resolve the version on the phase's release line.
+      For an update, classify it (pre-update-checklist.md Phase 0): patch, release line or phase change.
+    commands:
+      - "scripts/resolve-version.sh --line ${RELEASE_LINE}"
+      - "curl -s localhost:9153/health | jq -r '.network, .node_version'   # updates only"
+    edges: [network-planned-or-retired, version-outside-release-line, phase-change-treated-as-upgrade]
+
   - step: "Check prerequisites"
     decision_point: false
     detail: |
@@ -980,7 +1017,9 @@ procedure:
       - Validator wallet address: smart contract deployed on-chain
 
       Prerequisites:
-      - genlayer CLI installed (exact version for your network: npm install -g "genlayer@${CLI_VERSION}")
+      - genlayer CLI >= 0.40.1 (npm install -g genlayer@latest), pinned to the current phase:
+        NET=$(scripts/setup-cli-network.sh --cli-network ${CLI_NETWORK} --deployment-dir ${DEPLOYMENT_DIR} --deployment-key ${DEPLOYMENT_KEY})
+      - A validator from a previous phase is NOT registered on the current one: run the wizard again
       - Owner account created and unlocked with the deployed self-stake minimum
       - Terminal with TTY for interactive prompts
 
@@ -1001,8 +1040,9 @@ procedure:
       - genlayer staking validator-join (non-interactive with all flags)
       - genlayer staking set-identity (interactive)
     commands:
-      - 'npm install -g "genlayer@${CLI_VERSION}"'
-      - "genlayer staking wizard --network testnet-bradbury"
+      - 'npm install -g genlayer@latest'
+      - "NET=$(scripts/setup-cli-network.sh --cli-network ${CLI_NETWORK} --deployment-dir ${DEPLOYMENT_DIR} --deployment-key ${DEPLOYMENT_KEY})"
+      - "genlayer staking wizard --network ${NET}"
     outputs:
       - "validator_wallet_address (from Step 7 on-chain result)"
       - "operator_address (from Step 5 operator creation)"
@@ -1028,13 +1068,13 @@ procedure:
 
       If balance is 0, transfer GEN from the owner:
         genlayer account send 0xOPERATOR_ADDRESS 10gen \
-          --account "Owner Name" --network testnet-bradbury
+          --account "Owner Name" --network ${NET}
 
       Recommended initial funding: 10 GEN (covers thousands of transactions).
       Monitor and top up when operator balance drops below 1 GEN.
     commands:
       - "genlayer account show --account '${OPERATOR_ACCOUNT_NAME}'"
-      - "genlayer account send ${OPERATOR_ADDRESS} 10gen --account '${OWNER_ACCOUNT_NAME}' --network testnet-bradbury"
+      - "genlayer account send ${OPERATOR_ADDRESS} 10gen --account '${OWNER_ACCOUNT_NAME}' --network ${NET}"
     on_failure: "Fund operator manually via wallet or exchange"
     notes:
       - "Operator needs GEN for gas fees to sign validation transactions"
@@ -1043,17 +1083,17 @@ procedure:
 
   - step: "Determine version to install"
     detail: |
-      If user specified "latest", fetch the latest version.
-      Otherwise, use the specified version or let user choose.
+      Already resolved in "Resolve network, phase and version". "Latest" means the latest stable
+      release on the current phase's release line, never the newest release overall.
     decision_point: true
     question: "Which version would you like to install?"
     options:
       - answer: "Latest version (recommended)"
-        action: "Fetch latest from storage"
-        command: 'VERSION=$(curl -s "https://storage.googleapis.com/storage/v1/b/gh-af/o?prefix=genlayer-node/bin/amd64" | grep -o ''"name": *"[^"]*"'' | sed -n ''s/.*\/\(v[^/]*\)\/.*/\1/p'' | sort -Vr | head -1)'
+        action: "Latest stable on the release line"
+        command: 'VERSION=$(scripts/resolve-version.sh --line ${RELEASE_LINE})'
       - answer: "Specific version"
         action: "List available versions and let user choose"
-        command: 'curl -s "https://storage.googleapis.com/storage/v1/b/gh-af/o?prefix=genlayer-node/bin/amd64" | grep -o ''"name": *"[^"]*"'' | sed -n ''s/.*\/\(v[^/]*\)\/.*/\1/p'' | sort -ru | head -5'
+        command: 'scripts/resolve-version.sh --line ${RELEASE_LINE} --list   # then --check <choice>'
     notes:
       - "If user input contains 'latest', automatically use the latest version"
       - "Version is stored in ${VERSION} variable for subsequent steps"
@@ -1149,10 +1189,10 @@ procedure:
   - step: "Run configuration wizard"
     condition: "config_source == wizard"
     sub_steps:
-      - name: "Rollup URLs (Required - No Defaults)"
-        questions:
-          - "GenLayer Chain RPC URL (user must provide the network's HTTP RPC URL)"
-          - "GenLayer Chain WebSocket URL (user must provide the network's WebSocket URL)"
+      - name: "Rollup + Consensus (resolved, not asked)"
+        commands:
+          - "scripts/resolve-network.sh ... --out /tmp/genlayer-network   # must exit 0"
+          - "sudo -u genlayer scripts/apply-network-config.sh --resolved /tmp/genlayer-network --node-dir /opt/genlayer-node/${VERSION}"
       - name: "Node Identity"
         questions:
           - "Validator Wallet Address"

@@ -5,9 +5,9 @@ Shared commands and procedures used by both install and update workflows.
 ## Download & Extract Node Software
 
 ```bash
-# Set the exact version approved for your network (release announcement).
-# Do not take the newest listed version automatically: it may not be approved yet.
-VERSION=v0.6.0
+# The version resolved for the network's release line (network-resolution-procedure.md R2).
+# Never type it from memory: a newer line may not support the network's current phase.
+VERSION=$(scripts/resolve-version.sh --line "$RELEASE_LINE")   # or --check <version> if the user named one
 
 # Download tarball, checksums, signature and install.sh to a temp dir
 # (stop on any 404 — never fall back to an older version)
@@ -92,7 +92,8 @@ The release config ships with all providers present but auto-detection depends o
 For **greybox** strategy, OpenRouter is the primary — ensure `OPENROUTERKEY` is set in `.env`.
 For **default** strategy, enable at least one provider.
 
-**Provider mapping:**
+**Provider mapping** (example: the list and variable names change between releases; read the
+installed release's list with `scripts/list-llm-providers.sh ${NODE_DIR}` and offer only those):
 | Environment Variable | Config Name |
 |---------------------|-------------|
 | `HEURISTKEY` | heurist |
@@ -186,14 +187,19 @@ grep "greybox" /opt/genlayer-node/data/node/logs/node.log | tail -5
 
 ## Create Directory Structure
 
-The tarball ships `configs/node/`. The data directory is shared per minor line and linked from
-each version (see `install-procedure.md` Phase 2):
+The tarball ships `configs/node/`. The data directory is shared by the versions of one
+**phase and release line** (`DATA_KEY`, `install-procedure.md` Phase 0) and linked from each version:
 
 ```bash
 MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+')
-sudo -u genlayer mkdir -p /opt/genlayer-node/${MINOR}/data/node/keystore /opt/genlayer-node/${MINOR}/data/node/logs
-sudo -u genlayer ln -sfn ../${MINOR}/data /opt/genlayer-node/${VERSION}/data
+DATA_KEY=${DEPLOYMENT_DIR}-${MINOR}          # e.g. bradbury-phase-3-v0.6
+sudo -u genlayer mkdir -p /opt/genlayer-node/${DATA_KEY}/data/node/keystore /opt/genlayer-node/${DATA_KEY}/data/node/logs
+sudo -u genlayer ln -sfn ../${DATA_KEY}/data /opt/genlayer-node/${VERSION}/data
 ```
+
+Never link a version to another phase's data directory (sharp-edge `state-reused-across-phases`).
+Installs made before this convention use `/opt/genlayer-node/${MINOR}/data`: patch updates keep
+whatever the running version links to (`update-procedure.md` step 6).
 
 ## Setup Symlinks
 
@@ -254,14 +260,15 @@ cd /opt/genlayer-node
 sudo -u genlayer bash -c 'set -a; . ./.env; set +a; ./bin/genlayernode doctor'
 ```
 
-**Expected output** (example: Testnet Bradbury):
+**Expected output** (shape; the registry and chain must equal `resolved.env`'s
+`CONSENSUS_ADDRESS` and `CHAIN_ID`):
 ```
-  ✓ GenLayer Chain RPC: Connected to https://rpc.testnet-chain.genlayer.com
-  ✓ GenLayer Chain WebSocket: Connected to wss://rpc.testnet-chain.genlayer.com
+  ✓ GenLayer Chain RPC: Connected to <RPC_URL>
+  ✓ GenLayer Chain WebSocket: Connected to <WSS_URL>
   ✓ All required config fields are present
   ✓ Consensus Deployment (admission):
-    ✓ registry 0x3F71AE080BD6270A91dBcc7960d88797828538E0 is sealed
-    ✓ chain 4221, 97 contracts match the trusted manifest
+    ✓ registry <CONSENSUS_ADDRESS> is sealed
+    ✓ chain <CHAIN_ID>, <N> contracts match the trusted manifest
   ✓ GenVM Binaries: Found at ./opt/genvm/current
   ✓ LLM Providers: 1 of 6 enabled backends usable
   ✓ WebDriver: Successfully rendered test page at http://127.0.0.1:4444

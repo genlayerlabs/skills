@@ -92,7 +92,8 @@ CENTRAL_LOKI_PASSWORD=<API key - starts with glc_>
 # Node identification (set these yourself)
 NODE_ID=0xYourValidatorWalletAddress
 VALIDATOR_NAME=your-validator-name
-# Network label for recovery logs and alert routing, e.g. bradbury-phase2 (leave empty rather than guess)
+# Network label for recovery logs and alert routing: the node's /health .network
+# (networks.yaml node_network_name, e.g. bradbury-phase3). Leave empty rather than guess
 NETWORK_NAME=
 ```
 
@@ -297,7 +298,7 @@ CENTRAL_MONITORING_URL=https://prometheus-prod-66.../api/prom/push/
 | `CENTRAL_LOKI_PASSWORD` | Yes | Loki API key | `glc_xxxxx...` |
 | `NODE_ID` | Yes | Validator wallet address (full node: a stable unique name) | `0x1451c990...` |
 | `VALIDATOR_NAME` | Yes | Short validator name (no spaces) | `my-validator-1` |
-| `NETWORK_NAME` | No | Network label for recovery logs / alert routing | `bradbury-phase2` |
+| `NETWORK_NAME` | No | Network label for recovery logs / alert routing (`/health` `.network`) | `bradbury-phase3` |
 | `NODE_METRICS_ENDPOINT` | No | Node metrics address | `host.docker.internal:9153` |
 | `LOG_FILE_PATTERN` | No | Log file glob pattern | `/var/log/genlayer/node*.log` |
 | `METRICS_SCRAPE_INTERVAL` | No | How often to scrape metrics | `60s` (v0.6 default) |

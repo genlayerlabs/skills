@@ -74,6 +74,27 @@ sudo useradd --system --create-home --home-dir /var/lib/genlayer --shell /usr/sb
 
 ## Installation Phases
 
+### Phase 0: Resolve Network, Phase and Version
+
+Follow `network-resolution-procedure.md` R1–R3 first. Nothing network-specific or
+version-specific below is typed by hand: it comes from `networks.yaml` and the scripts.
+
+```bash
+# From networks.yaml (R1), e.g. for Bradbury Phase 3:
+#   CHAIN_ID CONFIG_FILE CLI_NETWORK DEPLOYMENT_DIR DEPLOYMENT_KEY NODE_NETWORK_NAME RELEASE_LINE PREVIOUS_DIRS
+VERSION=$(scripts/resolve-version.sh --line "$RELEASE_LINE")   # R2: latest stable on the line
+INSTALL_ROOT=/opt/genlayer-node; NODE_DIR=${INSTALL_ROOT}/${VERSION}; NODE_USER=genlayer
+MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+')
+DATA_KEY=${DEPLOYMENT_DIR}-${MINOR}       # shared data dir: one per phase AND release line
+```
+
+`DATA_KEY` keeps each phase's databases apart. Phases can share a chain id and a release
+line (Bradbury Phase 2 and 3 are both chain 4221, node v0.6), so a data directory named only
+after the release line would carry one phase's `genvm.db`/`ops.db` into the next.
+
+If `${NODE_DIR}` already exists from a previous phase (same version number), this is a
+phase change: follow `update-procedure.md` → "Network Phase Change" instead.
+
 ### Phase 1: Staking Wizard (Local Machine)
 
 **Skip if you already have a validator wallet address and operator keystore, or for a full node
@@ -82,21 +103,29 @@ sudo useradd --system --create-home --home-dir /var/lib/genlayer --shell /usr/sb
 The staking wizard runs on your **local machine** (not the server) to create wallet keys securely.
 
 ```bash
-# Install GenLayer CLI — the exact version named in the release announcement for your network
-npm install -g "genlayer@${CLI_VERSION}"
+# Install the GenLayer CLI (>= 0.40.1; use the version named in the release announcement if one is)
+npm install -g genlayer@latest
+
+# Pin the CLI to the network's CURRENT phase (network-resolution-procedure.md R4).
+# Use --network "$NET" in EVERY genlayer command: a CLI's built-in alias can still
+# point at a previous phase on the same chain.
+NET=$(scripts/setup-cli-network.sh --cli-network "$CLI_NETWORK" \
+  --deployment-dir "$DEPLOYMENT_DIR" --deployment-key "$DEPLOYMENT_KEY")
 
 # Create and unlock owner account
 genlayer account create --name "My Validator Owner"
 genlayer account unlock --account "My Validator Owner"
 
 # Fund the owner account with the deployed self-stake minimum + gas, then run wizard
-genlayer staking epoch-info --network testnet-bradbury   # deployed minimum (42,000 GEN is the protocol default)
-genlayer staking wizard --account "My Validator Owner" --network testnet-bradbury
-# (--network: your network's CLI alias; testnet-bradbury is the testnet documented today)
+genlayer staking epoch-info --network "$NET"   # deployed minimum, read it: never assume it
+genlayer staking wizard --account "My Validator Owner" --network "$NET"
 ```
 
-Phase 2 registration signs a proof of possession with the operator key: the operator must be an
-account the CLI holds (create it in the wizard). An operator address alone fails.
+A validator registered on a previous phase is **not** registered on the current one: each
+phase is a new staking deployment. Run the wizard (or validator-join) again on `$NET`.
+
+Registration (since Bradbury Phase 2) signs a proof of possession with the operator key: the
+operator must be an account the CLI holds (create it in the wizard). An operator address alone fails.
 
 **Save these outputs from the wizard:**
 | Item | Example | Used For |
@@ -115,7 +144,7 @@ genlayer account show --account "My Validator Operator"
 # Send GEN from owner to operator (10 GEN minimum recommended)
 genlayer account send 0xOPERATOR_ADDRESS 10gen \
   --account "My Validator Owner" \
-  --network testnet-bradbury
+  --network "$NET"
 ```
 
 **See `staking-wizard-procedure.md` for detailed wizard walkthrough.**
@@ -129,12 +158,12 @@ All remaining steps run on the **validator server**.
 > **See `common-procedures.md`** for detailed commands.
 
 ```bash
-VERSION=v0.6.0   # the exact version approved for your network (release announcement)
+# VERSION, NODE_DIR, MINOR, DATA_KEY from Phase 0 (never typed by hand)
 
 # Download, verify (cosign + SHA256), install with the release install.sh
 # See: common-procedures.md -> "Download & Extract Node Software"
 
-# Shared data directory (all v0.6.x) and the version's data/ link
+# Shared data directory (this phase + release line) and the version's data/ link
 # See: common-procedures.md -> "Create Directory Structure"
 
 # Setup symlinks
@@ -170,24 +199,22 @@ sudo chmod 600 /opt/genlayer-node/${VERSION}/.env
 
 **The user edits .env to add these values** (`sudo nano /opt/genlayer-node/${VERSION}/.env`):
 ```bash
-# API key of your network's RPC provider, if it needs one (Testnet Bradbury: Conduit,
-# https://app.conduit.xyz/rpc-keys — its WebSocket refuses connections without it).
-# The RPC URLs are in config.yaml (Phase 5).
+# API key of your network's RPC provider, when networks.yaml says rpc_key_required
+# (portal: rpc_key_portal; Bradbury: Conduit — its WebSocket refuses connections without it).
+# Never put the key in a URL. The RPC URLs are in config.yaml (Phase 5).
 GENLAYERNODE_ROLLUP_GENLAYERCHAINRPCKEY=your-rpc-provider-key
 
-# Required: LLM API key (set ONE based on your provider)
+# Required: LLM API key (set ONE based on your provider). The providers and their variable
+# names vary per release: list them with scripts/list-llm-providers.sh ${NODE_DIR}
 # HEURISTKEY=your-api-key-here
-# COMPUT3KEY=your-api-key-here
-# IOINTELLIGENCEKEY=your-api-key-here
 # OPENROUTERKEY=your-api-key-here
-# (see common-procedures.md for full provider list)
 
 # Validator only: the operator keystore's export passphrase.
 # Binary (systemd) reads GENLAYERNODE_PASSWORD (add the line); Docker reads NODE_PASSWORD.
 GENLAYERNODE_PASSWORD=your-export-passphrase
 
-# Docker only: the exact version, never latest
-NODE_VERSION=v0.6.0
+# Docker only: the exact version from Phase 0 (${VERSION}), never latest
+NODE_VERSION=<VERSION>
 ```
 
 
@@ -218,37 +245,46 @@ sudo -u genlayer sed -i '/^  <provider>:/,/^  [a-z]/ s/enabled: false/enabled: t
 
 ### Phase 5: Node Configuration (Server)
 
-The tarball ships `configs/node/config.yaml` (install.sh already set its `genvm.root_dir`);
-edit it in place. The network values are per-deployment: take them from
-your network's section in the docs ("Network-Specific Consensus Configuration"); for your own network, from its operator.
-Since v0.6 the node also needs the network's **protocol manifest**. Example — Testnet Bradbury:
+The tarball ships `configs/node/config.yaml` (install.sh already set its `genvm.root_dir`) with
+the network fields empty. Since v0.6 the node also needs the network's **protocol manifest**.
+Both are resolved and verified by the scripts, never typed by hand
+(`network-resolution-procedure.md` R3):
 
 ```bash
-sudo -u genlayer curl -fsSL https://docs.genlayer.com/validators/bradbury.protocol-manifest.json \
-  -o /opt/genlayer-node/${VERSION}/configs/node/protocol-manifest.json
-python3 -c "import json; m=json.load(open('/opt/genlayer-node/${VERSION}/configs/node/protocol-manifest.json')); print(m['chainId'], m['registry'])"
-# Must match consensus.chainid and consensus.consensusaddress (Testnet Bradbury: 4221 0x3F71AE080BD6270A91dBcc7960d88797828538E0)
+# 1. Fetch the network config + manifest and prove they are the CURRENT phase
+scripts/resolve-network.sh \
+  --config-file "$CONFIG_FILE" --chain-id "$CHAIN_ID" \
+  --deployment-dir "$DEPLOYMENT_DIR" --deployment-key "$DEPLOYMENT_KEY" \
+  --previous-dirs "$PREVIOUS_DIRS" --out /tmp/genlayer-network
+# exit 3 = the published docs still describe an older phase: STOP (see R3)
+cat /tmp/genlayer-network/resolved.env     # public values: show them to the user
+
+# 2. Write them into config.yaml (rollup + consensus keys, genesis) and install the manifest.
+#    Validator: pass the addresses from Phase 1. Full node: omit them and set node.mode: "full".
+sudo -u genlayer scripts/apply-network-config.sh --resolved /tmp/genlayer-network \
+  --node-dir ${NODE_DIR} --validator 0xYOUR_VALIDATOR_WALLET --operator 0xYOUR_OPERATOR_ADDRESS
 ```
 
-**Edit config.yaml to set the network values, the mode and validator addresses**
-(replace each key in its section; never add a second `rollup:` or `consensus:`). Example — Testnet Bradbury:
+The result has this shape (values come from `resolved.env`; these are placeholders):
 ```yaml
 rollup:
-  genlayerchainrpcurl: "https://rpc.testnet-chain.genlayer.com/"
-  genlayerchainwebsocketurl: "wss://rpc.testnet-chain.genlayer.com/"
-  provider: "conduit"
+  genlayerchainrpcurl: "<RPC_URL>"
+  genlayerchainwebsocketurl: "<WSS_URL>"
+  provider: "<ROLLUP_PROVIDER>"
 
 consensus:
-  consensusaddress: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"
-  chainid: "4221"
+  consensusaddress: "<CONSENSUS_ADDRESS>"   # the phase's AddressManager
+  chainid: "<CHAIN_ID>"
   manifestpath: "configs/node/protocol-manifest.json"
-  genesis: 47930
+  genesis: <GENESIS>
 
 node:
   mode: "validator"                     # or "full" (no addresses needed)
   validatorWalletAddress: "0xYOUR_VALIDATOR_WALLET_ADDRESS"
   operatorAddress: "0xYOUR_OPERATOR_ADDRESS"
 ```
+
+Never edit the network values by hand. If a value looks wrong, re-run `resolve-network.sh`.
 
 
 ### Phase 6: Operator Key Import (Server, validator only)
@@ -389,7 +425,9 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 ```
 
 **Sync complete when:**
-- `status` = `"healthy"` and `network` = the network you joined (Testnet Bradbury: `"bradbury-phase2"`)
+- `status` = `"healthy"` and `network` = `NODE_NETWORK_NAME` from `networks.yaml` (Bradbury
+  Phase 3: `"bradbury-phase3"`). A previous phase's name means the config is stale: stop the
+  node and redo Phase 5 (`network-resolution-procedure.md` R5)
 - `genlayer_node_synced` = 1 and `genlayer_node_blocks_behind` = 0
 
 ---
@@ -406,8 +444,8 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 ## Directory Structure After Installation
 
 ```
-/opt/genlayer-node/
-├── v0.6/data/node/                  # Shared by all v0.6.x versions
+/opt/genlayer-node/                  # example: Bradbury Phase 3 on v0.6.0
+├── bradbury-phase-3-v0.6/data/node/ # Shared by all v0.6.x versions of THIS phase (DATA_KEY)
 │   ├── keystore/                    # Operator key
 │   ├── genvm.db/                    # Chain history (PebbleDB directory)
 │   ├── ops.db/                      # This node's state (vote salts, nonces)
@@ -415,7 +453,7 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 ├── v0.6.0/                          # Version directory
 │   ├── bin/genlayernode             # Node binary
 │   ├── opt/genvm/                   # GenVM binaries
-│   ├── data -> ../v0.6/data         # Link to the shared data directory
+│   ├── data -> ../bradbury-phase-3-v0.6/data   # Link to the shared data directory
 │   ├── configs/node/config.yaml     # Node config
 │   ├── configs/node/protocol-manifest.json
 │   ├── .env                         # Environment variables
@@ -461,6 +499,6 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 
 After installation completes:
 1. Wait for sync to complete (check `journalctl` for progress)
-2. Verify validator is active: `genlayer staking validator-info 0xYOUR_WALLET --network testnet-bradbury`
+2. Verify validator is active: `genlayer staking validator-info 0xYOUR_WALLET --network "$NET"`
 3. Optional: Enable monitoring — see `monitoring-procedure.md`
 4. Optional: Set validator identity: `genlayer staking set-identity`

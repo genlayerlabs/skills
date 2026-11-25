@@ -21,13 +21,14 @@ Reference: https://docs.genlayer.com/validators/setup-guide#understanding-valida
 
 Before running the wizard:
 
-- **genlayer CLI** — the exact version named in the release announcement for your network
-  (`npm install -g "genlayer@${CLI_VERSION}"`). The default npm tag can select an older CLI
-  without your network's addresses. Node.js 20+ (22 for a fresh install).
+- **genlayer CLI** ≥ 0.40.1 (`npm install -g genlayer@latest`, or the version a release
+  announcement names), plus `jq` and `curl` for `scripts/setup-cli-network.sh`. Node.js 20+ (22 for a fresh install).
 - An **owner account** with GEN for the **deployed self-stake minimum** plus gas. Read the
-  minimum with `genlayer staking epoch-info --network testnet-bradbury` — 42,000 GEN is only the
+  minimum with `genlayer staking epoch-info --network "$NET"` — 42,000 GEN is only the
   protocol default, not a guaranteed network setting. Delegation does not replace self-stake.
-- The CLI must be configured for the correct **network** (e.g., `testnet-bradbury`)
+- The CLI must target the network's **current phase**: run `NET=$(scripts/setup-cli-network.sh ...)`
+  (`network-resolution-procedure.md` R4) and pass `--network "$NET"` to every command. A built-in
+  alias such as `testnet-bradbury` can still point at a previous phase on the same chain
 - The owner account must be **unlocked**
 - **Back up the owner key** (private key or seed phrase). The wizard exports only the operator
   key; a lost owner key means the stake can never be exited or claimed.
@@ -80,10 +81,10 @@ The wizard is **fully interactive** and runs in the terminal. It does NOT open a
 genlayer staking wizard
 
 # Skip account and network prompts
-genlayer staking wizard --account "My Validator Owner" --network testnet-bradbury
+genlayer staking wizard --account "My Validator Owner" --network "$NET"
 
 # Skip identity setup
-genlayer staking wizard --account "My Validator Owner" --network testnet-bradbury --skip-identity
+genlayer staking wizard --account "My Validator Owner" --network "$NET" --skip-identity
 ```
 
 ### Step 1: Account Setup
@@ -111,9 +112,10 @@ Using account: My Validator Owner (0x01959d0ed126285cbed368a0d9e7c4eb14d2b77b)
 
 **Prompt**: "Select network"
 
-**Options**: Available networks (excludes "studionet"). Choose your network (e.g., `testnet-bradbury`).
+**Options**: Available networks (excludes "studionet").
 
-**Skipped if**: `--network` flag is provided.
+**Skipped if**: `--network` flag is provided. Always provide it (`--network "$NET"`), so the
+wizard cannot pick an alias that points at a previous phase.
 
 **Output**:
 ```
@@ -156,7 +158,7 @@ Balance sufficient!
 
 **Three paths**:
 
-> **Phase 2 proof of possession**: registration needs the operator public key and a proof of
+> **Proof of possession (since Bradbury Phase 2)**: registration needs the operator public key and a proof of
 > possession bound to the owner, chain and validator-wallet factory. The operator must be an
 > account the CLI holds (Path B or C) so it can sign the proof. An external operator address alone
 > is not enough, and the old `validatorJoin(address)` flow does not work.
@@ -277,7 +279,7 @@ Result:
 
 **Skipped if**: `--skip-identity` flag is provided, or user answers "no".
 
-**Can be done later**: `genlayer staking set-identity <VALIDATOR_WALLET> --account "<operator account>" --network testnet-bradbury`
+**Can be done later**: `genlayer staking set-identity <VALIDATOR_WALLET> --account "<operator account>" --network "$NET"`
 
 ### Step 9: Summary
 
@@ -300,7 +302,7 @@ Next Steps:
      /current/dir/My Validator Operator-keystore.json
   2. Import it into your validator node software
   3. Monitor your validator:
-     genlayer staking validator-info 0x1451c990... --network testnet-bradbury
+     genlayer staking validator-info 0x1451c990... --network "$NET"
   4. Lock your account when done: genlayer account lock
 ```
 
@@ -368,7 +370,7 @@ The skill should present the user with options based on the owner's available ba
 # Transfer GEN from owner to operator
 genlayer account send <OPERATOR_ADDRESS> <AMOUNT>gen \
   --account "Owner Account Name" \
-  --network testnet-bradbury
+  --network "$NET"
 ```
 
 Example:
@@ -376,7 +378,7 @@ Example:
 # Owner has 60,050 GEN available, sending 50,000 to operator
 genlayer account send 0x992fff41a1F49AF2043c2017B80F5a8d66f0a47B 50000gen \
   --account "My Validator Owner" \
-  --network testnet-bradbury
+  --network "$NET"
 ```
 
 #### 4. Verify Transfer
@@ -423,9 +425,9 @@ This step should be performed:
 
 ```bash
 # Check validator info on-chain
-genlayer staking validator-info <VALIDATOR_WALLET_ADDRESS> --network testnet-bradbury
+genlayer staking validator-info <VALIDATOR_WALLET_ADDRESS> --network "$NET"
 # Registered validators that are not active yet are listed by:
-genlayer staking validators --network testnet-bradbury
+genlayer staking validators --network "$NET"
 
 # Expected output includes:
 # - owner, operator addresses
@@ -442,12 +444,12 @@ genlayer staking validators --network testnet-bradbury
 After your deposit activates, you may need to prime the validator:
 
 ```bash
-genlayer staking validator-prime <VALIDATOR_WALLET_ADDRESS> --network testnet-bradbury
+genlayer staking validator-prime <VALIDATOR_WALLET_ADDRESS> --network "$NET"
 ```
 
 Check if priming is needed:
 ```bash
-genlayer staking validator-info <VALIDATOR_WALLET_ADDRESS> --network testnet-bradbury
+genlayer staking validator-info <VALIDATOR_WALLET_ADDRESS> --network "$NET"
 # Look for: needsPriming: true/false
 ```
 
@@ -481,21 +483,21 @@ genlayer account unlock --account "My Validator Operator"
 genlayer account export --account "My Validator Operator" --output "./operator-keystore.json"
 
 # 4. Join as validator (non-interactive)
-#    Phase 2: the operator must be an account this CLI holds, so it can sign the proof of
+#    Since Bradbury Phase 2 the operator must be an account this CLI holds, so it can sign the proof of
 #    possession — an address alone fails. Check the exact flags with
 #    `genlayer staking validator-join --help` of the qualified CLI version.
 genlayer staking validator-join \
   --account "My Validator Owner" \
   --amount <deployed minimum or more>gen \
   --operator 0x<OPERATOR_ADDRESS> \
-  --network testnet-bradbury
+  --network "$NET"
 
 # 5. Set identity (non-interactive via individual fields, or interactive via wizard)
 #    The CLI signs set-identity with the validator's OPERATOR account (see --help).
 genlayer staking set-identity 0x<VALIDATOR_WALLET_ADDRESS> \
   --account "My Validator Operator" \
   --moniker "My Validator" \
-  --network testnet-bradbury
+  --network "$NET"
 ```
 
 **Note**: Steps 1-3 require interactive password prompts. Step 4 (`validator-join`) is non-interactive if all flags are provided. However, `account create`, `account unlock`, and `account export` always require interactive password input.
@@ -516,17 +518,17 @@ genlayer account use "Account Name"
 genlayer account lock --account "My Validator Owner"
 
 # Check epoch info (staking parameters)
-genlayer staking epoch-info --network testnet-bradbury
+genlayer staking epoch-info --network "$NET"
 
 # List active validators
-genlayer staking active-validators --network testnet-bradbury
+genlayer staking active-validators --network "$NET"
 
-# Change operator address later (signed by the owner; Phase 2 also needs the new operator's
+# Change operator address later (signed by the owner; since Bradbury Phase 2 it also needs the new operator's
 # proof of possession: --operator-account names its CLI account, CLI v0.40.0-rc.3+)
 genlayer staking set-operator 0x<VALIDATOR_WALLET_ADDRESS> 0x<NEW_OPERATOR_ADDRESS> \
   --account "My Validator Owner" \
   --operator-account "My Validator Operator" \
-  --network testnet-bradbury
+  --network "$NET"
 ```
 
 ## Common Issues
@@ -534,7 +536,7 @@ genlayer staking set-operator 0x<VALIDATOR_WALLET_ADDRESS> 0x<NEW_OPERATOR_ADDRE
 ### "Address is not a validator"
 - The account address is not the validator wallet address
 - Use the `validatorWallet` from the wizard output, not the owner address
-- Correct: `genlayer staking validator-info 0x<VALIDATOR_WALLET> --network testnet-bradbury`
+- Correct: `genlayer staking validator-info 0x<VALIDATOR_WALLET> --network "$NET"`
 
 ### Balance Insufficient
 - Fund the owner account with the deployed self-stake minimum + gas (`genlayer staking epoch-info`)

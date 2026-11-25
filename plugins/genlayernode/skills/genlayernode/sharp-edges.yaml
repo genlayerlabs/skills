@@ -97,7 +97,7 @@ edges:
   - id: insufficient-gen-balance
     description: "Owner wallet has less than the deployed self-stake minimum (+ gas)"
     detect: |
-      genlayer staking epoch-info --network testnet-bradbury   # deployed minimum
+      genlayer staking epoch-info --network "$NET"   # deployed minimum
       genlayer account show --account "Owner Name"             # owner balance
     impact: "Cannot create validator (or it never activates). Staking wizard stops at the balance check."
     fix: |
@@ -121,13 +121,108 @@ edges:
   - id: wrong-network-selected
     description: "Selected wrong network in staking wizard"
     detect: |
-      Check the RPC URL, consensusaddress and chainid in config.yaml match the network
-      you selected during wallet creation (values from that network's section in the docs).
+      Check the consensusaddress and chainid in config.yaml match resolve-network.sh's resolved.env,
+      and that the validator is registered there: genlayer staking validator-info <wallet> --network "$NET".
     impact: "Validator won't be recognized on the correct network."
     fix: |
-      Re-run staking wizard with correct network selection
-      or manually update configuration to match.
+      Re-run the staking wizard with --network "$NET" (the pinned current phase), and re-apply the
+      network config with apply-network-config.sh. Never edit the values by hand.
     severity: critical
+
+  # ============================================================================
+  # NETWORK, PHASE AND VERSION (check BEFORE anything is installed or staked)
+  # Values are resolved at run time: network-resolution-procedure.md, networks.yaml
+  # ============================================================================
+
+  - id: docs-lag-phase-launch
+    description: "Published network config/manifest still describes the previous phase"
+    detect: |
+      scripts/resolve-network.sh ... ; echo $?     # exit 3 = docs point at an older deployment
+      # Seen on 2026-11-25: genlayer-docs bradbury.yaml/manifest still on Bradbury Phase 2
+      # one day after Phase 3 launched.
+    impact: |
+      Phases share a chain id. A node configured from stale docs starts, syncs and
+      looks healthy, but follows a dead deployment: it never validates on the live one.
+    fix: |
+      Do not install with the published files. Get the current phase's config and
+      manifest from the GenLayer team (announcement / Discord), then
+        scripts/resolve-network.sh ... --config-url <url> --manifest-url <url>
+      The deployment-book check still has to pass.
+    severity: critical
+
+  - id: cli-network-stale-phase
+    description: "genlayer CLI built-in network alias points at a previous phase"
+    detect: |
+      # Built-in aliases ship inside the CLI release; compare with the pinned profile:
+      genlayer staking epoch-info --network "$CLI_NETWORK"   # built-in alias (networks.yaml cli_network)
+      genlayer staking epoch-info --network "$NET"           # after scripts/setup-cli-network.sh
+      # Different epoch / validator set = the built-in alias is on an older phase.
+      # Seen at the Bradbury Phase 3 launch: genlayer 0.40.0 still staked on Phase 2;
+      # fixed the next day in genlayer 0.40.1 / genlayer-js 2.1.0.
+    impact: |
+      The staking wizard and validator-join succeed, on the OLD phase's staking contract.
+      Stake is locked on a deployment the node is not on; the validator never becomes active.
+    fix: |
+      Always pin the CLI to the deployment book before staking, and use the printed name:
+        NET=$(scripts/setup-cli-network.sh --cli-network "$CLI_NETWORK" \
+              --deployment-dir "$DEPLOYMENT_DIR" --deployment-key "$DEPLOYMENT_KEY")
+        genlayer staking wizard --network "$NET"
+      If stake already went to the old phase: exit/claim there, then join on the current phase.
+    severity: critical
+
+  - id: cli-network-add-ambiguous-book
+    description: "`genlayer network add --deployment <book>` refuses the deployment book"
+    detect: |
+      # genlayer 0.40.x: "Multiple deployment entries map to roundsStorage: RoundsStorage and Rounds"
+    impact: "Custom profile not created; falling back to the built-in (possibly stale) alias."
+    fix: |
+      Do not pass --deployment. Pass every address explicitly; scripts/setup-cli-network.sh does this
+      (--consensus-main, --consensus-data, --staking, --fee-manager, --rounds-storage, --appeals).
+    severity: medium
+
+  - id: phase-change-treated-as-upgrade
+    description: "Moving to a new phase (or network) with the patch-update steps"
+    detect: |
+      curl -s localhost:9153/health | jq -r .network      # e.g. bradbury-phase2
+      # target: networks.yaml current_phase.node_network_name, e.g. bradbury-phase3
+      # Different names = phase change, even when both run the same release line (v0.6)
+    impact: |
+      The patch steps copy the old config (old AddressManager) and link the old data directory:
+      the new binary keeps syncing the old phase, with a validator not staked on the new one.
+    fix: |
+      Follow update-procedure.md -> "Network Phase Change": stake on the new phase, new data
+      directory (DATA_KEY), fresh config from resolve-network.sh. Only the operator key may be reused.
+    severity: critical
+
+  - id: state-reused-across-phases
+    description: "One phase's data directory (genvm.db, ops.db) linked into another phase's install"
+    detect: |
+      readlink /opt/genlayer-node/$(basename "$(dirname "$(readlink -f /opt/genlayer-node/bin)")")/data
+      # expect ../<current deployment_dir>-<minor>/data, e.g. ../bradbury-phase-3-v0.6/data.
+      # ../v0.6/data (pre-phase naming) on a node whose /health network is the current phase
+      # is fine only if that directory was created fresh for this phase.
+    impact: "Replay of the wrong deployment's history; corrupt or rejected state; vote salts/nonces of another deployment in ops.db."
+    fix: |
+      Stop the node, create a fresh /opt/genlayer-node/<deployment_dir>-<minor>/data (copy only
+      keystore/), relink the version's data/ to it, start (update-procedure.md -> "Network Phase Change").
+    severity: critical
+
+  - id: version-outside-release-line
+    description: "Installing a node release from a different line than the network's current phase supports"
+    detect: |
+      # networks.yaml current_phase.node_release_line (e.g. v0.6) vs $VERSION (e.g. v0.5.14 or v0.7.0)
+    impact: |
+      Older lines lack the protocol-manifest config (consensusaddress/manifestpath) and refuse
+      the network config; newer lines may need a newer manifest or a newer phase.
+    fix: "Use scripts/resolve-version.sh --line <node_release_line>. Only cross lines on explicit GenLayer guidance."
+    severity: high
+
+  - id: network-planned-or-retired
+    description: "User asks for a network that is not active (Clarke or Mainnet before launch, retired Asimov)"
+    detect: "networks.yaml status != active"
+    impact: "No current phase to resolve; any config found online is a dead or unlaunched deployment."
+    fix: "Stop and explain. Offer the active network. A planned network becomes installable once networks.yaml marks it active."
+    severity: high
 
   # ============================================================================
   # DOWNLOAD AND EXTRACTION
@@ -263,15 +358,16 @@ edges:
       grep -E "GENLAYERNODE_CONSENSUS_CONSENSUSADDRESS|GENLAYERNODE_CONSENSUS_GENESIS" .env 2>/dev/null
     impact: "Node cannot interact with consensus, or scans from block 0 (very slow) if genesis is wrong/missing."
     fix: |
-      The AddressManager address, chain id and genesis block are PER-DEPLOYMENT — there is no
-      single correct value. Take them from the official docs for the network you join
-      ("Network-Specific Consensus Configuration"); for your own network, from its operator.
-      v0.6+ sets them in configs/node/config.yaml under `consensus:`. Example — Testnet Bradbury:
-        consensus:
-          consensusaddress: "0x3F71AE080BD6270A91dBcc7960d88797828538E0"
-          chainid: "4221"                       # DECIMAL, not hex
-          manifestpath: "configs/node/protocol-manifest.json"
-          genesis: 47930                        # AddressManager deployment block
+      The AddressManager address, chain id and genesis block are PER-DEPLOYMENT and change with
+      every phase — there is no single correct value, and never one from memory. Resolve and write
+      them with the scripts (install-procedure.md Phase 5):
+        scripts/resolve-network.sh ... --out /tmp/genlayer-network     # verifies vs deployment book
+        scripts/apply-network-config.sh --resolved /tmp/genlayer-network --node-dir <version dir>
+      Result in configs/node/config.yaml under `consensus:`:
+        consensusaddress: "<CONSENSUS_ADDRESS>"
+        chainid: "<CHAIN_ID>"                   # DECIMAL, not hex
+        manifestpath: "configs/node/protocol-manifest.json"
+        genesis: <GENESIS>                      # AddressManager deployment block
       v0.6 refuses to start when the manifest's registry/chain do not match these values.
       A missing/wrong `genesis` makes the node auto-scan from block 0. Confirm at runtime:
       /health should report the intended `network`.
@@ -286,12 +382,11 @@ edges:
       # doctor: "Consensus Deployment (admission)" fails; logs: manifest / admission errors at start
     impact: "The node does not start (deployment admission check). The release package ships NO network files."
     fix: |
-      Download the network's manifest from its docs section to the path manifestpath names,
-      e.g. Testnet Bradbury:
-        curl -fsSL https://docs.genlayer.com/validators/bradbury.protocol-manifest.json \
-          -o /opt/genlayer-node/<version>/configs/node/protocol-manifest.json
-      Its chainId and registry must match consensus.chainid (decimal) and consensus.consensusaddress
-      (Testnet Bradbury: 4221, 0x3F71AE080BD6270A91dBcc7960d88797828538E0). Never hand-write a manifest.
+      Fetch and verify it with scripts/resolve-network.sh, install it with
+      scripts/apply-network-config.sh (to the path manifestpath names). Its chainId and registry must
+      match consensus.chainid (decimal) and consensus.consensusaddress, and the registry must be the
+      current phase's AddressManager in the deployment book: the script checks all three.
+      Never hand-write a manifest, and never copy one from a previous phase's install.
       Docker: releases from rc.2 mount it via NODE_MANIFEST_PATH (default ./configs/node/protocol-manifest.json).
     severity: critical
 
@@ -598,7 +693,7 @@ edges:
     fix: |
       Check:
       1. RPC URL is correct and accessible; the RPC provider key is set if needed (WebSocket 401 otherwise)
-      2. consensus.genesis is pinned (the deployment's AddressManager block; Testnet Bradbury: 47930)
+      2. consensus.genesis is pinned (the deployment's AddressManager block: resolved.env GENESIS)
       3. Firewall allows outbound HTTPS/WSS
 
       Check logs for errors.
@@ -816,9 +911,9 @@ edges:
       - Find your validator
       - Update operator address to the new one
 
-      Option 2: Using genlayer CLI (signed by the OWNER; Phase 2 also needs the new operator's
+      Option 2: Using genlayer CLI (signed by the OWNER; since Bradbury Phase 2 it also needs the new operator's
       proof of possession: --operator-account names its CLI account, CLI v0.40.0-rc.3+)
-      genlayer staking set-operator YOUR_VALIDATOR_WALLET NEW_OPERATOR_ADDRESS --account "Owner Name" --operator-account "Operator Name" --network testnet-bradbury
+      genlayer staking set-operator YOUR_VALIDATOR_WALLET NEW_OPERATOR_ADDRESS --account "Owner Name" --operator-account "Operator Name" --network "$NET"
     severity: critical
 
   - id: consensus-genesis-not-set
@@ -836,7 +931,7 @@ edges:
     fix: |
       Pin the deployment's AddressManager deploy block in config.yaml:
         consensus:
-          genesis: <deploy-block>   # the AddressManager deployment block for THIS deployment (Testnet Bradbury: 47930)
+          genesis: <deploy-block>   # the AddressManager deployment block for THIS deployment (resolved.env GENESIS)
       Restart. With genesis pinned the node catches up to head in seconds.
     severity: high
 
@@ -1054,17 +1149,17 @@ edges:
       - Alloy container is running but log timestamps are old
 
   - id: v05-to-v06-not-in-place
-    description: "Trying to update a v0.5 (Bradbury Phase 1 / Asimov) node in place to v0.6 (Bradbury Phase 2)"
+    description: "Trying to update a v0.5 (Bradbury Phase 1 / Asimov) node in place to v0.6 (Bradbury Phase 2+)"
     detect: |
       /opt/genlayer-node/bin/genlayernode version | grep -E 'Version: +v0\.5'
       grep -E '^  genlayerchainrpcurl:.*(zksync|genlayer-testnet)' /opt/genlayer-node/configs/node/config.yaml
     impact: |
-      Phase 2 is a new chain (Arbitrum Orbit, chain id 4221) with new contracts and a new validator
+      Bradbury Phase 2+ is a new chain (Arbitrum Orbit) with new contracts and a new validator
       registration (proof of possession). Old data, config and registration do not carry over.
+      Same shape as any phase change (edge phase-change-treated-as-upgrade).
     fix: |
-      Stop and disable the old node, then do a fresh install (install-procedure.md) in a new
-      version directory with a fresh data directory. Register the validator again with the
-      qualified CLI (staking-wizard-procedure.md).
+      Follow update-procedure.md -> "Network Phase Change": fresh install with a fresh data
+      directory, validator registered again on the pinned current phase (--network "$NET").
     severity: high
 
   - id: high-downtime-update
@@ -1150,12 +1245,13 @@ edges:
 
       STRUCTURE FOR NEW INSTALLATIONS (v0.6+):
 
-      Share the WHOLE data directory per minor line (v0.6 splits state into genvm.db =
+      Share the WHOLE data directory per phase AND minor line (v0.6 splits state into genvm.db =
       chain history and ops.db = this node's vote salts / nonces / operator stamp — both must
-      persist across patch updates, and ops.db must never be copied to another node):
-      /opt/genlayer-node/v0.6/data/node/{genvm.db,ops.db,keystore,logs}   (shared)
-      /opt/genlayer-node/v0.6.0/data -> ../v0.6/data
-      /opt/genlayer-node/v0.6.1/data -> ../v0.6/data
+      persist across patch updates, and ops.db must never be copied to another node or phase):
+      /opt/genlayer-node/<deployment_dir>-v0.6/data/node/{genvm.db,ops.db,keystore,logs}   (shared)
+      /opt/genlayer-node/v0.6.0/data -> ../<deployment_dir>-v0.6/data
+      /opt/genlayer-node/v0.6.1/data -> ../<deployment_dir>-v0.6/data
+      (Installs made before this convention use ../v0.6/data; keep it for patches on that phase.)
       See common-procedures.md -> "Create Directory Structure".
     severity: high
     note: "This issue typically occurs when upgrading from old installations that weren't set up with shared storage"
@@ -1192,7 +1288,7 @@ edges:
       # The validator wallet address is a SMART CONTRACT, not the owner account.
       # Common mistake: using owner address in config.yaml instead of validator wallet.
       # Check: validator-info should work with the address in config.yaml
-      genlayer staking validator-info <ADDRESS_FROM_CONFIG> --network testnet-bradbury
+      genlayer staking validator-info <ADDRESS_FROM_CONFIG> --network "$NET"
       # If it returns "Address is not a validator", the wrong address is being used.
     impact: |
       Node starts but cannot validate. It won't recognize itself as a validator
@@ -1231,17 +1327,17 @@ edges:
 
       If the operator account was deleted:
         - Create a new operator account
-        - Update the validator to use the new operator (owner signs; Phase 2 also needs the
+        - Update the validator to use the new operator (owner signs; since Bradbury Phase 2 it also needs the
           new operator's proof of possession: --operator-account, CLI v0.40.0-rc.3+):
           genlayer staking set-operator 0xVALIDATOR_WALLET 0xNEW_OPERATOR \
-            --account "Owner Name" --operator-account "New Operator Name" --network testnet-bradbury
+            --account "Owner Name" --operator-account "New Operator Name" --network "$NET"
         - Fund the new operator address with GEN for gas
     severity: high
 
   - id: wizard-insufficient-balance
     description: "Running wizard without enough GEN tokens"
     detect: |
-      genlayer staking epoch-info --network testnet-bradbury   # deployed self-stake minimum
+      genlayer staking epoch-info --network "$NET"   # deployed self-stake minimum
       genlayer account show
       # Balance must be >= the deployed minimum (42,000 GEN is the protocol default) plus gas
     impact: |
@@ -1288,7 +1384,7 @@ edges:
       2. If balance is 0 or low, send GEN from owner:
          genlayer account send 0xOPERATOR_ADDRESS 10gen \
            --account "Owner Name" \
-           --network testnet-bradbury
+           --network "$NET"
 
       3. Verify operator now has funds:
          genlayer account show --account "Operator Name"

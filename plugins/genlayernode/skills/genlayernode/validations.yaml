@@ -83,7 +83,7 @@ validations:
     type: command
     command: "command -v jq >/dev/null 2>&1"
     expect: "exit 0"
-    message: "jq is recommended. Install with: sudo apt install jq"
+    message: "jq is required by the resolution scripts (server) and setup-cli-network.sh (laptop). Install with: sudo apt install jq (macOS: brew install jq)"
 
   # ============================================================================
   # GENLAYER CLI
@@ -93,7 +93,13 @@ validations:
     type: command
     command: "command -v genlayer >/dev/null 2>&1"
     expect: "exit 0"
-    message: "GenLayer CLI not installed. Install the exact version for your network: npm install -g genlayer@<version from the release announcement>"
+    message: "GenLayer CLI not installed. Install with: npm install -g genlayer@latest (>= 0.40.1)"
+
+  - id: genlayer-cli-version
+    type: command
+    command: "genlayer --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' | head -1 | awk -F. '{exit !($1>0||$2>40||($2==40&&$3>=1))}'"
+    expect: "exit 0"
+    message: "genlayer CLI too old (needs >= 0.40.1 for custom network profiles and Bradbury Phase 3). Run: npm install -g genlayer@latest"
 
   # ============================================================================
   # DOCKER STATE
@@ -137,7 +143,19 @@ validations:
     type: command
     command: "[ -f configs/node/protocol-manifest.json ]"
     expect: "exit 0"
-    message: "Protocol manifest not found (required since v0.6). Download your network's manifest from its docs section to configs/node/protocol-manifest.json (Testnet Bradbury: https://docs.genlayer.com/validators/bradbury.protocol-manifest.json)"
+    message: "Protocol manifest not found (required since v0.6). Fetch and install it with scripts/resolve-network.sh + scripts/apply-network-config.sh (install-procedure.md Phase 5)"
+
+  - id: manifest-matches-config
+    type: command
+    command: "[ \"$(jq -r .registry configs/node/protocol-manifest.json | tr A-F a-f)\" = \"$(sed -n 's/^ *consensusaddress: *//p' configs/node/config.yaml | sed 's/ *#.*//' | tr -d '\"' | tr A-F a-f)\" ]"
+    expect: "exit 0"
+    message: "Manifest registry and consensus.consensusaddress differ (manifest or config from another phase). Re-run resolve-network.sh and apply-network-config.sh"
+
+  - id: config-matches-resolved-network
+    type: command
+    command: ". /tmp/genlayer-network/resolved.env && [ \"$(sed -n 's/^ *consensusaddress: *//p' configs/node/config.yaml | sed 's/ *#.*//' | tr -d '\"' | tr A-F a-f)\" = \"$(echo $CONSENSUS_ADDRESS | tr A-F a-f)\" ]"
+    expect: "exit 0"
+    message: "config.yaml consensusaddress is not the current phase's AddressManager (resolve-network.sh output). Re-run apply-network-config.sh"
 
   - id: llm-key-configured
     type: command
@@ -156,6 +174,12 @@ validations:
     command: curl -sf http://localhost:9153/health | jq -e '.status == "healthy"' >/dev/null
     expect: "exit 0"
     message: "Node health check failed. Check if node is running."
+
+  - id: node-network-current-phase
+    type: command
+    command: "[ -n \"${NODE_NETWORK_NAME:-}\" ] && [ \"$(curl -sf http://localhost:9153/health | jq -r .network)\" = \"$NODE_NETWORK_NAME\" ]"
+    expect: "exit 0"
+    message: "Node reports a different network than the current phase (networks.yaml node_network_name). A previous phase's name means a stale config: stop the node and redo install-procedure.md Phase 5"
 
   # ============================================================================
   # SYSTEMD SERVICE CHECKS
@@ -298,6 +322,8 @@ on_warn:
 # Post-update validations (run after upgrade)
 post_update:
   - node-health-ok
+  - node-network-current-phase
+  - manifest-matches-config
   - alloy-container-running
   - alloy-bind-mount-fresh
   - alloy-logs-no-errors

@@ -2,6 +2,29 @@
 
 This checklist MUST be executed before starting any validator node update to catch known edge cases proactively.
 
+## Phase 0: Classify the Update (blocking)
+
+**Purpose:** Decide if this is a patch, a release-line change or a **network phase change**
+(edges: phase-change-treated-as-upgrade, state-reused-across-phases)
+
+```bash
+curl -s http://localhost:9153/health | jq -r '.network, .node_version'
+# Compare with networks.yaml (network-resolution-procedure.md R1-R2):
+#   current_phase.node_network_name   e.g. bradbury-phase3
+#   current_phase.node_release_line   e.g. v0.6
+#   scripts/resolve-version.sh --line <release_line>
+```
+
+| Running `network` | Running version vs target | Type | Procedure |
+|-------------------|---------------------------|------|-----------|
+| = current phase | same release line | Patch | `update-procedure.md` (this checklist applies) |
+| = current phase | new release line | Release line | `update-procedure.md` → "Major Version Updates" |
+| a `previous_phases` name (e.g. `bradbury-phase2`) | any | **Phase change** | `update-procedure.md` → "Network Phase Change". **Not** a patch, even when the version line is the same |
+| `custom` / empty | any | Unknown | Compare `consensus.consensusaddress` with `resolve-network.sh` output before choosing |
+
+**Action if phase change:** stop this checklist and follow "Network Phase Change": copying the
+old config or linking the old data directory would keep the node on the old phase.
+
 ## Phase 1: Current Node Analysis
 
 ### 1.1 Check Current LLM Configuration
@@ -11,7 +34,8 @@ This checklist MUST be executed before starting any validator node update to cat
 # Check which LLM key is set in .env — NAMES ONLY, never the values
 sudo awk -F= '/^(HEURISTKEY|COMPUT3KEY|IOINTELLIGENCEKEY|LIBERTAI_API_KEY|ANTHROPICKEY|GEMINIKEY|OPENROUTERKEY|MORPHEUS_API_KEY|OPENAIKEY|XAIKEY)=/ && length($2)>0 {print $1": set"}' /opt/genlayer-node/.env
 
-# Provider mapping:
+# The provider list changes per release: scripts/list-llm-providers.sh <node-dir>
+# Provider mapping (example):
 #   HEURISTKEY -> heurist
 #   COMPUT3KEY -> comput3
 #   IOINTELLIGENCEKEY -> ionet
@@ -35,9 +59,11 @@ grep -A 2 '<provider>:' ${GENVM_CFG}/genvm-module-llm.yaml | grep 'enabled'
 **Purpose:** Detect if the data directory is not shared between patch versions (edge: database-not-shared-patch-versions)
 
 ```bash
-# v0.6: each version's data/ should be a link to the shared /opt/genlayer-node/<minor>/data
+# v0.6: each version's data/ should be a link to a shared data directory:
+#   /opt/genlayer-node/<deployment_dir>-<minor>/data   (current convention, one per phase)
+#   /opt/genlayer-node/<minor>/data                    (installs made before it)
 for d in /opt/genlayer-node/v0.6.*/data; do printf '%s -> %s\n' "$d" "$(readlink "$d" || echo 'REAL DIRECTORY')"; done
-ls /opt/genlayer-node/v0.6/data/node/   # genvm.db ops.db keystore logs
+ls "$(readlink -f /opt/genlayer-node/data)/node/"   # genvm.db ops.db keystore logs
 
 # If a version has a real data/ directory (not a link) -> FLAG FOR FIX
 ```
