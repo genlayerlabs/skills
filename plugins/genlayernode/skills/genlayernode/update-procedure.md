@@ -193,7 +193,7 @@ Major version updates may require:
 
 The principle remains: **Prepare everything first, then quick switch.**
 
-**v0.5.x (Bradbury Phase 1 / Asimov) -> v0.6.x is NOT an in-place update.** It is a network
+**v0.5.x (Bradbury Phase 1) -> v0.6.x is NOT an in-place update.** It is a network
 phase change: follow the next section.
 
 ## Network Phase Change (e.g. Bradbury Phase 2 -> Phase 3, or Bradbury -> Clarke)

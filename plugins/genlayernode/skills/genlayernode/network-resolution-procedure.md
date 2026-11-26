@@ -39,8 +39,8 @@ Read `networks.yaml`. Offer only entries with `status: active`.
   an existing CLI profile: networks on the same chain share all of them.
 - User names a `planned` network (e.g. Mainnet before launch) → stop: "Mainnet has not
   launched yet; this skill will support it once `networks.yaml` lists it as active."
-- User names a `retired` network (e.g. Asimov) → stop and explain it is retired;
-  offer the active network instead.
+- User names a `retired` network, or one `networks.yaml` does not list → stop and explain
+  this skill does not install it; offer the active networks instead.
 
 Record for the rest of the run (example values for Bradbury Phase 3):
 

@@ -271,7 +271,7 @@ edges:
     severity: high
 
   - id: network-planned-or-retired
-    description: "User asks for a network that is not active (Mainnet before launch, retired Asimov)"
+    description: "User asks for a network that is not active (Mainnet before launch, a retired or unlisted network)"
     detect: "networks.yaml status != active"
     impact: "No current phase to resolve; any config found online is a dead or unlaunched deployment."
     fix: "Stop and explain. Offer the active network. A planned network becomes installable once networks.yaml marks it active."
@@ -1202,7 +1202,7 @@ edges:
       - Alloy container is running but log timestamps are old
 
   - id: v05-to-v06-not-in-place
-    description: "Trying to update a v0.5 (Bradbury Phase 1 / Asimov) node in place to v0.6 (Bradbury Phase 2+)"
+    description: "Trying to update a v0.5 (Bradbury Phase 1) node in place to v0.6 (Bradbury Phase 2+)"
     detect: |
       /opt/genlayer-node/bin/genlayernode version | grep -E 'Version: +v0\.5'
       grep -E '^  genlayerchainrpcurl:.*(zksync|genlayer-testnet)' /opt/genlayer-node/configs/node/config.yaml

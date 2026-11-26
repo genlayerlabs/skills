@@ -90,9 +90,3 @@ networks:
     cli_network: TBD
     config_file: TBD
     current_phase: TBD
-
-  - id: asimov
-    display_name: "Asimov Testnet"
-    status: retired                # v0.4.x line; this skill no longer installs it
-    kind: testnet
-    cli_network: testnet-asimov
