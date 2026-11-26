@@ -92,6 +92,9 @@ WSS_URL=$(yaml_get rollup genlayerchainwebsocketurl "$OUT/network.yaml")
 PROVIDER=$(yaml_get rollup provider "$OUT/network.yaml")
 # Optional: a network the node release cannot detect from its address publishes its name.
 NODE_NETWORK=$(yaml_get node network "$OUT/network.yaml")
+# resolved.env is sourced by apply-network-config.sh: a name is letters, digits, . _ - only.
+[ -z "$NODE_NETWORK" ] || [[ "$NODE_NETWORK" =~ ^[A-Za-z0-9._-]+$ ]] \
+  || fail 4 "network config has an invalid node.network value"
 MAN_ADDR=$(jq -r '.registry // empty' "$OUT/protocol-manifest.json")
 MAN_CHAIN=$(jq -r '.chainId // empty' "$OUT/protocol-manifest.json")
 

@@ -70,8 +70,12 @@ if [ -n "${NODE_NETWORK:-}" ]; then
     awk -v v="$NODE_NETWORK" '{ print } /^node:/ && !d { print "  network: \"" v "\""; d = 1 }' "$CFG" > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
   fi
 else
-  awk '/^[^[:space:]#][^:]*:/ { sect = $0; sub(/:.*/, "", sect) }
-       sect == "node" && /^  network:/ { sub(/^  /, "  # "); }
+  # Only a direct child of node: (the indentation of its first key), whatever that width is.
+  awk '/^[^[:space:]#][^:]*:/ { sect = $0; sub(/:.*/, "", sect); ind = "" }
+       sect == "node" && /^[[:space:]]+[^[:space:]#]/ {
+         if (ind == "") { ind = $0; sub(/[^[:space:]].*$/, "", ind) }
+         if (index($0, ind "network:") == 1) $0 = ind "# " substr($0, length(ind) + 1)
+       }
        { print }' "$CFG" > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
 fi
 [ -z "$VALIDATOR" ] || set_key node validatorWalletAddress "$VALIDATOR" 1

@@ -178,9 +178,9 @@ validations:
   - id: node-network-current-phase
     type: command
     # node_network_name set (Bradbury, Clarke): /health must say exactly that. Empty (a network
-    # with no name yet): `custom`/empty is expected, and a name starting with the network id
-    # is accepted; anything else is another deployment on the same chain.
-    command: "h=$(curl -sf http://localhost:9153/health) && n=$(printf '%s' \"$h\" | jq -r '.network // \"\"') && if [ -n \"${NODE_NETWORK_NAME:-}\" ]; then [ \"$n\" = \"$NODE_NETWORK_NAME\" ]; else case \"$n\" in ''|custom|\"${NETWORK_ID:-_unset_}\"*) true ;; *) false ;; esac; fi"
+    # with no name yet, or NODE_NETWORK_NAME not exported): only `custom`/empty passes; any
+    # real name is a previous phase or another deployment on the same chain.
+    command: "h=$(curl -sf http://localhost:9153/health) && n=$(printf '%s' \"$h\" | jq -r '.network // \"\"') && if [ -n \"${NODE_NETWORK_NAME:-}\" ]; then [ \"$n\" = \"$NODE_NETWORK_NAME\" ]; else case \"$n\" in ''|custom) true ;; *) false ;; esac; fi"
     expect: "exit 0"
     message: "Node reports a different network than the one chosen (networks.yaml node_network_name; `custom` only when that is empty). A previous phase's or another network's name (e.g. bradbury-phase3 on a Clarke install) means the wrong config: stop the node and redo install-procedure.md Phase 5"
 
