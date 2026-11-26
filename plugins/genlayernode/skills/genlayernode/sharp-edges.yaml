@@ -150,6 +150,58 @@ edges:
       The deployment-book check still has to pass.
     severity: critical
 
+  - id: networks-share-a-chain
+    description: "Two active networks on one chain (Bradbury Phase 3 and Clarke, both 4221) get mixed up"
+    detect: |
+      # Same chain id, RPC host, Conduit key and explorer: only the AddressManager differs.
+      grep consensusaddress /opt/genlayer-node/bin/../configs/node/config.yaml
+      grep CONSENSUS_ADDRESS /tmp/genlayer-network/resolved.env    # must be equal
+      genlayer network list                                        # which profile is active
+      # Typical slips: installing Clarke with bradbury.yaml; staking with
+      # --network testnet-bradbury (Clarke's BASE profile, which is Bradbury Phase 3);
+      # reusing a Bradbury data directory for Clarke.
+    impact: |
+      Nothing fails. The node syncs the other network and reports healthy; the stake
+      (42,000 GEN) is locked on the other network's staking contract.
+    fix: |
+      Ask the user which network (R1) and carry NETWORK_ID through the whole run. Config only
+      from resolve-network.sh for that network (it exits 3 on the other network's files and
+      names them). Staking only with the profile setup-cli-network.sh printed (`clarke` or
+      `bradbury-phase-3`). Separate data directory per deployment (DATA_KEY).
+    severity: critical
+
+  - id: network-files-not-published
+    description: "A network is live but its config + manifest are not in genlayer-docs yet"
+    detect: |
+      scripts/resolve-network.sh ... ; echo $?     # exit 3, "is not published yet (404)"
+      # Seen on 2026-11-26: Clarke deployed (genlayer-networks/clarke) before
+      # content/validators/clarke.yaml and clarke.protocol-manifest.json existed.
+    impact: "No verified config to install. Using the sibling network's files joins that network instead."
+    fix: |
+      Stop. Get the network's config + manifest from the GenLayer team, then
+        scripts/resolve-network.sh ... --config-url <url> --manifest-url <url>   # file:// works
+      The deployment-book check still has to pass. Never edit bradbury.yaml by hand into a
+      Clarke config: the manifest must be the sealed one for that deployment.
+    severity: high
+
+  - id: node-network-name-from-config
+    description: "Clarke's name comes from node.network in the config, not from detection (node v0.6.1)"
+    detect: |
+      curl -s localhost:9153/health | jq -r .network      # custom = node.network not set
+      grep -nE '^  (network|mode|validatorWalletAddress):' /opt/genlayer-node/bin/../configs/node/config.yaml
+      # clarke.yaml publishes a node: section with ONE key (network: "clarke").
+    impact: |
+      Without the key the node runs but reports `custom` in logs, metrics and /health.
+      Pasting the published node: section over the existing one deletes mode and
+      validatorWalletAddress: the node then starts with defaults and no validator wallet.
+      A config copied from a Clarke install keeps network: "clarke" on another network.
+    fix: |
+      Let scripts/apply-network-config.sh do it: it sets only node.network when the resolved
+      network publishes one, and comments out a leftover value when it does not. Never
+      replace the node: section by hand. The name is a label; the deployment is proven by
+      consensus.consensusaddress == resolved.env CONSENSUS_ADDRESS.
+    severity: high
+
   - id: cli-network-stale-phase
     description: "genlayer CLI built-in network alias points at a previous phase"
     detect: |
@@ -219,7 +271,7 @@ edges:
     severity: high
 
   - id: network-planned-or-retired
-    description: "User asks for a network that is not active (Clarke or Mainnet before launch, retired Asimov)"
+    description: "User asks for a network that is not active (Mainnet before launch, retired Asimov)"
     detect: "networks.yaml status != active"
     impact: "No current phase to resolve; any config found online is a dead or unlaunched deployment."
     fix: "Stop and explain. Offer the active network. A planned network becomes installable once networks.yaml marks it active."

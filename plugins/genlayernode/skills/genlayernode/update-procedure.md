@@ -196,11 +196,13 @@ The principle remains: **Prepare everything first, then quick switch.**
 **v0.5.x (Bradbury Phase 1 / Asimov) -> v0.6.x is NOT an in-place update.** It is a network
 phase change: follow the next section.
 
-## Network Phase Change (e.g. Bradbury Phase 2 -> Phase 3, later Bradbury -> Clarke)
+## Network Phase Change (e.g. Bradbury Phase 2 -> Phase 3, or Bradbury -> Clarke)
 
-A new phase is a **new consensus deployment**: new contracts, a new validator registration and
-new chain state, often on the **same chain id and the same node release line** (Bradbury Phase 2
-and 3: chain 4221, node v0.6). Nothing fails loudly if you treat it as a patch: the copied config
+A new phase, or another network, is a **new consensus deployment**: new contracts, a new
+validator registration and new chain state, often on the **same chain id and the same node
+release line** (Bradbury Phase 2, Phase 3 and Clarke: chain 4221, node v0.6). Bradbury Phase 3
+and Clarke are both live: moving a server from one to the other leaves the first one's
+validator registered there, so exit it or keep running it on another server. Nothing fails loudly if you treat it as a patch: the copied config
 keeps the old AddressManager and the node keeps syncing the old phase. So it is a fresh install,
 with three differences:
 

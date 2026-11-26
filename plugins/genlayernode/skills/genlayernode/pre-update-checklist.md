@@ -20,7 +20,8 @@ curl -s http://localhost:9153/health | jq -r '.network, .node_version'
 | = current phase | same release line | Patch | `update-procedure.md` (this checklist applies) |
 | = current phase | new release line | Release line | `update-procedure.md` → "Major Version Updates" |
 | a `previous_phases` name (e.g. `bradbury-phase2`) | any | **Phase change** | `update-procedure.md` → "Network Phase Change". **Not** a patch, even when the version line is the same |
-| `custom` / empty | any | Unknown | Compare `consensus.consensusaddress` with `resolve-network.sh` output before choosing |
+| another active network's name (e.g. `bradbury-phase3` when the target is Clarke) | any | **Network change** | Same procedure as a phase change: `update-procedure.md` → "Network Phase Change" |
+| `custom` / empty | any | Unknown | Compare `consensus.consensusaddress` with `resolve-network.sh` output before choosing: equal = current phase, different = phase or network change |
 
 **Action if phase change:** stop this checklist and follow "Network Phase Change": copying the
 old config or linking the old data directory would keep the node on the old phase.

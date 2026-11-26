@@ -7,8 +7,13 @@
 #
 # When a network launches a new phase (e.g. Bradbury Phase 3 -> Phase 4), the
 # ONLY edit needed here is that network's `current_phase` block. When a new
-# network launches (Clarke, Mainnet), flip its `status` to `active` and fill
-# the `TBD` fields from its genlayer-networks folder and its docs page.
+# network launches (Mainnet), flip its `status` to `active` and fill the `TBD`
+# fields from its genlayer-networks folder and its docs page.
+#
+# Several networks can be active at once AND share a rollup chain: Bradbury
+# Phase 3 and Clarke are both on chain 4221 and differ only by contract address.
+# `same_chain_deployments` lists the other folders on a network's chain, so the
+# resolver can name the deployment when it is handed another network's files.
 
 schema: 1
 
@@ -50,15 +55,32 @@ networks:
       # A node or CLI still on one of these is on the wrong network.
       - { name: "Bradbury Phase 2", deployment_dir: bradbury-phase-2, node_network_name: bradbury-phase2 }
       - { name: "Bradbury Phase 1", deployment_dir: bradbury,         node_network_name: bradbury-phase1 }
+    same_chain_deployments: [clarke]   # other networks on chain 4221 (not phases of this one)
 
   - id: clarke
-    display_name: "Clarke"
-    status: planned                # replaces Bradbury when it launches
+    display_name: "Clarke Testnet"
+    status: active                 # public testnet after Bradbury; Bradbury Phase 3 keeps running next to it
     kind: testnet
-    chain_id: TBD
-    cli_network: TBD
-    config_file: TBD
-    current_phase: TBD
+    chain_id: 4221                 # the Bradbury rollup: shared with Bradbury Phase 3, told apart ONLY by contract address
+    rollup: "Arbitrum Orbit (Conduit)"
+    # No CLI release has a Clarke preset yet. This is only the BASE profile (same chain
+    # and RPC) that setup-cli-network.sh builds the `clarke` profile on. Never pass it
+    # to a genlayer command for Clarke: on its own it is Bradbury Phase 3.
+    cli_network: testnet-bradbury
+    config_file: clarke            # docs file stem: clarke.yaml + clarke.protocol-manifest.json
+    rpc_key_required: true         # same Conduit RPC key as Bradbury (same chain)
+    rpc_key_portal: "https://app.conduit.xyz/rpc-keys"
+    current_phase:
+      name: "Clarke"
+      deployment_dir: clarke                                # folder in genlayer-networks
+      deployment_key: genlayerOrbitTestnet.deployment_clarke
+      # v0.6.1 cannot detect Clarke from its address (it was built before the deployment),
+      # so clarke.yaml sets node.network and apply-network-config.sh writes that one key.
+      node_network_name: clarke
+      node_release_line: v0.6                               # v0.6.1 or later on the line
+      launched: 2026-11-26
+    previous_phases: []
+    same_chain_deployments: [bradbury-phase-3, bradbury-phase-2]
 
   - id: mainnet
     display_name: "GenLayer Mainnet"

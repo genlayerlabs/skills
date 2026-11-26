@@ -1,6 +1,6 @@
 {
   "name": "genlayernode",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Interactive wizard to set up and update a GenLayer validator node on Linux, for any active GenLayer network (current phase and node version resolved at run time).",
   "author": {
     "name": "GenLayer Labs",

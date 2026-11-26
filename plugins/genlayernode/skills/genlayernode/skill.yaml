@@ -1,6 +1,6 @@
 name: genlayernode
 kind: gate
-version: "2.0.1"
+version: "2.1.0"
 description: "Interactive wizard to set up or update a GenLayer validator node on Linux, for any active GenLayer network. Resolves the network's current phase, node version and config at run time."
 severity: high
 tags:
@@ -64,18 +64,18 @@ resolution:
     - "minimum stake (genlayer staking epoch-info)"
   steps:
     - id: R1
-      what: "Choose network (status: active only) and read its current_phase"
+      what: "Choose network (status: active only; ask when several are active, e.g. Bradbury Phase 3 and Clarke share chain 4221) and read its current_phase"
     - id: R2
       what: "Resolve version"
       command: "scripts/resolve-version.sh --line ${RELEASE_LINE}"
     - id: R3
-      what: "Fetch config + manifest, verify vs the deployment book (exit 3 = docs on an older phase: stop)"
+      what: "Fetch config + manifest, verify vs the deployment book (exit 3 = files not published yet, or they describe an older phase / another network on the chain: stop)"
       command: "scripts/resolve-network.sh --config-file ${CONFIG_FILE} --chain-id ${CHAIN_ID} --deployment-dir ${DEPLOYMENT_DIR} --deployment-key ${DEPLOYMENT_KEY} --previous-dirs ${PREVIOUS_DIRS} --out /tmp/genlayer-network"
     - id: R4
       what: "Pin the genlayer CLI to the current phase (laptop)"
       command: "NET=$(scripts/setup-cli-network.sh --cli-network ${CLI_NETWORK} --deployment-dir ${DEPLOYMENT_DIR} --deployment-key ${DEPLOYMENT_KEY})"
     - id: R5
-      what: "After start: /health .network == NODE_NETWORK_NAME"
+      what: "After start: /health .network == NODE_NETWORK_NAME (Clarke: `clarke`, written to node.network by apply-network-config.sh because v0.6.1 does not detect it)"
   update_types:
     patch: "same phase, same release line: zero-downtime switch (update-procedure.md)"
     release_line: "same phase, new line: update-procedure.md -> Major Version Updates"
@@ -971,7 +971,8 @@ procedure:
     decision_point: true
     detail: |
       network-resolution-procedure.md R1-R2. Read networks.yaml; offer status: active networks only
-      (planned -> stop: not launched; retired -> stop). Resolve the version on the phase's release line.
+      (planned -> stop: not launched; retired -> stop). Several active (Bradbury Phase 3, Clarke):
+      ask; never infer the network from chain id, RPC host or a CLI profile. Resolve the version on the phase's release line.
       For an update, classify it (pre-update-checklist.md Phase 0): patch, release line or phase change.
     commands:
       - "scripts/resolve-version.sh --line ${RELEASE_LINE}"
