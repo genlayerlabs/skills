@@ -119,7 +119,7 @@ PRs can include network labels to trigger auto-deploy on merge via the release w
 
 | Label | Network | Description |
 |-------|---------|-------------|
-| `asimov-phase4` | asimov-phase4 | Main testnet - production |
+| `clarke` | clarke | Main testnet - production |
 | `bradbury` | bradbury | Secondary testnet - staging |
 
 **Behavior:**
@@ -177,7 +177,7 @@ Before creating the PR, present it to the user for review:
 ## PR Preview
 
 **Title:** feat(consensus): Add validator ban detection
-**Labels:** asimov-phase4
+**Labels:** clarke
 
 **Body:**
 ## Description
