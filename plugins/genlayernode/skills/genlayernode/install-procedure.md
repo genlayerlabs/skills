@@ -81,16 +81,18 @@ version-specific below is typed by hand: it comes from `networks.yaml` and the s
 
 ```bash
 # From networks.yaml (R1), e.g. for Bradbury Phase 3:
-#   CHAIN_ID CONFIG_FILE CLI_NETWORK DEPLOYMENT_DIR DEPLOYMENT_KEY NODE_NETWORK_NAME RELEASE_LINE PREVIOUS_DIRS
+#   NETWORK_ID CHAIN_ID CONFIG_FILE CLI_NETWORK DEPLOYMENT_DIR DEPLOYMENT_KEY NODE_NETWORK_NAME RELEASE_LINE PREVIOUS_DIRS
 VERSION=$(scripts/resolve-version.sh --line "$RELEASE_LINE")   # R2: latest stable on the line
 INSTALL_ROOT=/opt/genlayer-node; NODE_DIR=${INSTALL_ROOT}/${VERSION}; NODE_USER=genlayer
 MINOR=$(echo ${VERSION} | grep -oE '^v[0-9]+\.[0-9]+')
 DATA_KEY=${DEPLOYMENT_DIR}-${MINOR}       # shared data dir: one per phase AND release line
 ```
 
-`DATA_KEY` keeps each phase's databases apart. Phases can share a chain id and a release
-line (Bradbury Phase 2 and 3 are both chain 4221, node v0.6), so a data directory named only
-after the release line would carry one phase's `genvm.db`/`ops.db` into the next.
+`DATA_KEY` keeps each deployment's databases apart. Phases and networks can share a chain id
+and a release line (Bradbury Phase 2, Phase 3 and Clarke are all chain 4221, node v0.6), so a
+data directory named only after the release line would carry one deployment's
+`genvm.db`/`ops.db` into the next. Moving a server from Bradbury to Clarke is the same case as
+a phase change.
 
 If `${NODE_DIR}` already exists from a previous phase (same version number), this is a
 phase change: follow `update-procedure.md` → "Network Phase Change" instead.
@@ -426,8 +428,9 @@ curl -s http://localhost:9153/metrics | grep -E '^genlayer_node_(synced|blocks_b
 
 **Sync complete when:**
 - `status` = `"healthy"` and `network` = `NODE_NETWORK_NAME` from `networks.yaml` (Bradbury
-  Phase 3: `"bradbury-phase3"`). A previous phase's name means the config is stale: stop the
-  node and redo Phase 5 (`network-resolution-procedure.md` R5)
+  Phase 3: `"bradbury-phase3"`; Clarke: `"clarke"`, set through `node.network` by Phase 5). A
+  previous phase's or another network's name means the wrong config: stop the node and redo
+  Phase 5 (`network-resolution-procedure.md` R5)
 - `genlayer_node_synced` = 1 and `genlayer_node_blocks_behind` = 0
 
 ---

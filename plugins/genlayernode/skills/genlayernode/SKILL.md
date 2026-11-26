@@ -1,6 +1,6 @@
 ---
 name: genlayernode
-description: Set up or update a GenLayer validator node on Linux for any active GenLayer network (Bradbury now, Clarke and Mainnet later); phase, node version and config are resolved at run time.
+description: Set up or update a GenLayer validator node on Linux for any active GenLayer network (Bradbury Phase 3 and Clarke now, Mainnet later); phase, node version and config are resolved at run time.
 allowed-tools:
   - Bash
   - Read
@@ -22,10 +22,11 @@ network the user chooses, on that network's **current phase**, with a node relea
 
 ## The Rule This Skill Is Built On: Resolve, Never Remember
 
-GenLayer runs several networks and replaces them over time: Bradbury phases 1 → 2 → 3, then
-Clarke, then Mainnet. Each phase is a new consensus deployment, often **on the same chain id and
-the same node release line**, so stale values fail **silently**: the node syncs a dead deployment
-and the CLI stakes on it.
+GenLayer runs several networks and replaces them over time: Bradbury phases 1 → 2 → 3, Clarke,
+then Mainnet. Each phase or network is a new consensus deployment, often **on the same chain id
+and the same node release line** (Bradbury Phase 3 and Clarke: both chain 4221, node v0.6, live
+at the same time), so stale or mixed-up values fail **silently**: the node syncs the wrong
+deployment and the CLI stakes on it.
 
 - **Never** use a contract address, genesis block, RPC host, node version, protocol manifest,
   LLM provider list or minimum stake from memory, from an earlier run, or from the examples in
@@ -932,7 +933,9 @@ Expected response (shape):
 
 `network` must equal the current phase's `node_network_name` in `networks.yaml` (e.g.
 `bradbury-phase3`). A previous phase's name means the config is stale: stop the node and redo
-the network config (`network-resolution-procedure.md` R5).
+the network config (`network-resolution-procedure.md` R5). Clarke reports `clarke`, but only
+because `apply-network-config.sh` writes `node.network` from `clarke.yaml` (v0.6.1 cannot
+detect it): `custom` on a Clarke node means that key is missing.
 
 **Sync status:**
 ```bash
@@ -1063,7 +1066,8 @@ When you use the word "latest", the skill will automatically fetch and install t
 RPC/WebSocket URLs, provider, consensus address, chain id, genesis and the protocol manifest are
 resolved by `scripts/resolve-network.sh` and written by `scripts/apply-network-config.sh`. Show the
 resolved values (they are public); do not ask the user to type them. Ask only which **network** to
-join, and only when `networks.yaml` lists more than one active network.
+join, and only when `networks.yaml` lists more than one active network (today it does: Bradbury
+Phase 3 and Clarke, on the same chain, so the choice cannot be inferred from anything else).
 
 **IMPORTANT**: The "Other" text field in AskUserQuestion does not work reliably. For free text
 (connection details, wallet addresses), ask a **plain text question** in chat.

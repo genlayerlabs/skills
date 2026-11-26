@@ -8,8 +8,9 @@ written into this skill**. Every install and every update starts here.
 ## Why nothing is hardcoded
 
 GenLayer runs several networks at once and replaces them over time: Bradbury
-(phases 1 → 2 → 3 …), then Clarke, then Mainnet. Each phase is a new consensus
-deployment, often **on the same chain id**, and each node release can change the
+(phases 1 → 2 → 3 …), Clarke, then Mainnet. Each phase or network is a new consensus
+deployment, often **on the same chain id** (Bradbury Phase 3 and Clarke both live on
+chain 4221, at the same time), and each node release can change the
 config format. A contract address, genesis block or version written into this skill
 is wrong the day after the next launch, and on a shared chain a wrong address does
 not fail loudly: the node syncs a dead deployment and the staking CLI stakes on it.
@@ -33,11 +34,13 @@ everything else at run time from published sources, cross-checked against each o
 Read `networks.yaml`. Offer only entries with `status: active`.
 
 - One active network → confirm it with the user ("Bradbury Testnet, Bradbury Phase 3: correct?").
-- Several active → ask which one (AskUserQuestion, one option per network).
-- User names a `planned` network (e.g. Clarke before launch) → stop: "Clarke has not
+- Several active (today: Bradbury Phase 3 and Clarke) → ask which one (AskUserQuestion, one
+  option per network). **Never infer it** from the chain id, the RPC host, the Conduit key or
+  an existing CLI profile: networks on the same chain share all of them.
+- User names a `planned` network (e.g. Mainnet before launch) → stop: "Mainnet has not
   launched yet; this skill will support it once `networks.yaml` lists it as active."
-- User names a `retired` network (e.g. Asimov) → stop and explain it is retired;
-  offer the active network instead.
+- User names a `retired` network, or one `networks.yaml` does not list → stop and explain
+  this skill does not install it; offer the active networks instead.
 
 Record for the rest of the run (example values for Bradbury Phase 3):
 
@@ -50,8 +53,13 @@ DEPLOYMENT_DIR=bradbury-phase-3
 DEPLOYMENT_KEY=genlayerOrbitTestnet.deployment_bradbury_phase_3
 NODE_NETWORK_NAME=bradbury-phase3
 RELEASE_LINE=v0.6
-PREVIOUS_DIRS=bradbury-phase-2,bradbury     # from previous_phases[].deployment_dir
+PREVIOUS_DIRS=bradbury-phase-2,bradbury,clarke   # previous_phases[].deployment_dir + same_chain_deployments
 ```
+
+For Clarke: `NETWORK_ID=clarke CHAIN_ID=4221 CONFIG_FILE=clarke CLI_NETWORK=testnet-bradbury`
+(base profile only, see R4) `DEPLOYMENT_DIR=clarke
+DEPLOYMENT_KEY=genlayerOrbitTestnet.deployment_clarke NODE_NETWORK_NAME=clarke` (set through
+the config, see R5) `RELEASE_LINE=v0.6 PREVIOUS_DIRS=bradbury-phase-3,bradbury-phase-2`.
 
 ### R2. Choose the node version
 
@@ -87,7 +95,7 @@ It checks, in order, and stops on the first failure:
 | Exit | Meaning | What to do |
 |------|---------|------------|
 | 0 | Verified | Continue. `/tmp/genlayer-network/` holds `network.yaml`, `protocol-manifest.json`, `resolved.env` |
-| 3 | Docs still describe an **older phase** (the script names it) | **Stop.** Do not install with these files. Ask the user for the current phase's config + manifest (GenLayer announcement / Discord), then re-run with `--config-url <url> --manifest-url <url>` (`file://` paths work). The same three checks still run. |
+| 3 | The network's files are **not published yet** (404), or they describe **another deployment** on the chain: an older phase, or another network (the script names it) | **Stop.** Do not install with these files, and do not substitute another network's (`bradbury.yaml` is not a Clarke config). Ask the user for this deployment's config + manifest (GenLayer announcement / Discord), then re-run with `--config-url <url> --manifest-url <url>` (`file://` paths work). The same three checks still run. |
 | 4 | Files inconsistent or pre-v0.6 format | Stop and report; do not hand-edit around it |
 | 5 | Fetch failed | Check the server's outbound HTTPS, retry |
 
@@ -113,6 +121,10 @@ This creates a CLI profile from the deployment book, because a CLI release can s
 point its built-in `testnet-bradbury` at the previous phase (same chain id, so it
 "works" and stakes on the wrong deployment). Requires `genlayer` ≥ 0.40.1.
 
+A network without a CLI preset (Clarke) works the same way: `cli_network` is then only the
+**base** profile (`testnet-bradbury`: same chain and RPC) and the script prints `clarke`.
+Passing the base name itself to a `genlayer` command stakes on Bradbury Phase 3.
+
 ### R5. Confirm after the node starts
 
 The node names the deployment it detected from `consensusaddress` (it also logs it
@@ -126,14 +138,26 @@ curl -s http://localhost:9153/health | jq -r '.network'
 |--------|---------|
 | `NODE_NETWORK_NAME` (e.g. `bradbury-phase3`) | Correct |
 | A previous phase's name (e.g. `bradbury-phase2`) | **Stale config.** Stop the node, go back to R3 |
-| `custom` / empty | This release was built before the phase existed and cannot name it. Not an error by itself (R3 already proved the address), but prefer a release that knows the phase: check for a newer patch on the release line |
+| `custom` / empty | This release was built before the deployment existed and cannot name it, and the config does not set `node.network`. Not an error by itself (R3 already proved the address), but prefer a release that knows the phase: check for a newer patch on the release line. On Clarke it means `node.network` was not written: re-run `apply-network-config.sh` |
+| Another active network's name (e.g. `bradbury-phase3` on a Clarke install) | **Wrong network's config.** Stop the node, go back to R1 and R3 |
+
+Clarke on v0.6.1: the node cannot detect Clarke from the AddressManager, so `clarke.yaml`
+carries a third section, `node:` with the single key `network: "clarke"`. `resolve-network.sh`
+puts it in `resolved.env` as `NODE_NETWORK` and `apply-network-config.sh` writes **only that
+key** into the node's existing `node:` section (mode and wallet addresses are untouched). It is
+a label, not a proof: the address check in R3 is what proves the deployment.
 
 ## When a new phase or network launches (maintainers)
 
 1. Wait for the deployment folder in `genlayer-networks` (e.g. `bradbury-phase-4/`).
 2. In `networks.yaml`: move the old `current_phase` into `previous_phases`, write the
    new `current_phase` (deployment dir, deployment key, node network name, release line).
-3. A new network (Clarke, Mainnet): set `status: active` and fill its `TBD` fields.
-   Retire the network it replaces (`status: retired`).
-4. Nothing else in the skill changes: addresses, genesis, RPC hosts, manifests and
+3. A new network (Mainnet): set `status: active` and fill its `TBD` fields. Retire the
+   network it replaces (`status: retired`) only once that network is shut down; until then
+   both stay active and, if they share a chain, list each other in `same_chain_deployments`.
+4. A network can launch before a node release names it or the docs publish its files
+   (Clarke, 2026-11-26): its config then sets `node.network` itself and `node_network_name`
+   is that value; expect R3 to exit 3 until `<config_file>.yaml` and its manifest are in
+   genlayer-docs.
+5. Nothing else in the skill changes: addresses, genesis, RPC hosts, manifests and
    versions are all resolved at run time.

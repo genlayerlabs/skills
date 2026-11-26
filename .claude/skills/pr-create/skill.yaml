@@ -130,13 +130,13 @@ patterns:
     description: |
       Apply network labels to PRs that should auto-deploy on merge.
       The release workflow reads these labels to determine deploy targets.
-      Valid labels: asimov-phase4, bradbury
+      Valid labels: clarke, bradbury
       Labels are optional — omitting means release without deploy.
     example: |
       # Single network
-      gh pr create --title "..." --body "..." --label asimov-phase4
+      gh pr create --title "..." --body "..." --label clarke
       # Multiple networks
-      gh pr create --title "..." --body "..." --label asimov-phase4 --label bradbury
+      gh pr create --title "..." --body "..." --label clarke --label bradbury
       # No deploy (omit --label)
       gh pr create --title "..." --body "..."
 
@@ -226,7 +226,7 @@ procedure:
     detail: |
       Ask user which network(s) to deploy to on merge.
       Use AskUserQuestion with options:
-      - asimov-phase4 (main testnet)
+      - clarke (main testnet)
       - bradbury (staging)
       - Both networks
       - None (skip deploy)
@@ -239,12 +239,12 @@ procedure:
           header: "Deploy"
           multiSelect: false
           options:
-            - label: "asimov-phase4 (Recommended)"
+            - label: "clarke (Recommended)"
               description: "Main testnet - production environment"
             - label: "bradbury"
               description: "Secondary testnet - staging environment"
             - label: "Both networks"
-              description: "Deploy to asimov-phase4 AND bradbury"
+              description: "Deploy to clarke AND bradbury"
             - label: "None (skip deploy)"
               description: "Create release but don't deploy"
 
@@ -278,7 +278,7 @@ procedure:
     commands:
       - |
         # With network label(s):
-        gh pr create --title "<type>(<scope>): <subject>" --label asimov-phase4 --body "$(cat <<'EOF'
+        gh pr create --title "<type>(<scope>): <subject>" --label clarke --body "$(cat <<'EOF'
         ## Description
 
         <2-3 sentences summarizing what changed>

@@ -8,6 +8,9 @@
 # Edits <node-dir>/configs/node/config.yaml in place (backup: config.yaml.bak):
 #   rollup.genlayerchainrpcurl / genlayerchainwebsocketurl / provider
 #   consensus.consensusaddress / chainid / genesis (uncommented)
+#   node.network (only this key: set when the network publishes one, e.g. Clarke;
+#     otherwise an active value left from another network is commented out so the
+#     node detects the name from the address)
 #   node.validatorWalletAddress / operatorAddress (when given)
 # and copies the manifest to the path consensus.manifestpath names.
 # Never writes secrets: the RPC key stays in the environment (.env).
@@ -58,6 +61,23 @@ set_key rollup    provider                  "$ROLLUP_PROVIDER"   1
 set_key consensus consensusaddress          "$CONSENSUS_ADDRESS" 1
 set_key consensus chainid                   "$CHAIN_ID"          1
 [ -z "$GENESIS" ] || set_key consensus genesis "$GENESIS" 0
+# node.network is ONE key of the user's node: section (mode, wallet addresses stay untouched).
+if [ -n "${NODE_NETWORK:-}" ]; then
+  [[ "$NODE_NETWORK" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "bad node.network in resolved.env: $NODE_NETWORK" >&2; exit 4; }
+  if grep -qE '^[[:space:]]+#?[[:space:]]*network:' <(awk '/^node:/{n=1;next} /^[^[:space:]#]/{n=0} n' "$CFG"); then
+    set_key node network "$NODE_NETWORK" 1
+  else  # key absent from this release's example: add it right under `node:`
+    awk -v v="$NODE_NETWORK" '{ print } /^node:/ && !d { print "  network: \"" v "\""; d = 1 }' "$CFG" > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+  fi
+else
+  # Only a direct child of node: (the indentation of its first key), whatever that width is.
+  awk '/^[^[:space:]#][^:]*:/ { sect = $0; sub(/:.*/, "", sect); ind = "" }
+       sect == "node" && /^[[:space:]]+[^[:space:]#]/ {
+         if (ind == "") { ind = $0; sub(/[^[:space:]].*$/, "", ind) }
+         if (index($0, ind "network:") == 1) $0 = ind "# " substr($0, length(ind) + 1)
+       }
+       { print }' "$CFG" > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+fi
 [ -z "$VALIDATOR" ] || set_key node validatorWalletAddress "$VALIDATOR" 1
 [ -z "$OPERATOR" ]  || set_key node operatorAddress        "$OPERATOR"  1
 
@@ -70,5 +90,5 @@ cp "$RESOLVED/protocol-manifest.json" "$dest"
 
 echo "✓ $CFG updated (backup $CFG.bak)"
 echo "✓ manifest installed at $dest"
-grep -nE '^\s+(genlayerchainrpcurl|genlayerchainwebsocketurl|provider|consensusaddress|chainid|genesis|validatorWalletAddress|operatorAddress):' "$CFG" \
+grep -nE '^\s+(genlayerchainrpcurl|genlayerchainwebsocketurl|provider|consensusaddress|chainid|genesis|network|mode|validatorWalletAddress|operatorAddress):' "$CFG" \
   | sed -E 's/[[:space:]]+#.*$//'
